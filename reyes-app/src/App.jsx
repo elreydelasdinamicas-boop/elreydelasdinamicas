@@ -429,8 +429,7 @@ function PromoterPage({ user, profile, onBack }) {
     if (user) supabase.from('referrals').select('*, referred:referred_user_id(email)').eq('promoter_id', user.id).then(({ data }) => { if (data) setReferrals(data) })
   }, [user])
   if (!profile?.is_promoter) return <div style={{ ...S.content, textAlign: 'center', paddingTop: 60 }}><p style={{ color: '#888' }}>No eres Heraldo del Reino aún</p><button onClick={onBack} style={{ ...S.btnGold, maxWidth: 240, margin: '16px auto 0' }}>Volver</button></div>
-  const refUrl = `https://losreyesdelasdinamicas.netlify.app/?ref=${profile?.referral_code}`
-  return (
+const refUrl = `https://glowing-puppy-df9560.netlify.app/?ref=${profile?.referral_code}`  return (
     <div style={S.content}>
       <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: '#D4AF37', cursor: 'pointer', fontWeight: 700, marginBottom: 16, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>← Volver</button>
       <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 19, marginBottom: 20 }}>📣 Panel del Heraldo</h2>
