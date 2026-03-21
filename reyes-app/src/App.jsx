@@ -1,38 +1,40 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase.js'
 
 const fmt = v => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v)
 const fmtDate = d => new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
 const fmtTime = d => new Date(d).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-const medals = ['ð¥', 'ð¥', 'ð¥', 'ð¯']
+const medals = ['ð¥', 'ð¥', 'ð¥', 'ð¯', 'ðï¸']
 
 const C = {
   gold: '#C9A227', goldLight: '#E8C547', goldDark: '#8B6914',
   bg: '#080808', bg2: '#111', bg3: '#1A1A1A', card: '#141414',
   cardBorder: 'rgba(201,162,39,0.15)', muted: '#666',
   green: '#27AE60', blue: '#2980B9', red: '#C0392B',
+  purple: '#9B59B6', orange: '#E67E22',
 }
 
 const S = {
   header: { position: 'sticky', top: 0, zIndex: 40, background: 'rgba(8,8,8,0.97)', backdropFilter: 'blur(20px)', borderBottom: `1px solid ${C.cardBorder}`, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' },
   bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(8,8,8,0.98)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(201,162,39,0.2)', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 4px' },
   content: { padding: '16px 16px 88px', maxWidth: 500, margin: '0 auto' },
-  card: { background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16, padding: 16 },
-  btnGold: { background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, color: '#000', border: 'none', borderRadius: 12, padding: '14px 20px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 15, width: '100%', fontFamily: 'inherit', transition: 'all .2s' },
+  card: { background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16, padding: 16, position: 'relative', overflow: 'hidden' },
+  btnGold: { background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, color: '#000', border: 'none', borderRadius: 12, padding: '14px 20px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 15, width: '100%', fontFamily: 'inherit' },
   btnOutline: { background: 'transparent', color: C.gold, border: `1px solid rgba(201,162,39,0.4)`, borderRadius: 12, padding: '13px 20px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, width: '100%', fontFamily: 'inherit' },
+  btnPurple: { background: 'linear-gradient(135deg,#5b2d8a,#7c3db8)', color: '#fff', border: '1px solid rgba(155,89,182,0.5)', borderRadius: 12, padding: '14px 20px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, width: '100%', fontFamily: 'inherit' },
   navBtn: (active) => ({ background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer', padding: '8px 10px', color: active ? C.gold : '#444', transform: active ? 'scale(1.08)' : 'scale(1)', transition: 'all .2s', minWidth: 52 }),
   badge: (type) => {
-    const map = { gold: { background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, color: '#000' }, green: { background: 'rgba(39,174,96,0.15)', color: C.green }, blue: { background: 'rgba(41,128,185,0.15)', color: '#5DADE2' }, red: { background: 'rgba(192,57,43,0.15)', color: '#E74C3C' }, dim: { background: 'rgba(201,162,39,0.1)', color: C.gold } }
+    const map = { gold: { background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, color: '#000' }, green: { background: 'rgba(39,174,96,0.15)', color: C.green }, blue: { background: 'rgba(41,128,185,0.15)', color: '#5DADE2' }, red: { background: 'rgba(192,57,43,0.15)', color: '#E74C3C' }, dim: { background: 'rgba(201,162,39,0.1)', color: C.gold }, purple: { background: 'rgba(155,89,182,0.15)', color: '#C9A0E8' }, orange: { background: 'rgba(230,126,34,0.15)', color: '#E67E22' } }
     return { borderRadius: 999, padding: '3px 10px', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, textTransform: 'uppercase', letterSpacing: '.5px', ...map[type] }
   }
 }
+
+const CSS = `@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes houseFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}.house-float{animation:houseFloat 3s ease-in-out infinite}.pulse{animation:pulse 2s infinite}@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}.slide-up{animation:slideUp .3s ease}@keyframes glow{0%,100%{box-shadow:0 0 6px rgba(155,89,182,0.4),0 0 0 1px rgba(155,89,182,0.5)}50%{box-shadow:0 0 18px rgba(155,89,182,0.9),0 0 0 1.5px #9B59B6}}.society-glow{animation:glow 2s ease-in-out infinite}@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}.society-float{animation:float 3s ease-in-out infinite}input,select,textarea{background:#1a1a1a;border:1px solid rgba(201,162,39,0.2);border-radius:12px;padding:13px 16px;color:#fff;font-size:15px;outline:none;width:100%;transition:border-color .2s;font-family:inherit;box-sizing:border-box}input:focus,select:focus,textarea:focus{border-color:#C9A227}input::placeholder,textarea::placeholder{color:#444}textarea{resize:none}::-webkit-scrollbar{display:none}`
 
 const LogoSVG = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
     <polygon points="50,4 92,20 92,60 50,96 8,60 8,20" fill="#1a1000" stroke="#C9A227" strokeWidth="3"/>
     <circle cx="50" cy="10" r="1.5" fill="#E8C547" opacity="0.9"/>
-    <circle cx="30" cy="16" r="1" fill="#E8C547" opacity="0.6"/>
-    <circle cx="70" cy="14" r="1" fill="#E8C547" opacity="0.6"/>
     <polygon points="50,22 72,36 28,36" fill="#C9A227"/>
     <rect x="30" y="36" width="40" height="26" fill="#2a1e00" stroke="#C9A227" strokeWidth="0.5"/>
     <rect x="35" y="38" width="3" height="22" fill="#C9A227" opacity="0.7"/>
@@ -41,14 +43,11 @@ const LogoSVG = ({ size = 32 }) => (
     <rect x="62" y="38" width="3" height="22" fill="#C9A227" opacity="0.7"/>
     <rect x="33" y="40" width="5" height="5" rx="1" fill="#E8C547" opacity="0.9"/>
     <rect x="62" y="40" width="5" height="5" rx="1" fill="#E8C547" opacity="0.9"/>
-    <rect x="47" y="40" width="6" height="5" rx="1" fill="#E8C547" opacity="0.7"/>
     <rect x="45" y="50" width="10" height="12" rx="2" fill="#1a1000"/>
     <ellipse cx="22" cy="56" rx="7" ry="8" fill="#6B4423"/>
     <text x="22" y="59" textAnchor="middle" fill="#C9A227" fontSize="7" fontWeight="bold">$</text>
     <ellipse cx="78" cy="56" rx="7" ry="8" fill="#6B4423"/>
     <text x="78" y="59" textAnchor="middle" fill="#C9A227" fontSize="7" fontWeight="bold">$</text>
-    <ellipse cx="35" cy="64" rx="4" ry="2" fill="#C9A227" opacity="0.8"/>
-    <ellipse cx="65" cy="64" rx="4" ry="2" fill="#C9A227" opacity="0.8"/>
     <rect x="20" y="67" width="60" height="22" rx="3" fill="#0d0900" stroke="#C9A227" strokeWidth="1.5"/>
     <text x="50" y="74" textAnchor="middle" fill="#C9A227" fontSize="5.5" fontWeight="bold" letterSpacing="0.5">LA CASA</text>
     <text x="50" y="80" textAnchor="middle" fill="#C9A227" fontSize="3.5" letterSpacing="1">DE LAS</text>
@@ -57,19 +56,9 @@ const LogoSVG = ({ size = 32 }) => (
 )
 
 const Logo = () => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
     <div style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', border: `1px solid rgba(201,162,39,0.3)`, flexShrink: 0 }}><LogoSVG size={40} /></div>
     <div><b style={{ fontSize: 13, fontWeight: 900, color: '#fff', display: 'block', lineHeight: 1.1 }}>La Casa</b><span style={{ fontSize: 9, color: C.gold, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>De Las Dinamicas</span></div>
-  </div>
-)
-
-const CSS = `@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes houseFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}.house-float{animation:houseFloat 3s ease-in-out infinite}.pulse{animation:pulse 2s infinite}@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}.slide-up{animation:slideUp .3s ease}input,select,textarea{background:#1a1a1a;border:1px solid rgba(201,162,39,0.2);border-radius:12px;padding:13px 16px;color:#fff;font-size:15px;outline:none;width:100%;transition:border-color .2s;font-family:inherit;box-sizing:border-box}input:focus,select:focus{border-color:#C9A227}input::placeholder{color:#444}textarea{resize:none}`
-
-const Loading = () => (
-  <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-    <style>{CSS}</style>
-    <LogoSVG size={72} />
-    <div style={{ color: C.gold, fontWeight: 700, letterSpacing: 1 }}>Cargando La Casa...</div>
   </div>
 )
 
@@ -78,6 +67,8 @@ const Toggle = ({ on, onToggle }) => (
     <span style={{ position: 'absolute', width: 18, height: 18, background: '#fff', borderRadius: '50%', top: 3, left: on ? 23 : 3, transition: 'left .2s' }}></span>
   </button>
 )
+
+const GoldLine = () => <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1.5, background: `linear-gradient(90deg,transparent,${C.gold},transparent)` }} />
 
 const Icons = {
   wa: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
@@ -89,10 +80,51 @@ const Icons = {
 const DEFAULT_CONFIG = {
   showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
   whatsapp: '', canal: '', instagram: '', facebook: '', telegram: '',
-  supportWhatsapp: '', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda con mi boleto',
-  paymentWhatsapp: '', imgDeleteDays: 3
+  supportWhatsapp: '', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
+  paymentWhatsapp: '', imgDeleteDays: 3,
+  notifAutoNewRaffle: true, notifAuto24h: true, notifAuto2h: true,
+  notifAutoPaymentConfirmed: true, notifAutoUnpaidReminder: true, notifAutoResult: false,
 }
 
+// âââ PWA HOOK âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function usePWA() {
+  const [canInstall, setCanInstall] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(false)
+  const [notifPermission, setNotifPermission] = useState('default')
+
+  useEffect(() => {
+    const installed = localStorage.getItem('pwaInstalled') === 'true' ||
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true
+    setIsInstalled(installed)
+    if (window.deferredInstallPrompt) setCanInstall(true)
+    const onAvail = () => setCanInstall(true)
+    const onInst = () => { setIsInstalled(true); setCanInstall(false) }
+    window.addEventListener('pwaInstallAvailable', onAvail)
+    window.addEventListener('pwaInstalled', onInst)
+    if ('Notification' in window) setNotifPermission(Notification.permission)
+    return () => { window.removeEventListener('pwaInstallAvailable', onAvail); window.removeEventListener('pwaInstalled', onInst) }
+  }, [])
+
+  const install = useCallback(async () => {
+    if (!window.deferredInstallPrompt) return false
+    window.deferredInstallPrompt.prompt()
+    const { outcome } = await window.deferredInstallPrompt.userChoice
+    if (outcome === 'accepted') { localStorage.setItem('pwaInstalled', 'true'); setIsInstalled(true); setCanInstall(false); return true }
+    return false
+  }, [])
+
+  const requestNotif = useCallback(async () => {
+    if (!('Notification' in window)) return false
+    const perm = await Notification.requestPermission()
+    setNotifPermission(perm)
+    return perm === 'granted'
+  }, [])
+
+  return { canInstall, isInstalled, notifPermission, install, requestNotif }
+}
+
+// âââ APP PRINCIPAL ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export default function App() {
   const [page, setPage] = useState('home')
   const [user, setUser] = useState(null)
@@ -107,6 +139,7 @@ export default function App() {
   const [showReservePopup, setShowReservePopup] = useState(false)
   const [pendingNums, setPendingNums] = useState(null)
   const [appConfig, setAppConfig] = useState(DEFAULT_CONFIG)
+  const pwa = usePWA()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -128,7 +161,6 @@ export default function App() {
 
   useEffect(() => { fetchRaffles() }, [])
   useEffect(() => { if (user) fetchMyTickets() }, [user])
-
   useEffect(() => {
     if (!selectedRaffle) return
     fetchReserved(selectedRaffle.id)
@@ -138,9 +170,7 @@ export default function App() {
     return () => supabase.removeChannel(ch)
   }, [selectedRaffle])
 
-  useEffect(() => {
-    if (user && pendingNums?.nums?.length > 0) reservePending()
-  }, [user, pendingNums])
+  useEffect(() => { if (user && pendingNums?.nums?.length > 0) reservePending() }, [user, pendingNums])
 
   async function reservePending() {
     const { raffleId, nums, price } = pendingNums
@@ -149,10 +179,8 @@ export default function App() {
     const taken = (ex || []).flatMap(t => t.numbers || [])
     const avail = nums.filter(n => !taken.includes(n))
     if (avail.length > 0) await supabase.from('tickets').insert({ user_id: user.id, raffle_id: raffleId, numbers: avail, status: 'reserved', total_amount: avail.length * price })
-    localStorage.removeItem('pendingNums')
-    setPendingNums(null)
-    await fetchMyTickets()
-    setPage('profile')
+    localStorage.removeItem('pendingNums'); setPendingNums(null)
+    await fetchMyTickets(); setPage('profile')
   }
 
   async function fetchConfig() {
@@ -171,15 +199,14 @@ export default function App() {
     const { data } = await supabase.from('raffles').select('*').eq('status', 'active').order('created_at', { ascending: false })
     if (data && data.length > 0) setRaffles(data)
     else setRaffles([
-      { id: 1, title: 'MOTO YAMAHA MT-03 + $500.000', is_featured: true, ticket_price: 5000, raffle_date: '2025-04-15', lottery_name: 'Bogota', number_range: 100, prizes: [{ amount: 'Moto Yamaha MT-03 0km' }, { amount: '$500.000 en efectivo' }, { amount: '$200.000 en efectivo' }] },
-      { id: 2, title: 'VIAJE A CANCUN TODO INCLUIDO', is_featured: true, ticket_price: 10000, raffle_date: '2025-05-01', lottery_name: 'Medellin', number_range: 100, prizes: [{ amount: 'Viaje Cancun para 2 personas' }, { amount: '$1.000.000 en efectivo' }, { amount: 'iPhone 16 Pro' }] },
+      { id: 1, title: 'MOTO YAMAHA MT-03 + $500.000', is_featured: true, ticket_price: 5000, raffle_date: '2025-04-15', lottery_name: 'Bogota', number_range: 100, prizes: [{ amount: 'Moto Yamaha MT-03 0km' }, { amount: '$500.000 en efectivo' }, { amount: '$200.000 en efectivo' }], society_numbers: [11, 12, 13, 33, 44, 55, 77], presale_active: true, presale_price: 3000, presale_quota: 20, packages_active: true, packages: [{ qty: 3, price: 12000 }, { qty: 5, price: 18000 }, { qty: 10, price: 30000 }], promotions_active: true, promotions: [{ buy: 3, get: 1, label: 'Compra 3, lleva 4!' }] },
+      { id: 2, title: 'VIAJE A CANCUN TODO INCLUIDO', is_featured: true, ticket_price: 10000, raffle_date: '2025-05-01', lottery_name: 'Medellin', number_range: 100, prizes: [{ amount: 'Viaje Cancun para 2 personas' }, { amount: '$1.000.000 en efectivo' }, { amount: 'iPhone 16 Pro' }], society_numbers: [] },
     ])
   }
   async function fetchMyTickets() {
-    const { data } = await supabase.from('tickets').select('*, raffles(title,raffle_date,lottery_name)').eq('user_id', user.id).order('created_at', { ascending: false })
+    const { data } = await supabase.from('tickets').select('*, raffles(title,raffle_date,lottery_name,ticket_price)').eq('user_id', user.id).order('created_at', { ascending: false })
     if (data) setMyTickets(data)
   }
-
   async function doLogin(email, password) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
@@ -187,52 +214,46 @@ export default function App() {
   }
   async function doRegister(name, phone, email, password) {
     const refCode = 'CASA-' + Math.random().toString(36).substr(2, 6).toUpperCase()
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name, phone, referral_code: refCode, role: 'customer' } } })
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name, phone, referral_code: refCode } } })
     if (error) throw error
     if (data.session) {
-      await supabase.from('users_profile').upsert({ id: data.user.id, full_name: name, phone, email, role: 'customer', credits: 500, points: appConfig.showWelcomeBonus ? 1000 : 0, referral_code: refCode, is_promoter: false })
+      await supabase.from('users_profile').upsert({ id: data.user.id, full_name: name, phone, email, role: 'customer', credits: appConfig.showWelcomeBonus ? 500 : 0, points: appConfig.showWelcomeBonus ? 1000 : 0, referral_code: refCode, is_promoter: false })
       setUser(data.user); await fetchProfile(data.user.id)
       setAuthPage(null); setPage('home'); return
     }
     if (data.user && !data.session) throw new Error('Revisa tu correo y confirma tu cuenta.')
   }
   async function doLogout() {
-    await supabase.auth.signOut()
-    setUser(null); setProfile(null); setMyTickets([]); setPage('home')
+    await supabase.auth.signOut(); setUser(null); setProfile(null); setMyTickets([]); setPage('home')
   }
-
   async function handleReserve() {
     if (!user) {
       localStorage.setItem('pendingNums', JSON.stringify({ raffleId: selectedRaffle.id, nums: selectedNums, price: selectedRaffle.ticket_price }))
-      setShowReservePopup(false)
-      setAuthPage('choose')
-      return
+      setShowReservePopup(false); setAuthPage('choose'); return
     }
     const r = selectedRaffle
     const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', r.id).in('status', ['reserved', 'paid'])
     const taken = (ex || []).flatMap(t => t.numbers || [])
     const conflict = selectedNums.filter(n => taken.includes(n))
-    if (conflict.length > 0) {
-      alert(`Los numeros ${conflict.map(n => String(n).padStart(2, '0')).join(', ')} ya estan apartados. Elige otros.`)
-      await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); return
-    }
-    const { error } = await supabase.from('tickets').insert({ user_id: user.id, raffle_id: r.id, numbers: selectedNums, status: 'reserved', total_amount: selectedNums.length * r.ticket_price })
-    if (error) { alert('Error al apartar. Intenta de nuevo.'); return }
-    await fetchMyTickets(); setSelectedNums([]); setShowReservePopup(false)
-    setPage('profile')
+    if (conflict.length > 0) { alert(`Los numeros ${conflict.map(n => String(n).padStart(2, '0')).join(', ')} ya estan apartados.`); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); return }
+    await supabase.from('tickets').insert({ user_id: user.id, raffle_id: r.id, numbers: selectedNums, status: 'reserved', total_amount: selectedNums.length * r.ticket_price })
+    await fetchMyTickets(); setSelectedNums([]); setShowReservePopup(false); setPage('profile')
   }
-
   async function becomePromoter() {
     if (!user) return
     const refCode = 'CASA-' + Math.random().toString(36).substr(2, 6).toUpperCase()
     await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id)
     await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: 15, level2_rate: 7, level3_rate: 3 })
-    await fetchProfile(user.id)
-    alert('Ahora eres Vendedor Oficial de La Casa!'); setPage('promoter')
+    await fetchProfile(user.id); alert('Ahora eres Vendedor Oficial!'); setPage('promoter')
   }
 
-  if (loading) return <Loading />
-
+  if (loading) return (
+    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+      <style>{CSS}</style>
+      <div className="house-float"><LogoSVG size={72} /></div>
+      <div style={{ color: C.gold, fontWeight: 700, letterSpacing: 1 }}>Cargando La Casa...</div>
+    </div>
+  )
   if (authPage === 'choose') return <ChooseAuthScreen selectedRaffle={selectedRaffle} selectedNums={selectedNums} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onBack={() => { setAuthPage(null); setPage('raffle') }} />
   if (authPage === 'login') return <LoginScreen onLogin={doLogin} onRegister={() => setAuthPage('register')} onBack={() => setAuthPage(null)} />
   if (authPage === 'register') return <RegisterScreen onRegister={doRegister} onLogin={() => setAuthPage('login')} appConfig={appConfig} />
@@ -249,18 +270,13 @@ export default function App() {
           <span style={{ width: 8, height: 8, background: '#C0392B', borderRadius: '50%', position: 'absolute', top: 3, right: 3 }}></span>
         </button>
         <Logo />
-        {user
-          ? <button onClick={() => setPage('profile')} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: 8 }}>
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            </button>
-          : <button onClick={() => setAuthPage('login')} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, border: 'none', color: '#000', cursor: 'pointer', padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, fontFamily: 'inherit' }}>Entrar</button>
-        }
+        {user ? <button onClick={() => setPage('profile')} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: 8 }}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
+          : <button onClick={() => setAuthPage('login')} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, border: 'none', color: '#000', cursor: 'pointer', padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, fontFamily: 'inherit' }}>Entrar</button>}
       </header>
-
       <main>
-        {page === 'home' && <HomePage raffles={raffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onLogin={() => setAuthPage('login')} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
+        {page === 'home' && <HomePage raffles={raffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
         {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} />}
-        {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={() => setPage('support')} appConfig={appConfig} />}
+        {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={() => setPage('support')} appConfig={appConfig} pwa={pwa} />}
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
         {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
         {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={false} appConfig={appConfig} />}
@@ -269,51 +285,26 @@ export default function App() {
         {page === 'winners' && <WinnersPage onBack={() => setPage('home')} onRaffle={() => setPage('home')} />}
         {page === 'how' && <HowItWorksPage onBack={() => setPage('home')} onRegister={() => setAuthPage('register')} />}
       </main>
-
       <nav style={S.bottomNav}>
-        {[
-          { id: 'home', label: 'Inicio', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
+        {[{ id: 'home', label: 'Inicio', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
           ...(appConfig.showPoints ? [{ id: 'points', label: 'Puntos', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> }] : []),
           { id: 'support', label: 'Soporte', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
           { id: 'profile', label: 'Mi Cuenta', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-        ].map(({ id, label, icon }) => (
-          <button key={id} onClick={() => setPage(id)} style={S.navBtn(page === id)}>
-            {icon}
-            <span style={{ fontSize: 9, fontWeight: 700 }}>{label}</span>
-          </button>
-        ))}
+        ].map(({ id, label, icon }) => (<button key={id} onClick={() => setPage(id)} style={S.navBtn(page === id)}>{icon}<span style={{ fontSize: 9, fontWeight: 700 }}>{label}</span></button>))}
       </nav>
-
       {showReservePopup && selectedRaffle && selectedNums.length > 0 && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setShowReservePopup(false)}>
           <div className="slide-up" style={{ background: '#111', borderRadius: '22px 22px 0 0', padding: 24, width: '100%', maxWidth: 500, border: `1px solid rgba(201,162,39,0.25)`, borderBottom: 'none', position: 'relative', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
+            <GoldLine />
             <div style={{ width: 40, height: 4, background: '#2a2a2a', borderRadius: 2, margin: '0 auto 18px' }}></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-              <div>
-                <div style={{ color: C.muted, fontSize: 11, marginBottom: 4 }}>Numeros seleccionados</div>
-                <div style={{ color: C.gold, fontSize: 20, fontWeight: 900, lineHeight: 1 }}>
-                  {selectedNums.map(n => `#${String(n).padStart(selectedRaffle.number_range <= 100 ? 2 : 3, '0')}`).join('  ')}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ color: C.muted, fontSize: 11 }}>Total</div>
-                <div style={{ color: C.gold, fontSize: 20, fontWeight: 900 }}>{fmt(selectedNums.length * selectedRaffle.ticket_price)}</div>
-              </div>
+              <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 4 }}>Numeros seleccionados</div><div style={{ color: C.gold, fontSize: 20, fontWeight: 900 }}>{selectedNums.map(n => `#${String(n).padStart(selectedRaffle.number_range <= 100 ? 2 : 3, '0')}`).join('  ')}</div></div>
+              <div style={{ textAlign: 'right' }}><div style={{ color: C.muted, fontSize: 11 }}>Total</div><div style={{ color: C.gold, fontSize: 20, fontWeight: 900 }}>{fmt(selectedNums.length * selectedRaffle.ticket_price)}</div></div>
             </div>
             <div style={{ background: '#1a1a1a', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', gap: 20 }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Sorteo</div>
-                <div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{new Date(selectedRaffle.raffle_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Loteria</div>
-                <div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.lottery_name}</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Caduca</div>
-                <div style={{ color: '#E74C3C', fontSize: 11, fontWeight: 700 }}>24 horas</div>
-              </div>
+              <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Sorteo</div><div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{new Date(selectedRaffle.raffle_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}</div></div>
+              <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Loteria</div><div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.lottery_name}</div></div>
+              <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Caduca</div><div style={{ color: '#E74C3C', fontSize: 11, fontWeight: 700 }}>24h</div></div>
             </div>
             <button onClick={handleReserve} style={{ ...S.btnGold, marginBottom: 10 }}>Confirmar reserva</button>
             <div style={{ color: C.muted, fontSize: 11, textAlign: 'center', marginBottom: 10 }}>Los numeros quedan guardados 24 horas mientras confirmas el pago</div>
@@ -338,20 +329,15 @@ function ChooseAuthScreen({ selectedRaffle, selectedNums, onLogin, onRegister, o
           <div style={{ fontSize: 10, color: C.gold, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase' }}>La Casa De Las Dinamicas</div>
         </div>
         <div style={{ background: 'linear-gradient(135deg,#1a1200,#2a1800)', border: `1px solid rgba(201,162,39,0.4)`, borderRadius: 16, padding: 16, marginBottom: 24, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
+          <GoldLine />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
             <div style={{ width: 36, height: 36, background: 'rgba(201,162,39,0.15)', border: `1px solid rgba(201,162,39,0.3)`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={C.gold} strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
             </div>
-            <div>
-              <div style={{ color: C.gold, fontSize: 13, fontWeight: 800 }}>Tienes boletos guardados!</div>
-              <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{r?.title}</div>
-            </div>
+            <div><div style={{ color: C.gold, fontSize: 13, fontWeight: 800 }}>Tienes boletos guardados!</div><div style={{ color: C.muted, fontSize: 10 }}>{r?.title}</div></div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-            {(selectedNums || []).map(n => (
-              <div key={n} style={{ background: 'rgba(201,162,39,0.12)', border: `1px solid rgba(201,162,39,0.3)`, borderRadius: 8, padding: '5px 10px', color: C.gold, fontSize: 14, fontWeight: 900 }}>#{pad(n)}</div>
-            ))}
+            {(selectedNums || []).map(n => (<div key={n} style={{ background: 'rgba(201,162,39,0.12)', border: `1px solid rgba(201,162,39,0.3)`, borderRadius: 8, padding: '5px 10px', color: C.gold, fontSize: 14, fontWeight: 900 }}>#{pad(n)}</div>))}
           </div>
           <div style={{ background: 'rgba(201,162,39,0.08)', borderRadius: 8, padding: '7px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ color: C.muted, fontSize: 11 }}>Se liberan en</span>
@@ -363,24 +349,18 @@ function ChooseAuthScreen({ selectedRaffle, selectedNums, onLogin, onRegister, o
           <div style={{ color: C.muted, fontSize: 13 }}>Ingresa o crea tu cuenta en menos de 1 minuto</div>
         </div>
         <div onClick={onRegister} style={{ background: `linear-gradient(160deg,#1a1200,${C.card})`, border: `1px solid rgba(201,162,39,0.3)`, borderRadius: 16, padding: 18, marginBottom: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
+          <GoldLine />
           <div style={{ width: 48, height: 48, background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#000" strokeWidth="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ color: '#fff', fontWeight: 900, fontSize: 15, marginBottom: 3 }}>Crear cuenta gratis</div>
-            <div style={{ color: C.muted, fontSize: 12 }}>$500 en saldo + 1.000 puntos de bienvenida</div>
-          </div>
+          <div style={{ flex: 1 }}><div style={{ color: '#fff', fontWeight: 900, fontSize: 15, marginBottom: 3 }}>Crear cuenta gratis</div><div style={{ color: C.muted, fontSize: 12 }}>$500 en saldo + 1.000 puntos de bienvenida</div></div>
           <div style={{ color: C.gold, fontSize: 18 }}>â</div>
         </div>
         <div onClick={onLogin} style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 48, height: 48, background: 'rgba(201,162,39,0.1)', border: `1px solid rgba(201,162,39,0.25)`, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke={C.gold} strokeWidth="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ color: '#fff', fontWeight: 900, fontSize: 15, marginBottom: 3 }}>Ya tengo cuenta</div>
-            <div style={{ color: C.muted, fontSize: 12 }}>Iniciar sesion y reclamar mis numeros</div>
-          </div>
+          <div style={{ flex: 1 }}><div style={{ color: '#fff', fontWeight: 900, fontSize: 15, marginBottom: 3 }}>Ya tengo cuenta</div><div style={{ color: C.muted, fontSize: 12 }}>Iniciar sesion y reclamar mis numeros</div></div>
           <div style={{ color: '#666', fontSize: 18 }}>â</div>
         </div>
         <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', width: '100%', textAlign: 'center', fontSize: 13, fontFamily: 'inherit' }}>Volver al sorteo</button>
@@ -389,8 +369,8 @@ function ChooseAuthScreen({ selectedRaffle, selectedNums, onLogin, onRegister, o
   )
 }
 
-// âââ HOME âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function HomePage({ raffles, displayName, appConfig, onRaffle, user, onLogin, onHow, onWinners }) {
+// âââ HOME PAGE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWinners }) {
   const socials = [
     { key: 'whatsapp', label: 'WhatsApp', bg: '#075E54', icon: Icons.wa, url: appConfig.whatsapp },
     { key: 'canal', label: 'Canal', bg: '#128C7E', icon: Icons.wa, url: appConfig.canal, badge: true },
@@ -424,9 +404,7 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onLogin, on
               </div>
             ) : (
               <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
-                {[['ð°','Legales'],['ðµ','Seguros'],['ð','Premios']].map(([ic,lb]) => (
-                  <div key={lb}><div style={{ fontSize: 16 }}>{ic}</div><div style={{ color: '#444', fontSize: 8, textTransform: 'uppercase', marginTop: 1 }}>{lb}</div></div>
-                ))}
+                {[['ð°','Legales'],['ðµ','Seguros'],['ð','Premios']].map(([ic,lb]) => (<div key={lb}><div style={{ fontSize: 16 }}>{ic}</div><div style={{ color: '#444', fontSize: 8, textTransform: 'uppercase', marginTop: 1 }}>{lb}</div></div>))}
               </div>
             )}
           </div>
@@ -434,17 +412,8 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onLogin, on
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        {appConfig.showHowItWorks && (
-          <button onClick={onHow} style={{ flex: 1, background: C.bg3, border: `1px solid ${C.cardBorder}`, borderRadius: 10, padding: '9px 10px', color: C.gold, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Como funciona?
-          </button>
-        )}
-        {appConfig.showWinners && (
-          <button onClick={onWinners} style={{ flex: 1, background: C.bg3, border: '1px solid rgba(39,174,96,0.2)', borderRadius: 10, padding: '9px 10px', color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-            ð Ganadores
-          </button>
-        )}
+        {appConfig.showHowItWorks && <button onClick={onHow} style={{ flex: 1, background: C.bg3, border: `1px solid ${C.cardBorder}`, borderRadius: 10, padding: '9px 10px', color: C.gold, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Como funciona?</button>}
+        {appConfig.showWinners && <button onClick={onWinners} style={{ flex: 1, background: C.bg3, border: '1px solid rgba(39,174,96,0.2)', borderRadius: 10, padding: '9px 10px', color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>ð Ganadores</button>}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -456,30 +425,36 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onLogin, on
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {raffles.map(r => {
           const prizes = Array.isArray(r.prizes) ? r.prizes : []
+          const hasSociety = Array.isArray(r.society_numbers) && r.society_numbers.length > 0
+          const hasPresale = r.presale_active && r.presale_price > 0
           return (
             <div key={r.id} onClick={() => onRaffle(r)} style={{ background: `linear-gradient(160deg,#1a1200,${C.card})`, border: `1px solid ${C.cardBorder}`, borderRadius: 18, padding: 18, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1.5, background: `linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
+              <GoldLine />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                   {r.is_featured && <span style={S.badge('gold')}>Destacada</span>}
                   <span style={S.badge('green')}>Activa</span>
+                  {hasSociety && <span style={S.badge('purple')}>ð¥ Sociedad</span>}
+                  {hasPresale && <span style={S.badge('purple')}>Preventa</span>}
                 </div>
                 <span style={{ color: C.muted, fontSize: 11 }}>ð± {r.lottery_name}</span>
               </div>
               <h3 style={{ color: '#fff', fontSize: 15, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 10px', lineHeight: 1.3 }}>{r.title}</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
-                {prizes.slice(0, 3).map((p, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14 }}>{medals[i]}</span>
-                    <span style={{ color: '#ccc', fontSize: 12 }}>{p.amount || p}</span>
-                  </div>
-                ))}
+                {prizes.slice(0, 3).map((p, i) => (<div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 14 }}>{medals[i]}</span><span style={{ color: '#ccc', fontSize: 12 }}>{p.amount || p}</span></div>))}
               </div>
+              {hasPresale && (
+                <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.25)', borderRadius: 9, padding: '7px 10px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: C.purple, fontSize: 10, fontWeight: 700 }}>Preventa activa â</span>
+                  <span style={{ color: '#C9A0E8', fontSize: 14, fontWeight: 900 }}>{fmt(r.presale_price)}</span>
+                  <span style={{ color: C.muted, fontSize: 9, textDecoration: 'line-through', marginLeft: 2 }}>{fmt(r.ticket_price)}</span>
+                </div>
+              )}
               <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', marginBottom: 12 }}></div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ color: C.muted, fontSize: 10, textTransform: 'uppercase' }}>Valor del boleto</div>
-                  <div style={{ color: C.gold, fontSize: 24, fontWeight: 900, lineHeight: 1 }}>{fmt(r.ticket_price)}</div>
+                  <div style={{ color: C.muted, fontSize: 10, textTransform: 'uppercase' }}>{hasPresale ? 'Precio normal' : 'Valor del boleto'}</div>
+                  <div style={{ color: C.gold, fontSize: 22, fontWeight: 900, lineHeight: 1 }}>{fmt(r.ticket_price)}</div>
                   <div style={{ color: C.muted, fontSize: 10, marginTop: 3 }}>ð {fmtDate(r.raffle_date)}</div>
                 </div>
                 <button style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, color: '#000', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 800, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>Apartar numero</button>
@@ -492,22 +467,36 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onLogin, on
   )
 }
 
-// âââ RAFFLE PAGE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// âââ RAFFLE PAGE con SOCIEDAD visual âââââââââââââââââââââââââââââââââââââââââ
 function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelectedNums, onShowPopup, onBack }) {
   const range = r.number_range || 100
   const cols = range <= 100 ? 10 : 20
   const prizes = Array.isArray(r.prizes) ? r.prizes : []
   const societyNums = Array.isArray(r.society_numbers) ? r.society_numbers : []
+  const packages = Array.isArray(r.packages) ? r.packages : []
+  const promotions = Array.isArray(r.promotions) ? r.promotions : []
   const [verifyName, setVerifyName] = useState('')
   const [verifyPhone, setVerifyPhone] = useState('')
   const [verifyResult, setVerifyResult] = useState(null)
+  const [societyModal, setSocietyModal] = useState(null)
+  const [selectedPkg, setSelectedPkg] = useState(null)
 
-  const toggleNum = n => setSelectedNums(prev => prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n])
+  const pad = n => range <= 100 ? String(n).padStart(2, '0') : String(n).padStart(3, '0')
+  const toggleNum = n => {
+    if (societyNums.includes(n)) { setSocietyModal(n); return }
+    setSelectedNums(prev => prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n])
+  }
   const luckyNum = () => {
     const avail = Array.from({ length: range }, (_, i) => i).filter(n => !allReservedNums.includes(n) && !selectedNums.includes(n) && !societyNums.includes(n))
     if (avail.length) setSelectedNums(prev => [...prev, avail[Math.floor(Math.random() * avail.length)]])
   }
   const getStatus = n => allReservedNums.includes(n) ? 'reserved' : societyNums.includes(n) ? 'society' : 'available'
+
+  const activePromo = promotions.find(p => selectedNums.length >= p.buy)
+  const freeNums = activePromo ? activePromo.get : 0
+
+  const pricePerNum = r.presale_active && r.presale_price > 0 ? r.presale_price : r.ticket_price
+  const totalPrice = selectedPkg ? selectedPkg.price : selectedNums.length * pricePerNum
 
   async function verifyTicket() {
     if (!verifyName && !verifyPhone) return
@@ -528,67 +517,133 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
           <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>â Volver</button>
           <button onClick={shareWA} style={{ background: 'rgba(39,174,96,0.15)', border: '1px solid rgba(39,174,96,0.3)', borderRadius: 8, color: C.green, cursor: 'pointer', padding: '6px 12px', fontSize: 11, fontWeight: 700, fontFamily: 'inherit' }}>Compartir</button>
         </div>
-        <div style={{ textAlign: 'center', padding: '8px 0 20px' }}>
-          <div style={{ width: 56, height: 56, borderRadius: 14, overflow: 'hidden', margin: '0 auto 12px', border: `1px solid rgba(201,162,39,0.3)` }}><LogoSVG size={56} /></div>
-          <h1 style={{ color: '#fff', fontSize: 17, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 8px', lineHeight: 1.3 }}>{r.title}</h1>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(201,162,39,0.08)', border: `1px solid rgba(201,162,39,0.2)`, borderRadius: 999, padding: '6px 18px' }}>
-            <span style={{ color: C.muted, fontSize: 11 }}>Valor del boleto</span>
-            <span style={{ color: C.gold, fontSize: 16, fontWeight: 900 }}>{fmt(r.ticket_price)}</span>
+        <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, overflow: 'hidden', margin: '0 auto 10px', border: `1px solid rgba(201,162,39,0.3)` }}><LogoSVG size={52} /></div>
+          <h1 style={{ color: '#fff', fontSize: 16, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 8px', lineHeight: 1.3 }}>{r.title}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            {r.presale_active && r.presale_price > 0 ? (
+              <div style={{ background: 'rgba(155,89,182,0.1)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 999, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: C.muted, fontSize: 11, textDecoration: 'line-through' }}>{fmt(r.ticket_price)}</span>
+                <span style={{ color: '#C9A0E8', fontSize: 16, fontWeight: 900 }}>{fmt(r.presale_price)}</span>
+                <span style={{ background: C.purple, borderRadius: 999, padding: '1px 7px', color: '#fff', fontSize: 8, fontWeight: 700 }}>PREVENTA</span>
+              </div>
+            ) : (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(201,162,39,0.08)', border: `1px solid rgba(201,162,39,0.2)`, borderRadius: 999, padding: '6px 18px' }}>
+                <span style={{ color: C.muted, fontSize: 11 }}>Valor del boleto</span>
+                <span style={{ color: C.gold, fontSize: 16, fontWeight: 900 }}>{fmt(r.ticket_price)}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <div style={{ overflowX: 'auto', padding: '14px 16px', display: 'flex', gap: 10, scrollbarWidth: 'none' }}>
+      {/* Premios scroll */}
+      <div style={{ overflowX: 'auto', padding: '12px 16px', display: 'flex', gap: 10, scrollbarWidth: 'none' }}>
         {prizes.map((p, i) => (
-          <div key={i} style={{ flexShrink: 0, background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 14, padding: '12px 18px', minWidth: 150, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1.5, background: `linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-            <div style={{ fontSize: 26, marginBottom: 5 }}>{medals[i]}</div>
-            <div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Premio {i+1}</div>
-            <div style={{ color: C.gold, fontSize: 13, fontWeight: 800 }}>{p.amount || p.title || p}</div>
+          <div key={i} style={{ flexShrink: 0, background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 14, padding: '10px 16px', minWidth: 140, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+            <GoldLine />
+            <div style={{ fontSize: 24, marginBottom: 4 }}>{medals[i]}</div>
+            <div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 4 }}>Premio {i+1}</div>
+            <div style={{ color: C.gold, fontSize: 12, fontWeight: 800 }}>{p.amount || p.title || p}</div>
           </div>
         ))}
       </div>
 
       <div style={{ padding: '0 16px' }}>
+
+        {/* PAQUETES */}
+        {r.packages_active && packages.length > 0 && (
+          <div style={{ ...S.card, marginBottom: 14 }}>
+            <GoldLine />
+            <div style={{ color: '#fff', fontWeight: 800, fontSize: 13, marginBottom: 10 }}>Paquetes con descuento</div>
+            <div style={{ display: 'flex', gap: 8, overflow: 'auto', scrollbarWidth: 'none', paddingBottom: 4 }}>
+              <div onClick={() => setSelectedPkg(null)} style={{ flexShrink: 0, background: !selectedPkg ? 'rgba(201,162,39,0.15)' : '#1a1a1a', border: `1px solid ${!selectedPkg ? C.gold : 'rgba(255,255,255,0.07)'}`, borderRadius: 11, padding: '10px 14px', cursor: 'pointer', minWidth: 68, textAlign: 'center' }}>
+                <div style={{ color: '#fff', fontSize: 9, fontWeight: 700, marginBottom: 3 }}>Individual</div>
+                <div style={{ color: C.gold, fontSize: 13, fontWeight: 900 }}>{fmt(pricePerNum)}</div>
+              </div>
+              {packages.map((pkg, i) => {
+                const isSelected = selectedPkg?.qty === pkg.qty
+                const savings = (pkg.qty * pricePerNum) - pkg.price
+                return (
+                  <div key={i} onClick={() => { setSelectedPkg(pkg); setSelectedNums(prev => prev.slice(0, pkg.qty)) }} style={{ flexShrink: 0, background: isSelected ? 'rgba(201,162,39,0.15)' : '#1a1a1a', border: `${isSelected ? '2px' : '1px'} solid ${isSelected ? C.gold : 'rgba(255,255,255,0.07)'}`, borderRadius: 11, padding: '10px 14px', cursor: 'pointer', minWidth: 80, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                    {isSelected && <GoldLine />}
+                    <div style={{ background: C.green, borderRadius: 999, padding: '1px 5px', color: '#fff', fontSize: 6, fontWeight: 700, marginBottom: 3, display: 'inline-block' }}>-{Math.round(savings/pkg.qty*100/pricePerNum)}%</div>
+                    <div style={{ color: '#fff', fontSize: 9, fontWeight: 700, marginBottom: 3 }}>{pkg.qty} boletos</div>
+                    <div style={{ color: C.gold, fontSize: 13, fontWeight: 900 }}>{fmt(pkg.price)}</div>
+                    <div style={{ color: C.muted, fontSize: 7, textDecoration: 'line-through' }}>{fmt(pkg.qty * pricePerNum)}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* PROMO ACTIVA */}
+        {activePromo && (
+          <div style={{ background: 'rgba(39,174,96,0.08)', border: '1px solid rgba(39,174,96,0.25)', borderRadius: 11, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>ð</span>
+            <div><div style={{ color: C.green, fontSize: 11, fontWeight: 800 }}>{activePromo.label}</div><div style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>{activePromo.get} numero(s) gratis seran asignados automaticamente</div></div>
+          </div>
+        )}
+
+        {/* GRILLA NUMEROS */}
         <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 18, padding: 16, marginBottom: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div>
               <h3 style={{ color: '#fff', fontWeight: 800, fontSize: 14, margin: 0 }}>Selecciona tu numero</h3>
               <div style={{ color: C.green, fontSize: 10, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 6, height: 6, background: C.green, borderRadius: '50%', display: 'inline-block' }} className="pulse"></span>
-                En vivo â actualizacion automatica
+                En vivo
               </div>
             </div>
             <button onClick={luckyNum} style={{ background: 'rgba(201,162,39,0.1)', border: `1px solid rgba(201,162,39,0.25)`, borderRadius: 8, color: C.gold, fontSize: 11, fontWeight: 700, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>Al azar</button>
           </div>
+
+          {/* LEYENDA */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            {[['#0f0f0f','#1e1e1e','#444','Disponible'],['rgba(201,162,39,0.2)',C.gold,C.gold,'Seleccionado'],['#0a0a0a','#1a1a1a','#2a2a2a','Apartado'],['rgba(41,128,185,0.1)','rgba(41,128,185,0.3)','#5DADE2','Sociedad']].map(([bg,border,color,label]) => (
+            {[['#0d0d0d','#1a1a1a','#333','Disponible'],['rgba(201,162,39,0.2)',C.gold,C.gold,'Seleccionado'],['#050505','#111','#1a1a1a','Apartado']].map(([bg,border,color,label]) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 13, height: 13, background: bg, border: `1px solid ${border}`, borderRadius: 3 }}></div><span style={{ fontSize: 10, color: C.muted }}>{label}</span></div>
             ))}
+            {societyNums.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 13, height: 13, background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1px solid #9B59B6', borderRadius: 3 }}></div>
+                <span style={{ fontSize: 10, color: C.purple, fontWeight: 700 }}>ð¥ Sociedad â mitad precio!</span>
+              </div>
+            )}
           </div>
+
+          {/* GRID */}
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 4 }}>
             {Array.from({ length: range }, (_, n) => {
-              const pad = range <= 100 ? String(n).padStart(2,'0') : String(n).padStart(3,'0')
-              const st = getStatus(n)
-              const isSel = selectedNums.includes(n), isRes = st === 'reserved', isSoc = st === 'society'
-              return (
-                <button key={n} onClick={() => { if(isRes) return; toggleNum(n) }}
-                  style={{ aspectRatio: 1, border: `1.5px solid ${isSel?C.gold:isRes?'#1a1a1a':isSoc?'rgba(41,128,185,0.35)':'#1a1a1a'}`, borderRadius: 7, background: isSel?'rgba(201,162,39,0.2)':isRes?'#0a0a0a':isSoc?'rgba(41,128,185,0.08)':'#0d0d0d', color: isSel?C.gold:isRes?'#222':isSoc?'#5DADE2':'#444', fontSize: isRes?8:11, fontWeight: 700, cursor: isRes?'not-allowed':'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {isRes ? 'ð' : pad}
-                </button>
+              const isSoc = societyNums.includes(n)
+              const isRes = allReservedNums.includes(n)
+              const isSel = selectedNums.includes(n)
+
+              if (isSoc) return (
+                <div key={n} onClick={() => setSocietyModal(n)} className="society-glow society-float"
+                  style={{ aspectRatio: 1, borderRadius: 6, background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1.5px solid #9B59B6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg,transparent,rgba(201,160,232,0.8),transparent)' }}></div>
+                  <div style={{ fontSize: range <= 100 ? 8 : 7, fontWeight: 900, color: '#C9A0E8', lineHeight: 1 }}>{pad(n)}</div>
+                  <div style={{ fontSize: 7, lineHeight: 1, marginTop: 1 }}>ð¥</div>
+                </div>
               )
+              if (isRes) return <div key={n} style={{ aspectRatio: 1, border: '1px solid #111', borderRadius: 6, background: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, cursor: 'not-allowed' }}>ð</div>
+              if (isSel) return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio: 1, border: `2px solid ${C.gold}`, borderRadius: 6, background: 'rgba(201,162,39,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, color: C.gold, cursor: 'pointer' }}>{pad(n)}</div>
+              return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio: 1, border: '1px solid #1a1a1a', borderRadius: 6, background: '#0d0d0d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#333', cursor: 'pointer' }}>{pad(n)}</div>
             })}
           </div>
+
           {selectedNums.length > 0 && (
             <div style={{ marginTop: 14 }}>
               <div style={{ background: 'rgba(201,162,39,0.06)', border: `1px solid rgba(201,162,39,0.15)`, borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ color: C.muted, fontSize: 12 }}>Seleccionados</span>
-                  <span style={{ color: C.gold, fontSize: 12, fontWeight: 700 }}>{selectedNums.map(n => range<=100?String(n).padStart(2,'0'):String(n).padStart(3,'0')).join(' Â· ')}</span>
+                  <span style={{ color: C.gold, fontSize: 12, fontWeight: 700 }}>{selectedNums.map(n => pad(n)).join(' Â· ')}</span>
                 </div>
+                {freeNums > 0 && <div style={{ color: C.green, fontSize: 11, marginBottom: 6 }}>+ {freeNums} numero(s) GRATIS por la promo!</div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: C.muted, fontSize: 12 }}>Total</span>
-                  <span style={{ color: C.gold, fontSize: 22, fontWeight: 900 }}>{fmt(selectedNums.length * r.ticket_price)}</span>
+                  <span style={{ color: C.gold, fontSize: 22, fontWeight: 900 }}>{fmt(totalPrice)}</span>
                 </div>
               </div>
               <button onClick={onShowPopup} style={S.btnGold}>Apartar mis numeros</button>
@@ -596,25 +651,60 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
           )}
         </div>
 
-        <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 18, padding: 16, marginBottom: 14 }}>
-          <h3 style={{ color: C.gold, fontWeight: 900, fontSize: 15, margin: '0 0 4px', textTransform: 'uppercase', textAlign: 'center' }}>Verificar mi boleto</h3>
+        {/* SECCION SOCIEDAD */}
+        {societyNums.length > 0 && (
+          <div style={{ background: 'linear-gradient(135deg,#0f0619,#1a0d2a)', border: '1px solid rgba(155,89,182,0.35)', borderRadius: 18, padding: 18, marginBottom: 14, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,transparent,#9B59B6,#C9A0E8,#9B59B6,transparent)' }}></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>ð¥</div>
+              <div><div style={{ color: '#C9A0E8', fontSize: 13, fontWeight: 900 }}>Numeros en Sociedad</div><div style={{ color: '#7b5cad', fontSize: 9, marginTop: 1 }}>Compra la mitad â gana todo el premio</div></div>
+            </div>
+            <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.18)', borderRadius: 10, padding: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {[['Tu pagas','Solo el 50% del valor','#C9A0E8'],['Buscamos','Otra persona para completar el boleto','#9B59B6'],['Si gana','AMBOS reciben el premio completo!','#27AE60']].map(([t,d,c]) => (
+                  <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 16, height: 16, background: `${c}20`, border: `1px solid ${c}40`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><div style={{ width: 5, height: 5, background: c, borderRadius: '50%' }}></div></div>
+                    <div><span style={{ color: c, fontSize: 9, fontWeight: 700 }}>{t}: </span><span style={{ color: '#888', fontSize: 9 }}>{d}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ color: '#7b5cad', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Numeros disponibles ({societyNums.length})</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+              {societyNums.map(n => (
+                <div key={n} onClick={() => setSocietyModal(n)} className="society-glow society-float"
+                  style={{ background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1.5px solid #9B59B6', borderRadius: 10, padding: '8px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
+                  <div style={{ color: '#C9A0E8', fontSize: 16, fontWeight: 900 }}>{pad(n)}</div>
+                  <div style={{ color: '#9B59B6', fontSize: 8, fontWeight: 700 }}>{fmt(r.ticket_price / 2)}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setSocietyModal(societyNums[0])} style={S.btnPurple}>
+              <span>ð¥</span> Unirme a un numero en sociedad
+            </button>
+          </div>
+        )}
+
+        {/* VERIFICAR BOLETO */}
+        <div style={{ ...S.card, marginBottom: 14 }}>
+          <GoldLine />
+          <h3 style={{ color: C.gold, fontWeight: 900, fontSize: 14, margin: '0 0 4px', textAlign: 'center' }}>Verificar mi boleto</h3>
           <p style={{ color: C.muted, fontSize: 12, margin: '0 0 14px', textAlign: 'center' }}>Consulta si tu numero esta correctamente apartado</p>
           <label style={{ fontSize: 10, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Nombre del participante</label>
           <input value={verifyName} onChange={e => setVerifyName(e.target.value)} placeholder="Ej: Carlos Rodriguez" style={{ marginBottom: 8 }} />
-          <div style={{ textAlign: 'center', color: '#333', fontSize: 11, margin: '6px 0' }}>â O â</div>
+          <div style={{ textAlign: 'center', color: '#333', fontSize: 11, margin: '6px 0' }}>â o â</div>
           <label style={{ fontSize: 10, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Celular / WhatsApp</label>
           <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="3001234567" style={{ marginBottom: 14 }} />
           <button onClick={verifyTicket} style={S.btnGold}>Verificar boleto</button>
           {verifyResult !== null && (
             <div style={{ marginTop: 14 }}>
-              {verifyResult.length === 0
-                ? <div style={{ textAlign:'center', color:C.muted, fontSize:13, padding:'16px 0' }}>No se encontraron boletos con esos datos</div>
-                : verifyResult.map((t,i) => (
-                  <div key={i} style={{ background:C.bg3, border:`1px solid ${C.cardBorder}`, borderRadius:12, padding:14, marginBottom:8 }}>
-                    <div style={{ color:C.gold, fontSize:18, fontWeight:900, marginBottom:4 }}>#{(t.numbers||[]).map(n=>range<=100?String(n).padStart(2,'0'):String(n).padStart(3,'0')).join(' Â· ')}</div>
-                    <div style={{ display:'flex', justifyContent:'space-between' }}>
-                      <span style={S.badge(t.status==='paid'?'green':'dim')}>{t.status==='paid'?'Pago confirmado':'Pendiente'}</span>
-                      <span style={{ color:'#fff', fontWeight:700 }}>{fmt(t.total_amount)}</span>
+              {verifyResult.length === 0 ? <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: '16px 0' }}>No se encontraron boletos con esos datos</div>
+                : verifyResult.map((t, i) => (
+                  <div key={i} style={{ background: C.bg3, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: 14, marginBottom: 8 }}>
+                    <div style={{ color: C.gold, fontSize: 18, fontWeight: 900, marginBottom: 4 }}>#{(t.numbers||[]).map(n => pad(n)).join(' Â· ')}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={S.badge(t.status === 'paid' ? 'green' : 'dim')}>{t.status === 'paid' ? 'Pago confirmado' : 'Pendiente'}</span>
+                      <span style={{ color: '#fff', fontWeight: 700 }}>{fmt(t.total_amount)}</span>
                     </div>
                   </div>
                 ))
@@ -623,10 +713,47 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
           )}
         </div>
       </div>
+
+      {/* MODAL SOCIEDAD */}
+      {societyModal !== null && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setSocietyModal(null)}>
+          <div className="slide-up" style={{ background: '#111', borderRadius: '22px 22px 0 0', padding: 24, width: '100%', maxWidth: 500, border: '1px solid rgba(155,89,182,0.35)', borderBottom: 'none', position: 'relative', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,transparent,#9B59B6,#C9A0E8,#9B59B6,transparent)' }}></div>
+            <div style={{ width: 40, height: 4, background: '#2a2a2a', borderRadius: 2, margin: '0 auto 18px' }}></div>
+            <div style={{ textAlign: 'center', marginBottom: 18 }}>
+              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '2px solid #9B59B6', borderRadius: 20, padding: '16px 28px', marginBottom: 10 }} className="society-glow">
+                <div style={{ color: '#7b5cad', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Numero en Sociedad</div>
+                <div style={{ color: '#C9A0E8', fontSize: 52, fontWeight: 900, lineHeight: 1 }}>{pad(societyModal)}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                  <span style={{ fontSize: 14 }}>ð¥</span>
+                  <span style={{ color: '#9B59B6', fontSize: 10, fontWeight: 700 }}>{r.title}</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ background: 'linear-gradient(135deg,rgba(155,89,182,0.08),rgba(155,89,182,0.03))', border: '1px solid rgba(155,89,182,0.2)', borderRadius: 12, padding: 14, marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 6, height: 6, background: '#555', borderRadius: '50%' }}></div><span style={{ color: '#888', fontSize: 11 }}>Valor real del boleto</span></div>
+                <span style={{ color: '#555', fontSize: 12, fontWeight: 700, textDecoration: 'line-through' }}>{fmt(r.ticket_price)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 6, height: 6, background: C.purple, borderRadius: '50%' }}></div><span style={{ color: '#C9A0E8', fontSize: 11, fontWeight: 700 }}>Tu pagas (50%)</span></div>
+                <span style={{ color: C.purple, fontSize: 20, fontWeight: 900 }}>{fmt(r.ticket_price / 2)}</span>
+              </div>
+              <div style={{ background: 'rgba(39,174,96,0.08)', borderRadius: 8, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ fontSize: 14 }}>ð</span>
+                <div><div style={{ color: C.green, fontSize: 9, fontWeight: 700 }}>Si el numero gana, AMBOS reciben el premio completo</div><div style={{ color: C.muted, fontSize: 8, marginTop: 1 }}>{prizes[0]?.amount || 'Premio principal'}</div></div>
+              </div>
+            </div>
+            <button onClick={() => { setSocietyModal(null); alert('Funcionalidad de sociedad â envia mensaje al soporte para coordinarlo!') }} style={{ ...S.btnPurple, marginBottom: 10 }}>
+              <span>ð¥</span> Unirme como socio â {fmt(r.ticket_price / 2)}
+            </button>
+            <button onClick={() => setSocietyModal(null)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#444', fontSize: 13, cursor: 'pointer', padding: 8, fontFamily: 'inherit' }}>Cancelar</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-
 // âââ COMO FUNCIONA ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function HowItWorksPage({ onBack, onRegister }) {
   const steps = [
@@ -732,7 +859,7 @@ function WinnersPage({ onBack, onRaffle }) {
 }
 
 // âââ PROFILE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, onPromoter, onBecomePromoter, isAdmin, onAdmin, onRefresh, onSupport, appConfig }) {
+function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, onPromoter, onBecomePromoter, isAdmin, onAdmin, onRefresh, onSupport, appConfig, pwa }) {
   if (!user) return (
     <div style={{ ...S.content, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:60, textAlign:'center' }}>
       <div style={{ width:72, height:72, borderRadius:16, overflow:'hidden', marginBottom:16 }} className="house-float"><LogoSVG size={72} /></div>
@@ -780,6 +907,44 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
         ? <button onClick={onPromoter} style={{ ...S.btnGold, marginBottom:10 }}>Panel de Vendedor Oficial â</button>
         : <button onClick={onBecomePromoter} style={{ ...S.btnGold, marginBottom:10 }}>Quiero ser Vendedor Oficial</button>
       }
+
+      {/* PWA INSTALL BANNER â se muestra si no ha descargado la app */}
+      {pwa && !pwa.isInstalled && (
+        <div style={{ background:'linear-gradient(135deg,#0d1428,#131b35)', border:'1px solid rgba(52,152,219,0.3)', borderRadius:16, padding:16, marginBottom:14, position:'relative', overflow:'hidden' }}>
+          <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:'linear-gradient(90deg,transparent,#3498DB,transparent)' }}></div>
+          <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+            <div style={{ width:44, height:44, borderRadius:11, overflow:'hidden', border:`1px solid rgba(201,162,39,0.3)`, flexShrink:0 }}><LogoSVG size={44} /></div>
+            <div style={{ flex:1 }}>
+              <div style={{ color:'#fff', fontSize:13, fontWeight:800 }}>Instala La Casa en tu celular</div>
+              <div style={{ color:'#6a9bbf', fontSize:10, marginTop:2 }}>Acceso rapido, notificaciones y funciona sin internet</div>
+            </div>
+            <button onClick={() => {}} style={{ background:'transparent', border:'none', color:'#555', cursor:'pointer', fontSize:18, padding:4, fontFamily:'inherit', lineHeight:1 }}>â</button>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:12 }}>
+            {[['Acceso rapido','Desde tu pantalla de inicio'],['Sin internet','Consulta tus boletos offline'],['Notificaciones','Alertas de sorteos'],['Mas rapida','Carga al instante']].map(([t,d]) => (
+              <div key={t} style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'7px 10px' }}>
+                <div style={{ color:'#fff', fontSize:9, fontWeight:700, marginBottom:1 }}>{t}</div>
+                <div style={{ color:'#555', fontSize:8 }}>{d}</div>
+              </div>
+            ))}
+          </div>
+          {pwa.canInstall ? (
+            <button onClick={pwa.install} style={{ background:'linear-gradient(135deg,#1877F2,#3498DB)', border:'none', borderRadius:10, padding:'12px', color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', width:'100%', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:7 }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Instalar app ahora â es gratis!
+            </button>
+          ) : (
+            <div style={{ background:'rgba(52,152,219,0.08)', border:'1px solid rgba(52,152,219,0.2)', borderRadius:10, padding:'10px 14px' }}>
+              <div style={{ color:'#5DADE2', fontSize:11, fontWeight:700, marginBottom:4 }}>Como instalar manualmente:</div>
+              <div style={{ color:'#888', fontSize:10, lineHeight:1.6 }}>
+                iPhone: Toca el boton compartir y luego "Agregar a pantalla de inicio"<br/>
+                Android: Toca los 3 puntos del menu y "Agregar a pantalla de inicio"
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {isAdmin && <button onClick={onAdmin} style={{ ...S.btnOutline, marginBottom:10 }}>Panel de Administracion</button>}
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:12 }}>
@@ -1041,40 +1206,28 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
     const { data } = await supabase.from('support_messages').select('*').eq('user_id', userId).order('created_at', { ascending:true })
     if (data) setMessages(data)
   }
-
   async function handleImageUpload(file) {
     if (!file || !user) return
     const ext = file.name.split('.').pop()
     const path = `support/${user.id}/${Date.now()}.${ext}`
     try {
       const { error: upErr } = await supabase.storage.from('support-images').upload(path, file, { cacheControl:'3600', upsert:false })
-      if (upErr) { alert('Error al subir imagen. Verifica que el bucket "support-images" este creado en Supabase Storage como publico.'); return }
+      if (upErr) { alert('Error al subir imagen. Verifica que el bucket support-images este creado en Supabase Storage como publico.'); return }
       const { data: { publicUrl } } = supabase.storage.from('support-images').getPublicUrl(path)
-      const days = appConfig?.imgDeleteDays || 3
-      const deleteAt = new Date(Date.now() + days * 86400000).toISOString()
+      const deleteAt = new Date(Date.now() + (appConfig?.imgDeleteDays||3) * 86400000).toISOString()
       await supabase.from('support_messages').insert({ user_id:user.id, message:'Comprobante de pago adjunto', from_admin:false, image_url:publicUrl, delete_at:deleteAt })
       await loadMyMessages()
     } catch(e) { alert('Error al procesar la imagen. Intenta de nuevo.') }
   }
-
   async function sendMessage(text) {
     const content = text || msg
     if (!content.trim()) return
     setMsg(''); setLoading(true)
-    if (isAdmin && selectedConv) {
-      await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:content, from_admin:true })
-      await loadConvMessages(selectedConv.user_id)
-    } else if (user) {
-      await supabase.from('support_messages').insert({ user_id:user.id, message:content, from_admin:false })
-      await loadMyMessages()
-    }
+    if (isAdmin && selectedConv) { await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:content, from_admin:true }); await loadConvMessages(selectedConv.user_id) }
+    else if (user) { await supabase.from('support_messages').insert({ user_id:user.id, message:content, from_admin:false }); await loadMyMessages() }
     setLoading(false)
   }
-
-  const waLink = () => {
-    const num = (appConfig?.supportWhatsapp || '').replace(/\D/g,'')
-    return num ? `https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg || 'Hola! Necesito ayuda')}` : null
-  }
+  const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
 
   if (isAdmin) return (
     <div style={{ height:'calc(100vh - 64px)', display:'flex', flexDirection:'column', background:C.bg }}>
@@ -1084,8 +1237,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
       </div>
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
         <div style={{ width:selectedConv?'35%':'100%', borderRight:`1px solid ${C.cardBorder}`, overflowY:'auto' }}>
-          {conversations.length === 0
-            ? <div style={{ textAlign:'center', padding:'40px 16px', color:C.muted }}><div style={{ fontSize:36, marginBottom:8 }}>ð¬</div><div>Sin mensajes aun</div></div>
+          {conversations.length===0 ? <div style={{ textAlign:'center', padding:'40px 16px', color:C.muted }}><div style={{ fontSize:36, marginBottom:8 }}>ð¬</div>Sin mensajes aun</div>
             : conversations.map((c,i) => (
               <div key={i} onClick={() => setSelectedConv(c)} style={{ padding:'12px 14px', borderBottom:`1px solid rgba(255,255,255,0.04)`, cursor:'pointer', background:selectedConv?.user_id===c.user_id?'rgba(201,162,39,0.06)':'transparent', display:'flex', gap:10, alignItems:'center' }}>
                 <div style={{ width:38, height:38, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:14, flexShrink:0 }}>{(c.name||'U')[0].toUpperCase()}</div>
@@ -1093,16 +1245,14 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
                   <div style={{ color:'#fff', fontWeight:700, fontSize:13, marginBottom:2 }}>{c.name}</div>
                   <div style={{ color:C.muted, fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.last_msg}</div>
                 </div>
-                {c.unread > 0 && <div style={{ width:18, height:18, background:'#C0392B', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#fff', fontWeight:700, flexShrink:0 }}>{c.unread}</div>}
+                {c.unread>0 && <div style={{ width:18, height:18, background:'#C0392B', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#fff', fontWeight:700, flexShrink:0 }}>{c.unread}</div>}
               </div>
-            ))
-          }
+            ))}
         </div>
         {selectedConv && (
           <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
             <div style={{ padding:'10px 14px', borderBottom:`1px solid ${C.cardBorder}`, display:'flex', alignItems:'center', gap:10 }}>
               <button onClick={() => setSelectedConv(null)} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontSize:18, padding:0 }}>â</button>
-              <div style={{ width:32, height:32, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:12 }}>{(selectedConv.name||'U')[0].toUpperCase()}</div>
               <div style={{ flex:1 }}><div style={{ color:'#fff', fontWeight:700, fontSize:13 }}>{selectedConv.name}</div>{selectedConv.phone && <div style={{ color:C.muted, fontSize:11 }}>{selectedConv.phone}</div>}</div>
               <button onClick={() => window.open(`https://wa.me/${(selectedConv.phone||'').replace(/\D/g,'')}`)} style={{ background:'rgba(39,174,96,0.15)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:11, fontWeight:700, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit' }}>WhatsApp</button>
             </div>
@@ -1119,12 +1269,12 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
               <div ref={messagesEndRef} />
             </div>
             <div style={{ padding:'8px 14px', overflowX:'auto', display:'flex', gap:6, scrollbarWidth:'none' }}>
-              {['Pago confirmado','Pago rechazado','En revision','Te contactamos','Ganaste!'].map(r => (
+              {['Pago confirmado','Pago rechazado','En revision','Ganaste!'].map(r => (
                 <button key={r} onClick={() => sendMessage(r)} style={{ flexShrink:0, background:C.bg3, border:`1px solid #2a2a2a`, borderRadius:999, padding:'5px 12px', color:'#ccc', fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{r}</button>
               ))}
             </div>
             <div style={{ padding:'10px 14px', borderTop:`1px solid ${C.cardBorder}`, display:'flex', gap:8 }}>
-              <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key==='Enter' && sendMessage()} placeholder="Responder al cliente..." style={{ flex:1 }} />
+              <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key==='Enter'&&sendMessage()} placeholder="Responder..." style={{ flex:1 }} />
               <button onClick={() => sendMessage()} disabled={loading} style={{ ...S.btnGold, width:'auto', padding:'10px 16px', borderRadius:10 }}>â</button>
             </div>
           </div>
@@ -1133,13 +1283,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
     </div>
   )
 
-  if (!user) return (
-    <div style={{ ...S.content, textAlign:'center', paddingTop:60 }}>
-      <div style={{ fontSize:48, marginBottom:16 }}>ð¬</div>
-      <h2 style={{ color:'#fff', fontWeight:800, marginBottom:8 }}>Atencion al Cliente</h2>
-      <p style={{ color:C.muted, fontSize:14 }}>Inicia sesion para chatear con nosotros</p>
-    </div>
-  )
+  if (!user) return (<div style={{ ...S.content, textAlign:'center', paddingTop:60 }}><div style={{ fontSize:48, marginBottom:16 }}>ð¬</div><h2 style={{ color:'#fff', fontWeight:800, marginBottom:8 }}>Atencion al Cliente</h2><p style={{ color:C.muted, fontSize:14 }}>Inicia sesion para chatear con nosotros</p></div>)
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 128px)', background:C.bg }}>
@@ -1148,35 +1292,16 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
         <div style={{ width:42, height:42, borderRadius:'50%', overflow:'hidden', border:`1px solid rgba(201,162,39,0.3)`, flexShrink:0 }}><LogoSVG size={42} /></div>
         <div style={{ flex:1 }}>
           <div style={{ color:'#fff', fontWeight:700, fontSize:14 }}>La Casa â Soporte</div>
-          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-            <span style={{ width:7, height:7, background:C.green, borderRadius:'50%', display:'inline-block' }} className="pulse"></span>
-            <span style={{ color:C.green, fontSize:11 }}>En linea â respuesta inmediata</span>
-          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:5 }}><span style={{ width:7, height:7, background:C.green, borderRadius:'50%', display:'inline-block' }} className="pulse"></span><span style={{ color:C.green, fontSize:11 }}>En linea</span></div>
         </div>
-        {waLink() && (
-          <a href={waLink()} target="_blank" rel="noreferrer" style={{ textDecoration:'none', flexShrink:0 }}>
-            <div style={{ background:'#075E54', borderRadius:10, padding:'7px 10px', display:'flex', alignItems:'center', gap:5 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              <span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>{appConfig?.supportWhatsappText || 'WhatsApp'}</span>
-            </div>
-          </a>
-        )}
+        {waLink() && (<a href={waLink()} target="_blank" rel="noreferrer" style={{ textDecoration:'none', flexShrink:0 }}><div style={{ background:'#075E54', borderRadius:10, padding:'7px 10px', display:'flex', alignItems:'center', gap:5 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg><span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>{appConfig?.supportWhatsappText||'WhatsApp'}</span></div></a>)}
       </div>
       <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', display:'flex', flexDirection:'column', gap:8 }}>
-        {messages.length === 0 && (
-          <div style={{ background:C.card, borderRadius:'16px 16px 16px 4px', padding:'12px 16px', fontSize:13, color:'#fff', maxWidth:'82%', border:`1px solid ${C.cardBorder}` }}>
-            Bienvenido! En que te podemos ayudar hoy? ð
-          </div>
-        )}
+        {messages.length===0 && <div style={{ background:C.card, borderRadius:'16px 16px 16px 4px', padding:'12px 16px', fontSize:13, color:'#fff', maxWidth:'82%', border:`1px solid ${C.cardBorder}` }}>Bienvenido! En que te podemos ayudar hoy?</div>}
         {messages.map((m,i) => (
           <div key={i} style={{ display:'flex', justifyContent:m.from_admin?'flex-start':'flex-end' }}>
-            <div style={{ maxWidth:'80%', background:m.from_admin?C.card:`linear-gradient(135deg,${C.gold},${C.goldLight})`, color:m.from_admin?'#fff':'#000', border:m.from_admin?`1px solid ${C.cardBorder}`:'none', borderRadius:m.from_admin?'16px 16px 16px 4px':'16px 16px 4px 16px', padding:'10px 14px', fontSize:13, lineHeight:1.5 }}>
-              {m.image_url && (
-                <div style={{ marginBottom:m.message?6:0 }}>
-                  <img src={m.image_url} alt="comprobante" style={{ width:'100%', borderRadius:8, display:'block' }} />
-                  {m.delete_at && <div style={{ fontSize:9, color:m.from_admin?'#555':'rgba(0,0,0,.4)', marginTop:3 }}>Se elimina el {new Date(m.delete_at).toLocaleDateString('es-CO')}</div>}
-                </div>
-              )}
+            <div style={{ maxWidth:'80%', background:m.from_admin?C.card:`linear-gradient(135deg,${C.gold},${C.goldLight})`, color:m.from_admin?'#fff':'#000', border:m.from_admin?`1px solid ${C.cardBorder}`:'none', borderRadius:m.from_admin?'16px 16px 16px 4px':'16px 16px 4px 16px', padding:'10px 14px', fontSize:13 }}>
+              {m.image_url && <div style={{ marginBottom:m.message?6:0 }}><img src={m.image_url} alt="comprobante" style={{ width:'100%', borderRadius:8, display:'block' }} />{m.delete_at && <div style={{ fontSize:9, color:m.from_admin?'#555':'rgba(0,0,0,.4)', marginTop:3 }}>Expira el {new Date(m.delete_at).toLocaleDateString('es-CO')}</div>}</div>}
               {m.message}
               <div style={{ fontSize:10, color:m.from_admin?'#555':'rgba(0,0,0,.4)', marginTop:4, textAlign:'right' }}>{fmtTime(m.created_at)}</div>
             </div>
@@ -1185,21 +1310,18 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
         <div ref={messagesEndRef} />
       </div>
       <div style={{ padding:'8px 16px', borderTop:`1px solid rgba(255,255,255,0.04)`, overflowX:'auto', display:'flex', gap:6, scrollbarWidth:'none', flexShrink:0 }}>
-        {quickReplies.map(q => (
-          <button key={q} onClick={() => sendMessage(q)} style={{ flexShrink:0, background:'rgba(201,162,39,0.07)', border:`1px solid rgba(201,162,39,0.18)`, borderRadius:999, padding:'6px 12px', color:C.gold, fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{q}</button>
-        ))}
+        {quickReplies.map(q => (<button key={q} onClick={() => sendMessage(q)} style={{ flexShrink:0, background:'rgba(201,162,39,0.07)', border:`1px solid rgba(201,162,39,0.18)`, borderRadius:999, padding:'6px 12px', color:C.gold, fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{q}</button>))}
       </div>
       <div style={{ padding:'10px 16px', borderTop:`1px solid ${C.cardBorder}`, display:'flex', gap:8, flexShrink:0, alignItems:'center' }}>
         <button onClick={() => fileInputRef.current?.click()} style={{ width:44, height:44, background:C.bg3, border:`1px solid rgba(201,162,39,0.2)`, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, padding:0 }}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={C.gold} strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill={C.gold} stroke="none"/><polyline points="21 15 16 10 5 21"/></svg>
         </button>
-        <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key==='Enter' && sendMessage()} placeholder="Escribe o adjunta comprobante..." style={{ flex:1 }} />
+        <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key==='Enter'&&sendMessage()} placeholder="Escribe o adjunta comprobante..." style={{ flex:1 }} />
         <button onClick={() => sendMessage()} disabled={loading} style={{ ...S.btnGold, width:'auto', padding:'11px 16px', borderRadius:10, flexShrink:0 }}>â</button>
       </div>
     </div>
   )
 }
-
 // âââ ADMIN ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, onOpenSupport, onRefreshRaffles }) {
   const [tab, setTab] = useState(0)
@@ -1493,6 +1615,7 @@ function ManualSaleForm({ raffles, onSaved }) {
   )
 }
 
+// âââ LOGIN ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // âââ LOGIN ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function LoginScreen({ onLogin, onRegister, onBack }) {
   const [email, setEmail] = useState(''); const [pwd, setPwd] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('')
