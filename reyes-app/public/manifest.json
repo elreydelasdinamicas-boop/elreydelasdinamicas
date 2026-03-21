@@ -1,0 +1,20 @@
+{
+  "name": "La Casa De Las Dinamicas",
+  "short_name": "La Casa",
+  "description": "La mejor plataforma de dinamicas del pais",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080808",
+  "theme_color": "#C9A227",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Ver Dinamicas", "url": "/", "description": "Ver sorteos activos" },
+    { "name": "Mis Boletos", "url": "/?page=profile", "description": "Ver mis boletos" }
+  ],
+  "categories": ["entertainment"],
+  "lang": "es-CO"
+}
