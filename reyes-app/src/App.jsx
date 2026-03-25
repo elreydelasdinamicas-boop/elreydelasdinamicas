@@ -304,10 +304,10 @@ export default function App() {
             <div style={{ background: '#1a1a1a', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', gap: 20 }}>
               <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Sorteo</div><div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{new Date(selectedRaffle.raffle_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}</div></div>
               <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Loteria</div><div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.lottery_name}</div></div>
-              <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Caduca</div><div style={{ color: '#E74C3C', fontSize: 11, fontWeight: 700 }}>24h</div></div>
+              <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Caduca</div><div style={{ color: '#E74C3C', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.release_hours ? (() => { const d = new Date(Date.now() + (selectedRaffle.release_hours||24)*3600000); return d.toLocaleDateString('es-CO',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) })() : '24h'}</div></div>
             </div>
             <button onClick={handleReserve} style={{ ...S.btnGold, marginBottom: 10 }}>Confirmar reserva</button>
-            <div style={{ color: C.muted, fontSize: 11, textAlign: 'center', marginBottom: 10 }}>Los numeros quedan guardados 24 horas mientras confirmas el pago</div>
+            <div style={{ color: C.muted, fontSize: 11, textAlign: 'center', marginBottom: 10 }}>{selectedRaffle.release_hours ? (() => { const d = new Date(Date.now() + (selectedRaffle.release_hours||24)*3600000); return `Los numeros quedan guardados hasta el ${d.toLocaleDateString('es-CO',{day:'numeric',month:'long'})} a las ${d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}` })() : 'Los numeros quedan guardados 24 horas mientras confirmas el pago'}</div>
             <button onClick={() => setShowReservePopup(false)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#444', fontSize: 13, cursor: 'pointer', padding: 8, fontFamily: 'inherit' }}>Cancelar</button>
           </div>
         </div>
@@ -1009,6 +1009,25 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
   const nums = t.numbers || []
   const range = Math.max(...nums, 0) > 99 ? 1000 : 100
   const [showPayModal, setShowPayModal] = useState(false)
+  const [timeLeft, setTimeLeft] = useState('')
+  const [showExtendModal, setShowExtendModal] = useState(false)
+
+  useEffect(() => {
+    if (paid || !t.created_at) return
+    const releaseHours = t.raffles?.release_hours || 24
+    const releaseTime = new Date(t.created_at).getTime() + releaseHours * 3600000
+    const update = () => {
+      const diff = releaseTime - Date.now()
+      if (diff <= 0) { setTimeLeft('Vencido'); return }
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setTimeLeft(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`)
+    }
+    update()
+    const iv = setInterval(update, 1000)
+    return () => clearInterval(iv)
+  }, [t.created_at, paid, t.raffles?.release_hours])
 
   async function releaseOne(num) {
     if (!window.confirm(`Liberar el numero ${String(num).padStart(2,'0')}?`)) return
@@ -1055,10 +1074,37 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
         })}
       </div>
 
+      {!paid && timeLeft && (
+        <div style={{ background: timeLeft === 'Vencido' ? 'rgba(192,57,43,0.1)' : 'rgba(201,162,39,0.06)', border: `1px solid ${timeLeft === 'Vencido' ? 'rgba(192,57,43,0.3)' : 'rgba(201,162,39,0.2)'}`, borderRadius:10, padding:'9px 12px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ color: timeLeft === 'Vencido' ? '#E74C3C' : C.muted, fontSize:9, textTransform:'uppercase', marginBottom:2 }}>{timeLeft === 'Vencido' ? 'Numero vencido' : 'Tiempo para pagar'}</div>
+            <div style={{ color: timeLeft === 'Vencido' ? '#E74C3C' : C.gold, fontSize:20, fontWeight:900, fontFamily:'monospace', letterSpacing:1 }}>{timeLeft}</div>
+          </div>
+          <div>
+            <div style={{ color:C.muted, fontSize:9, marginBottom:4, textAlign:'right' }}>Vence el</div>
+            <div style={{ color:'#fff', fontSize:10, fontWeight:700, textAlign:'right' }}>
+              {(() => { const d = new Date(new Date(t.created_at).getTime() + (t.raffles?.release_hours||24)*3600000); return d.toLocaleDateString('es-CO',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) })()}
+            </div>
+            <div onClick={() => setShowExtendModal(true)} style={{ color:C.gold, fontSize:8, fontWeight:700, textAlign:'right', marginTop:3, cursor:'pointer', textDecoration:'underline' }}>Solicitar mas tiempo</div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:paid?0:12 }}>
         <span style={S.badge(paid?'green':'dim')}>{paid?'Pago confirmado':'Pendiente de pago'}</span>
         <span style={{ color:'#fff', fontSize:15, fontWeight:900 }}>{fmt(t.total_amount)}</span>
       </div>
+
+      {showExtendModal && (
+        <div style={{ background:'linear-gradient(135deg,#1a1200,#141414)', border:`1px solid rgba(201,162,39,0.25)`, borderRadius:12, padding:14, marginBottom:10 }}>
+          <div style={{ color:C.gold, fontSize:12, fontWeight:800, marginBottom:6 }}>Solicitar mas tiempo</div>
+          <div style={{ color:C.muted, fontSize:11, marginBottom:12, lineHeight:1.5 }}>Enviamos una solicitud al administrador para extender el tiempo de tu reserva. El admin decidira si aprueba la extension.</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            <button onClick={async () => { await supabase.from('support_messages').insert({ user_id:t.user_id, message:`Solicito mas tiempo para pagar mi boleto #${(nums||[]).map(n=>String(n).padStart(2,'0')).join(', ')} de la dinamica ${t.raffles?.title||''}. Por favor extender el plazo.`, from_admin:false }); setShowExtendModal(false); alert('Solicitud enviada! El admin revisara tu caso.') }} style={{ background:`rgba(201,162,39,0.1)`, border:`1px solid rgba(201,162,39,0.25)`, borderRadius:9, padding:10, color:C.gold, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Enviar solicitud</button>
+            <button onClick={() => setShowExtendModal(false)} style={{ background:'transparent', border:`1px solid #2a2a2a`, borderRadius:9, padding:10, color:'#555', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
+          </div>
+        </div>
+      )}
 
       {!paid && (
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
@@ -1208,16 +1254,76 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
   }
   async function handleImageUpload(file) {
     if (!file || !user) return
-    const ext = file.name.split('.').pop()
-    const path = `support/${user.id}/${Date.now()}.${ext}`
+
+    // Validar tipo y tamaÃ±o
+    const allowed = ['image/jpeg','image/jpg','image/png','image/webp','image/gif']
+    if (!allowed.includes(file.type)) {
+      alert('Solo se permiten imagenes JPG, PNG, WEBP o GIF.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('La imagen no puede pesar mas de 10MB.')
+      return
+    }
+
+    const ext = file.name.split('.').pop().toLowerCase()
+    const fileName = `${Date.now()}_${Math.random().toString(36).substr(2,6)}.${ext}`
+    const path = `support/${user.id}/${fileName}`
+
     try {
-      const { error: upErr } = await supabase.storage.from('support-images').upload(path, file, { cacheControl:'3600', upsert:false })
-      if (upErr) { alert('Error al subir imagen. Verifica que el bucket support-images este creado en Supabase Storage como publico.'); return }
-      const { data: { publicUrl } } = supabase.storage.from('support-images').getPublicUrl(path)
-      const deleteAt = new Date(Date.now() + (appConfig?.imgDeleteDays||3) * 86400000).toISOString()
-      await supabase.from('support_messages').insert({ user_id:user.id, message:'Comprobante de pago adjunto', from_admin:false, image_url:publicUrl, delete_at:deleteAt })
+      // Subir al bucket
+      const { data: uploadData, error: upErr } = await supabase.storage
+        .from('support-images')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type
+        })
+
+      if (upErr) {
+        console.error('Upload error:', upErr)
+        if (upErr.message?.includes('row-level security') || upErr.message?.includes('policy')) {
+          alert('Error de permisos en Storage. Ejecuta el SQL de fix-storage en Supabase.')
+        } else if (upErr.message?.includes('Bucket not found')) {
+          alert('El bucket support-images no existe. Crealo en Supabase Storage â New Bucket â nombre: support-images â Public.')
+        } else {
+          alert('Error al subir: ' + upErr.message)
+        }
+        return
+      }
+
+      // Obtener URL publica
+      const { data: urlData } = supabase.storage
+        .from('support-images')
+        .getPublicUrl(path)
+
+      const publicUrl = urlData?.publicUrl
+      if (!publicUrl) { alert('No se pudo obtener la URL de la imagen.'); return }
+
+      // Auto-eliminar en 48 horas fijo
+      const deleteAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
+
+      // Guardar en support_messages
+      const { error: msgErr } = await supabase.from('support_messages').insert({
+        user_id: user.id,
+        message: 'Comprobante de pago adjunto',
+        from_admin: false,
+        image_url: publicUrl,
+        delete_at: deleteAt
+      })
+
+      if (msgErr) {
+        console.error('Message error:', msgErr)
+        alert('Imagen subida pero no se pudo registrar el mensaje. Intenta de nuevo.')
+        return
+      }
+
       await loadMyMessages()
-    } catch(e) { alert('Error al procesar la imagen. Intenta de nuevo.') }
+
+    } catch(e) {
+      console.error('handleImageUpload exception:', e)
+      alert('Error inesperado al procesar la imagen. Intenta de nuevo.')
+    }
   }
   async function sendMessage(text) {
     const content = text || msg
@@ -1417,8 +1523,9 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
                 <div style={{ color:C.muted, fontSize:12, marginBottom:6 }}>Numeros: <span style={{ color:C.gold, fontWeight:700 }}>{(t.numbers||[]).map(n=>String(n).padStart(2,'0')).join(', ')}</span></div>
                 <div style={{ color:C.gold, fontWeight:900, fontSize:16, marginBottom:12 }}>{fmt(t.total_amount)}</div>
                 <div style={{ display:'flex', gap:8 }}>
-                  <button onClick={async () => { await supabase.from('tickets').update({status:'paid'}).eq('id',t.id); setTickets(prev=>prev.map(x=>x.id===t.id?{...x,status:'paid'}:x)) }} style={{ flex:1, background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:12, fontWeight:700, padding:10, cursor:'pointer', fontFamily:'inherit' }}>Confirmar pago</button>
+                  <button onClick={async () => { await supabase.from('tickets').update({status:'paid'}).eq('id',t.id); setTickets(prev=>prev.map(x=>x.id===t.id?{...x,status:'paid'}:x)) }} style={{ flex:1, background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:12, fontWeight:700, padding:10, cursor:'pointer', fontFamily:'inherit' }}>Confirmar</button>
                   <button onClick={async () => { await supabase.from('tickets').update({status:'rejected'}).eq('id',t.id); setTickets(prev=>prev.filter(x=>x.id!==t.id)) }} style={{ flex:1, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.25)', borderRadius:8, color:'#E74C3C', fontSize:12, fontWeight:700, padding:10, cursor:'pointer', fontFamily:'inherit' }}>Rechazar</button>
+                  <button onClick={async () => { const extra = window.prompt('Horas adicionales (ej: 12, 24, 48):', '24'); if(!extra || isNaN(extra)) return; const newDate = new Date(new Date(t.created_at).getTime() + parseInt(extra)*3600000).toISOString(); await supabase.from('tickets').update({ created_at: newDate }).eq('id',t.id); await supabase.from('support_messages').insert({ user_id:t.user_id, message:`El administrador te dio ${extra} horas adicionales para pagar tu boleto ${(t.numbers||[]).map(n=>String(n).padStart(2,'0')).join(', ')} de ${t.raffles?.title||''}. Aprovecha este tiempo!`, from_admin:true }); setTickets(prev=>prev.map(x=>x.id===t.id?{...x,created_at:newDate}:x)); alert('Plazo extendido y usuario notificado!') }} style={{ flex:1, background:'rgba(201,162,39,0.08)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:8, color:C.gold, fontSize:12, fontWeight:700, padding:10, cursor:'pointer', fontFamily:'inherit' }}>+Tiempo</button>
                 </div>
               </div>
             ))
@@ -1496,7 +1603,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
     setSaving(true)
     const prizes = form.prizes.split('\n').filter(p=>p.trim()).map(p=>({ amount:p.trim() }))
     const society_numbers = form.society_numbers ? form.society_numbers.split(',').map(n=>parseInt(n.trim())).filter(n=>!isNaN(n)) : []
-    const data = { title:form.title, ticket_price:parseInt(form.ticket_price)||5000, number_range:parseInt(form.number_range)||100, max_per_person:parseInt(form.max_per_person)||5, raffle_date:form.raffle_date, lottery_name:form.lottery_name, card_color:form.card_color, is_free:form.is_free, accepts_points:form.accepts_points, prizes, society_numbers, status:form.status, description:form.description, is_featured:true }
+    const data = { title:form.title, ticket_price:parseInt(form.ticket_price)||5000, number_range:parseInt(form.number_range)||100, max_per_person:parseInt(form.max_per_person)||5, raffle_date:form.raffle_date, lottery_name:form.lottery_name, card_color:form.card_color, is_free:form.is_free, accepts_points:form.accepts_points, prizes, society_numbers, status:form.status, description:form.description, is_featured:true, release_hours:parseInt(form.release_hours)||24 }
     if (isEdit) await supabase.from('raffles').update(data).eq('id', raffle.id)
     else await supabase.from('raffles').insert(data)
     setSaving(false); onSave()
@@ -1540,6 +1647,17 @@ function RaffleForm({ raffle, onBack, onSave }) {
           </div>
         ))}
       </F>
+      <F label="Tiempo para pagar (horas antes de liberar el numero)">
+        <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+          {[[6,'6h'],[12,'12h'],[24,'24h'],[48,'48h'],[72,'72h']].map(([v,l]) => (
+            <button key={v} onClick={()=>setForm(p=>({...p,release_hours:v}))} style={{ flex:1, border:`1px solid ${form.release_hours===v?C.gold:'rgba(201,162,39,0.2)'}`, background:form.release_hours===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:form.release_hours===v?C.gold:C.muted, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
+          ))}
+        </div>
+        <div style={{ background:'rgba(201,162,39,0.06)', border:`1px solid rgba(201,162,39,0.15)`, borderRadius:9, padding:'9px 12px', color:C.muted, fontSize:11 }}>
+          Si el usuario no paga en <span style={{ color:C.gold, fontWeight:700 }}>{form.release_hours} horas</span>, el numero se libera automaticamente para otra persona
+        </div>
+      </F>
+
       <F label="Estado">
         <div style={{ display:'flex', gap:8 }}>
           {[['active','Activo'],['draft','Borrador'],['finished','Finalizado']].map(([v,l]) => (
@@ -1670,7 +1788,7 @@ function RegisterScreen({ onRegister, onLogin, appConfig }) {
           </div>
         )}
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          {[['Nombre completo','name','text','Carlos Rodriguez'],['WhatsApp / Celular','phone','tel','310 000 0000'],['Correo electronico','email','email','tuemail@correo.com'],['Contrasena','password','password','Minimo 6 caracteres'],['Codigo de referido (opcional)','ref','text','CASA-XXXXXX']].map(([label,key,type,ph]) => (
+          {[['Nombre completo','name','text','Carlos Rodriguez'],['WhatsApp / Celular','phone','tel','310 000 0000'],['Correo electronico','email','email','tuemail@correo.com'],['Contrasena','password','password','Minimo 6 caracteres']].map(([label,key,type,ph]) => (
             <div key={key}><label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>{label}</label><input type={type} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} placeholder={ph} /></div>
           ))}
           {error && <div style={{ color:'#E74C3C', fontSize:13, textAlign:'center', padding:'8px 12px', background:'rgba(192,57,43,0.1)', borderRadius:8 }}>{error}</div>}
