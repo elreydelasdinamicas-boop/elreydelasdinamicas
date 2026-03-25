@@ -139,6 +139,7 @@ export default function App() {
   const [showReservePopup, setShowReservePopup] = useState(false)
   const [pendingNums, setPendingNums] = useState(null)
   const [appConfig, setAppConfig] = useState(DEFAULT_CONFIG)
+  const [societyData, setSocietyData] = useState(null) // { raffle, number }
   const pwa = usePWA()
 
   useEffect(() => {
@@ -275,7 +276,7 @@ export default function App() {
       </header>
       <main>
         {page === 'home' && <HomePage raffles={raffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
-        {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} />}
+        {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={num => { setSocietyData({ raffle: selectedRaffle, number: num }); setPage('society') }} />}
         {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={() => setPage('support')} appConfig={appConfig} pwa={pwa} />}
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
         {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
@@ -283,6 +284,8 @@ export default function App() {
         {page === 'admin' && <AdminPage user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={() => setPage('home')} onOpenSupport={() => setPage('admin-support')} onRefreshRaffles={fetchRaffles} />}
         {page === 'admin-support' && <SupportPage user={user} profile={profile} isAdmin={true} onBack={() => setPage('admin')} appConfig={appConfig} />}
         {page === 'winners' && <WinnersPage onBack={() => setPage('home')} onRaffle={() => setPage('home')} />}
+        {page === 'society' && societyData && <SocietyPage user={user} profile={profile} raffle={societyData.raffle} number={societyData.number} onBack={() => { setPage('raffle') }} onLogin={() => setAuthPage('login')} />}
+        {page === 'admin-society' && <AdminSocietyPanel raffles={raffles} onBack={() => setPage('admin')} />}
         {page === 'how' && <HowItWorksPage onBack={() => setPage('home')} onRegister={() => setAuthPage('register')} />}
       </main>
       <nav style={S.bottomNav}>
@@ -468,7 +471,7 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWi
 }
 
 // âââ RAFFLE PAGE con SOCIEDAD visual âââââââââââââââââââââââââââââââââââââââââ
-function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelectedNums, onShowPopup, onBack }) {
+function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelectedNums, onShowPopup, onBack, onSociety }) {
   const range = r.number_range || 100
   const cols = range <= 100 ? 10 : 20
   const prizes = Array.isArray(r.prizes) ? r.prizes : []
@@ -744,7 +747,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
                 <div><div style={{ color: C.green, fontSize: 9, fontWeight: 700 }}>Si el numero gana, AMBOS reciben el premio completo</div><div style={{ color: C.muted, fontSize: 8, marginTop: 1 }}>{prizes[0]?.amount || 'Premio principal'}</div></div>
               </div>
             </div>
-            <button onClick={() => { setSocietyModal(null); alert('Funcionalidad de sociedad â envia mensaje al soporte para coordinarlo!') }} style={{ ...S.btnPurple, marginBottom: 10 }}>
+            <button onClick={() => { setSocietyModal(null); if(onSociety) onSociety(societyModal) }} style={{ ...S.btnPurple, marginBottom: 10 }}>
               <span>ð¥</span> Unirme como socio â {fmt(r.ticket_price / 2)}
             </button>
             <button onClick={() => setSocietyModal(null)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#444', fontSize: 13, cursor: 'pointer', padding: 8, fontFamily: 'inherit' }}>Cancelar</button>
@@ -1090,6 +1093,7 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
         </div>
       )}
 
+      {!paid && <TicketTimer ticket={t} />}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:paid?0:12 }}>
         <span style={S.badge(paid?'green':'dim')}>{paid?'Pago confirmado':'Pendiente de pago'}</span>
         <span style={{ color:'#fff', fontSize:15, fontWeight:900 }}>{fmt(t.total_amount)}</span>
@@ -1429,7 +1433,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
   )
 }
 // âââ ADMIN ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, onOpenSupport, onRefreshRaffles }) {
+function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, onOpenSupport, onOpenSociety, onRefreshRaffles }) {
   const [tab, setTab] = useState(0)
   const [tickets, setTickets] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -1479,10 +1483,13 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
         <div><div style={{ color:C.green, fontSize:10, fontWeight:700, textTransform:'uppercase', marginBottom:3 }}>Total recaudado</div><div style={{ color:'#fff', fontSize:24, fontWeight:900 }}>{fmt(totalRecaudo)}</div></div>
         <div style={{ fontSize:32 }}>ð°</div>
       </div>
-      <button onClick={onOpenSupport} style={{ ...S.btnGold, marginBottom:14, fontSize:14, position:'relative' }}>
-        Atender Clientes
-        {unreadCount > 0 && <span style={{ position:'absolute', top:-8, right:-8, width:22, height:22, background:'#C0392B', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:'#fff', fontWeight:700 }}>{unreadCount}</span>}
-      </button>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+        <button onClick={onOpenSupport} style={{ ...S.btnGold, fontSize:13, position:'relative' }}>
+          Atender Clientes
+          {unreadCount > 0 && <span style={{ position:'absolute', top:-8, right:-8, width:22, height:22, background:'#C0392B', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:'#fff', fontWeight:700 }}>{unreadCount}</span>}
+        </button>
+        <button onClick={() => onOpenSociety && onOpenSociety()} style={{ background:'linear-gradient(135deg,#5b2d8a,#7c3db8)', border:'1px solid rgba(155,89,182,0.4)', borderRadius:12, color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', padding:'14px' }}>ð¥ Sociedades</button>
+      </div>
       <div style={{ display:'flex', gap:3, background:'rgba(255,255,255,0.03)', borderRadius:10, padding:4, marginBottom:16 }}>
         {['Dinamicas','Boletos','Config'].map((t,i) => (
           <button key={t} onClick={() => setTab(i)} style={{ flex:1, padding:9, border:'none', background:tab===i?C.card:'transparent', color:tab===i?'#fff':'#555', fontSize:12, fontWeight:700, cursor:'pointer', borderRadius:8, fontFamily:'inherit' }}>{t}</button>
@@ -1796,6 +1803,389 @@ function RegisterScreen({ onRegister, onLogin, appConfig }) {
         </div>
         <p style={{ textAlign:'center', marginTop:20, color:'#555', fontSize:14 }}>Ya tienes cuenta? <button onClick={onLogin} style={{ background:'none', border:'none', color:C.gold, fontWeight:700, cursor:'pointer', fontSize:14, fontFamily:'inherit' }}>Ingresar</button></p>
       </div>
+    </div>
+  )
+}
+
+// âââ TICKET TIMER â countdown basado en expiracion real ââââââââââââââââââââââ
+function TicketTimer({ ticket }) {
+  const [timeLeft, setTimeLeft] = useState('')
+  const [urgent, setUrgent] = useState(false)
+
+  useEffect(() => {
+    function calc() {
+      const expiry = ticket.expires_at
+        ? new Date(ticket.expires_at)
+        : ticket.raffles?.raffle_date
+          ? new Date(new Date(ticket.raffles.raffle_date).getTime() - 6 * 3600000)
+          : null
+      if (!expiry) { setTimeLeft(''); return }
+      const diff = expiry - Date.now()
+      if (diff <= 0) { setTimeLeft('Vencido'); setUrgent(true); return }
+      const days = Math.floor(diff / 86400000)
+      const hours = Math.floor((diff % 86400000) / 3600000)
+      const mins = Math.floor((diff % 3600000) / 60000)
+      setUrgent(diff < 12 * 3600000)
+      if (days > 0) setTimeLeft(`${days}d ${hours}h restantes`)
+      else if (hours > 0) setTimeLeft(`${hours}h ${mins}m restantes`)
+      else setTimeLeft(`${mins} min restantes`)
+    }
+    calc()
+    const iv = setInterval(calc, 60000)
+    return () => clearInterval(iv)
+  }, [ticket])
+
+  if (!timeLeft) return null
+  const color = urgent ? '#E74C3C' : '#E67E22'
+  const dateLabel = ticket.raffles?.raffle_date
+    ? `Sorteo: ${new Date(ticket.raffles.raffle_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}`
+    : ''
+
+  return (
+    <div style={{ background: urgent ? 'rgba(192,57,43,0.08)' : 'rgba(230,126,34,0.08)', border: `1px solid ${color}40`, borderRadius: 8, padding: '7px 9px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ width: 5, height: 5, background: color, borderRadius: '50%' }} className="pulse"></div>
+          <span style={{ color, fontSize: 9, fontWeight: 700 }}>{urgent ? 'Paga urgente!' : 'Confirma tu pago'}</span>
+        </div>
+        {dateLabel && <div style={{ color: '#555', fontSize: 8, marginTop: 1 }}>{dateLabel}</div>}
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ color, fontSize: 13, fontWeight: 900 }}>{timeLeft}</div>
+      </div>
+    </div>
+  )
+}
+
+// âââ SOCIETY PAGE â pagina completa del sistema de sociedad ââââââââââââââââââ
+function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
+  const [societyTicket, setSocietyTicket] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [joining, setJoining] = useState(false)
+
+  const halfPrice = Math.floor((raffle?.ticket_price || 0) / 2)
+  const pad = n => String(n).padStart(raffle?.number_range <= 100 ? 2 : 3, '0')
+
+  useEffect(() => {
+    fetchSocietyTicket()
+    const ch = supabase.channel(`society-${raffle?.id}-${number}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'society_tickets', filter: `raffle_id=eq.${raffle?.id}` }, fetchSocietyTicket)
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [raffle?.id, number])
+
+  async function fetchSocietyTicket() {
+    if (!raffle?.id) return
+    const { data } = await supabase.from('society_tickets')
+      .select('*, socio1:socio1_id(full_name,city), socio2:socio2_id(full_name,city)')
+      .eq('raffle_id', raffle.id)
+      .eq('number', number)
+      .single()
+    setSocietyTicket(data || null)
+    setLoading(false)
+  }
+
+  async function joinSociety() {
+    if (!user) { onLogin(); return }
+    setJoining(true)
+    try {
+      if (!societyTicket) {
+        // Crear nueva sociedad como socio 1
+        const expiresAt = new Date(Date.now() + 48 * 3600000).toISOString()
+        const { error } = await supabase.from('society_tickets').insert({
+          raffle_id: raffle.id, number, socio1_id: user.id,
+          socio1_paid: false, socio1_amount: halfPrice,
+          status: 'waiting', expires_at: expiresAt
+        })
+        if (error) throw error
+        alert(`Numero #${pad(number)} reservado en sociedad! Tienes 48 horas para confirmar el pago de ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(halfPrice)}.`)
+      } else if (societyTicket.status === 'waiting' && !societyTicket.socio2_id) {
+        // Unirse como socio 2
+        if (societyTicket.socio1_id === user.id) { alert('Ya eres el primer socio de este numero!'); setJoining(false); return }
+        const { error } = await supabase.from('society_tickets').update({
+          socio2_id: user.id, socio2_paid: false,
+          socio2_amount: halfPrice, status: 'complete', updated_at: new Date().toISOString()
+        }).eq('id', societyTicket.id)
+        if (error) throw error
+        alert(`Te uniste a la sociedad del numero #${pad(number)}! Tienen el boleto completo. Confirma tu pago de ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(halfPrice)}.`)
+      }
+      await fetchSocietyTicket()
+    } catch(e) {
+      alert('Error al unirse: ' + e.message)
+    }
+    setJoining(false)
+  }
+
+  const status = societyTicket?.status
+  const isSocio1 = societyTicket?.socio1_id === user?.id
+  const isSocio2 = societyTicket?.socio2_id === user?.id
+  const alreadyIn = isSocio1 || isSocio2
+  const canJoin = !societyTicket || (status === 'waiting' && !societyTicket.socio2_id && !alreadyIn)
+  const fmt = v => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v)
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.bg }}>
+      <style>{CSS}</style>
+      <div style={{ background: 'linear-gradient(180deg,#0f0619 0%,#080808 100%)', padding: '16px 16px 0', borderBottom: '1px solid rgba(155,89,182,0.2)' }}>
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.purple, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: '0 0 14px', fontFamily: 'inherit' }}>â Volver</button>
+        <div style={{ textAlign: 'center', paddingBottom: 20 }}>
+          <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '2px solid #9B59B6', borderRadius: 20, padding: '16px 28px', marginBottom: 12 }} className="society-glow">
+            <div style={{ color: '#7b5cad', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Numero en Sociedad</div>
+            <div style={{ color: '#C9A0E8', fontSize: 52, fontWeight: 900, lineHeight: 1 }}>{pad(number)}</div>
+            <div style={{ color: '#9B59B6', fontSize: 11, fontWeight: 700, marginTop: 6 }}>ð¥ {raffle?.title}</div>
+          </div>
+          {/* Estado del numero */}
+          {loading ? (
+            <div style={{ color: C.muted, fontSize: 12 }}>Verificando disponibilidad...</div>
+          ) : (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '5px 14px', border: '1px solid', ...(
+              !societyTicket ? { background: 'rgba(155,89,182,0.12)', borderColor: 'rgba(155,89,182,0.3)', color: '#C9A0E8' } :
+              status === 'waiting' ? { background: 'rgba(230,126,34,0.12)', borderColor: 'rgba(230,126,34,0.3)', color: '#E67E22' } :
+              { background: 'rgba(39,174,96,0.12)', borderColor: 'rgba(39,174,96,0.3)', color: '#27AE60' }
+            )}}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} className="pulse"></div>
+              <span style={{ fontSize: 10, fontWeight: 700 }}>
+                {!societyTicket ? 'Disponible â 0/2 socios' :
+                 status === 'waiting' ? '1 socio unido â falta 1 mas!' :
+                 status === 'complete' ? 'Completo â 2/2 socios' : 'No disponible'}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={S.content}>
+        {/* Desglose precio */}
+        <div style={{ background: 'linear-gradient(135deg,rgba(155,89,182,0.08),rgba(155,89,182,0.03))', border: '1px solid rgba(155,89,182,0.2)', borderRadius: 16, padding: 16, marginBottom: 14 }}>
+          <div style={{ color: '#9B59B6', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>Desglose del costo</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ color: C.muted, fontSize: 13 }}>Valor real del boleto</span>
+            <span style={{ color: '#555', fontSize: 13, fontWeight: 700, textDecoration: 'line-through' }}>{fmt(raffle?.ticket_price || 0)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ color: '#C9A0E8', fontSize: 13, fontWeight: 700 }}>Tu pagas (50%)</span>
+            <span style={{ color: C.purple, fontSize: 24, fontWeight: 900 }}>{fmt(halfPrice)}</span>
+          </div>
+          <div style={{ background: 'rgba(39,174,96,0.08)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>ð</span>
+            <div>
+              <div style={{ color: '#27AE60', fontSize: 11, fontWeight: 700 }}>Si el numero gana, AMBOS reciben el premio completo</div>
+              <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{(Array.isArray(raffle?.prizes) ? raffle.prizes[0]?.amount : '') || 'Premio principal'}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Como funciona */}
+        <div style={{ ...S.card, marginBottom: 14 }}>
+          <GoldLine />
+          <div style={{ color: '#fff', fontSize: 13, fontWeight: 800, marginBottom: 12 }}>Como funciona la sociedad</div>
+          {[
+            ['ð¥', 'Dos personas compran el mismo numero', 'Cada una paga la mitad del precio del boleto'],
+            ['â', 'El boleto queda completo entre los dos', 'Ambos socios quedan registrados en el sorteo'],
+            ['ð', 'Si el numero gana, ambos ganan', 'El admin coordina la entrega del premio a cada socio'],
+            ['â°', 'Tienes 48 horas para confirmar el pago', 'Si no pagas, el cupo se libera automaticamente'],
+          ].map(([icon, title, desc], i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, marginBottom: i < 3 ? 12 : 0, paddingBottom: i < 3 ? 12 : 0, borderBottom: i < 3 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+              <div><div style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 2 }}>{title}</div><div style={{ color: C.muted, fontSize: 11 }}>{desc}</div></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Socio actual si existe */}
+        {societyTicket && societyTicket.status === 'waiting' && (
+          <div style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: 14, marginBottom: 14 }}>
+            <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 }}>Primer socio (ya pago su parte)</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>ð¤</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                  {societyTicket.reveal_names && societyTicket.socio1?.full_name
+                    ? societyTicket.socio1.full_name.split(' ')[0] + ' â ' + (societyTicket.socio1?.city || 'Colombia')
+                    : 'Socio verificado'}
+                </div>
+                <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>El admin puede revelar su identidad si lo decides</div>
+              </div>
+              <div style={{ background: 'rgba(39,174,96,0.12)', border: '1px solid rgba(39,174,96,0.25)', borderRadius: 999, padding: '3px 9px', color: '#27AE60', fontSize: 9, fontWeight: 700 }}>Pago confirmado</div>
+            </div>
+          </div>
+        )}
+
+        {/* Ya soy socio */}
+        {alreadyIn && (
+          <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.25)', borderRadius: 14, padding: 14, marginBottom: 14, textAlign: 'center' }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>ð¥</div>
+            <div style={{ color: '#C9A0E8', fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Ya eres socio de este numero!</div>
+            <div style={{ color: C.muted, fontSize: 12 }}>Ve a tu panel para ver el estado y confirmar el pago</div>
+          </div>
+        )}
+
+        {/* Boton principal */}
+        {!loading && canJoin && (
+          <button onClick={joinSociety} disabled={joining} style={{ ...S.btnPurple, opacity: joining ? .7 : 1, marginBottom: 8 }}>
+            <span>ð¥</span>
+            {joining ? 'Procesando...' : !societyTicket ? `Ser primer socio â ${fmt(halfPrice)}` : `Unirme como socio â ${fmt(halfPrice)}`}
+          </button>
+        )}
+        {!loading && !canJoin && !alreadyIn && (
+          <div style={{ background: 'rgba(39,174,96,0.08)', border: '1px solid rgba(39,174,96,0.2)', borderRadius: 12, padding: 14, textAlign: 'center' }}>
+            <div style={{ color: '#27AE60', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Este numero ya tiene 2 socios</div>
+            <div style={{ color: C.muted, fontSize: 11 }}>Revisa otros numeros disponibles en sociedad</div>
+          </div>
+        )}
+        <button onClick={onBack} style={{ ...S.btnOutline, marginTop: 8 }}>Ver otros numeros</button>
+      </div>
+    </div>
+  )
+}
+
+// âââ PANEL DE SOCIEDAD EN ADMIN âââââââââââââââââââââââââââââââââââââââââââââââ
+function AdminSocietyPanel({ raffles, onBack }) {
+  const [societies, setSocieties] = useState([])
+  const [filter, setFilter] = useState('all')
+  const [selectedRaffle, setSelectedRaffle] = useState('all')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { fetchSocieties() }, [selectedRaffle])
+
+  async function fetchSocieties() {
+    setLoading(true)
+    let q = supabase.from('society_tickets')
+      .select('*, raffle:raffle_id(title,ticket_price), socio1:socio1_id(full_name,phone,city), socio2:socio2_id(full_name,phone,city)')
+      .order('created_at', { ascending: false })
+    if (selectedRaffle !== 'all') q = q.eq('raffle_id', selectedRaffle)
+    const { data } = await q
+    setSocieties(data || [])
+    setLoading(false)
+  }
+
+  async function revealNames(id) {
+    await supabase.from('society_tickets').update({ reveal_names: true }).eq('id', id)
+    fetchSocieties()
+  }
+  async function extendTime(id) {
+    const newExp = new Date(Date.now() + 24 * 3600000).toISOString()
+    await supabase.from('society_tickets').update({ expires_at: newExp }).eq('id', id)
+    fetchSocieties()
+    alert('Plazo extendido 24 horas')
+  }
+  async function cancelSociety(id) {
+    if (!window.confirm('Cancelar esta sociedad?')) return
+    await supabase.from('society_tickets').update({ status: 'cancelled' }).eq('id', id)
+    fetchSocieties()
+  }
+  async function confirmPayment(id, socioNum) {
+    const field = socioNum === 1 ? 'socio1_paid' : 'socio2_paid'
+    await supabase.from('society_tickets').update({ [field]: true }).eq('id', id)
+    fetchSocieties()
+  }
+
+  const fmt = v => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v)
+  const filtered = filter === 'all' ? societies : societies.filter(s => s.status === filter)
+  const waiting = societies.filter(s => s.status === 'waiting').length
+  const complete = societies.filter(s => s.status === 'complete').length
+
+  return (
+    <div style={S.content}>
+      <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, marginBottom: 16, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>â Volver</button>
+      <div style={{ ...S.card, marginBottom: 14 }}>
+        <GoldLine />
+        <div style={{ color: '#fff', fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Gestion de Sociedades</div>
+        <div style={{ color: C.muted, fontSize: 11 }}>Administra todas las sociedades activas</div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+        {[[societies.length, 'Total', '#9B59B6'], [waiting, 'Sin socio', '#E67E22'], [complete, 'Completas', '#27AE60']].map(([v, l, c]) => (
+          <div key={l} style={{ background: C.card, border: `1px solid rgba(255,255,255,0.06)`, borderRadius: 12, padding: 10, textAlign: 'center' }}>
+            <div style={{ color: c, fontSize: 20, fontWeight: 900 }}>{v}</div>
+            <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: 5, marginBottom: 12, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 4 }}>
+        {[['all', 'Todos'], ['waiting', 'Sin socio'], ['complete', 'Completas'], ['cancelled', 'Canceladas']].map(([v, l]) => (
+          <button key={v} onClick={() => setFilter(v)} style={{ flexShrink: 0, background: filter === v ? 'rgba(201,162,39,0.15)' : '#1a1a1a', border: `1px solid ${filter === v ? C.gold : 'rgba(255,255,255,0.06)'}`, borderRadius: 999, padding: '5px 12px', color: filter === v ? C.gold : C.muted, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{l}</button>
+        ))}
+      </div>
+
+      {loading && <div style={{ textAlign: 'center', padding: '30px 0', color: C.muted }}>Cargando...</div>}
+
+      {!loading && filtered.map(s => {
+        const halfPrice = Math.floor((s.raffle?.ticket_price || 0) / 2)
+        const pad = n => String(n).padStart(2, '0')
+        const statusColor = s.status === 'waiting' ? '#E67E22' : s.status === 'complete' ? '#27AE60' : '#555'
+        return (
+          <div key={s.id} style={{ background: C.card, border: `1px solid ${statusColor}40`, borderRadius: 14, padding: 14, marginBottom: 12, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1.5, background: `linear-gradient(90deg,transparent,${statusColor},transparent)` }}></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div>
+                <div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>{s.raffle?.title}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1.5px solid #9B59B6', borderRadius: 8, padding: '4px 10px', color: '#C9A0E8', fontSize: 18, fontWeight: 900 }}>#{pad(s.number)}</div>
+                  <div style={{ background: `${statusColor}15`, border: `1px solid ${statusColor}35`, borderRadius: 999, padding: '2px 8px', color: statusColor, fontSize: 8, fontWeight: 700 }}>
+                    {s.status === 'waiting' ? 'Sin segundo socio' : s.status === 'complete' ? 'Completa' : 'Cancelada'}
+                  </div>
+                </div>
+              </div>
+              {s.expires_at && s.status === 'waiting' && (
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: C.muted, fontSize: 8 }}>Vence</div>
+                  <div style={{ color: '#E74C3C', fontSize: 10, fontWeight: 700 }}>{new Date(s.expires_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Socios */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              {[{ socio: s.socio1, paid: s.socio1_paid, num: 1, label: 'Socio 1' }, { socio: s.socio2, paid: s.socio2_paid, num: 2, label: 'Socio 2' }].map(({ socio, paid, num, label }) => (
+                <div key={num} style={{ flex: 1, background: '#1a1a1a', borderRadius: 10, padding: '8px 10px' }}>
+                  <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                  {socio ? (
+                    <>
+                      <div style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>{socio.full_name}</div>
+                      <div style={{ color: C.muted, fontSize: 9, margin: '2px 0' }}>{socio.phone}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                        <span style={{ color: fmt(halfPrice), fontSize: 9 }}>{fmt(halfPrice)}</span>
+                        {paid
+                          ? <span style={{ background: 'rgba(39,174,96,0.15)', borderRadius: 999, padding: '1px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700 }}>Pagado</span>
+                          : <button onClick={() => confirmPayment(s.id, num)} style={{ background: 'rgba(39,174,96,0.1)', border: '1px solid rgba(39,174,96,0.25)', borderRadius: 6, padding: '2px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Confirmar</button>
+                        }
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ color: '#555', fontSize: 10, fontStyle: 'italic' }}>Sin socio aun</div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Acciones */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
+              {s.socio1?.phone && (
+                <button onClick={() => window.open(`https://wa.me/${(s.socio1.phone).replace(/\D/g,'')}?text=${encodeURIComponent(`Hola! Tu sociedad del numero #${pad(s.number)} en La Casa De Las Dinamicas`)}`)} style={{ background: '#075E54', border: 'none', borderRadius: 8, padding: '7px', color: '#fff', fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>WA Socio 1</button>
+              )}
+              {!s.reveal_names && (
+                <button onClick={() => revealNames(s.id)} style={{ background: `rgba(201,162,39,0.1)`, border: `1px solid rgba(201,162,39,0.2)`, borderRadius: 8, padding: '7px', color: C.gold, fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Revelar nombres</button>
+              )}
+              {s.status === 'waiting' && (
+                <button onClick={() => extendTime(s.id)} style={{ background: `rgba(201,162,39,0.08)`, border: `1px solid rgba(201,162,39,0.18)`, borderRadius: 8, padding: '7px', color: C.gold, fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+24h</button>
+              )}
+              {s.status !== 'cancelled' && (
+                <button onClick={() => cancelSociety(s.id)} style={{ background: `rgba(192,57,43,0.1)`, border: `1px solid rgba(192,57,43,0.25)`, borderRadius: 8, padding: '7px', color: '#E74C3C', fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+              )}
+            </div>
+          </div>
+        )
+      })}
+      {!loading && filtered.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: C.muted }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>ð¥</div>
+          <div>No hay sociedades {filter !== 'all' ? 'con este filtro' : 'aun'}</div>
+        </div>
+      )}
     </div>
   )
 }
