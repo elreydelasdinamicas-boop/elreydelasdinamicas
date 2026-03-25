@@ -1542,7 +1542,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
         <button onClick={() => onOpenBingo && onOpenBingo()} style={{ background:'linear-gradient(135deg,#1a5a1a,#27AE60)', border:'1px solid rgba(39,174,96,0.4)', borderRadius:12, color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', padding:'14px' }}>ð± Panel Bingo</button>
-        <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'14px', display:'flex', alignItems:'center', justifyContent:'center', color:C.muted, fontSize:11 }}>+ Mas pronto</div
+        <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'14px', display:'flex', alignItems:'center', justifyContent:'center', color:C.muted, fontSize:11 }}>+ Mas pronto</div>
       </div>
       <div style={{ display:'flex', gap:3, background:'rgba(255,255,255,0.03)', borderRadius:10, padding:4, marginBottom:16 }}>
         {['Dinamicas','Boletos','Config'].map((t,i) => (
