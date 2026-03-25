@@ -1154,7 +1154,7 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
           <div style={{ color:C.gold, fontSize:12, fontWeight:800, marginBottom:6 }}>Solicitar mas tiempo</div>
           <div style={{ color:C.muted, fontSize:11, marginBottom:12, lineHeight:1.5 }}>Enviamos una solicitud al administrador para extender el tiempo de tu reserva. El admin decidira si aprueba la extension.</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-            <button onClick={async () => { await supabase.from('support_messages').insert({ user_id:t.user_id, message:`Solicito mas tiempo para pagar mi boleto #${(nums||[]).map(n=>String(n).padStart(2,'0')).join(', ')} de la dinamica ${t.raffles?.title||''}. Por favor extender el plazo.`, from_admin:false }); setShowExtendModal(false); alert('Solicitud enviada! El admin revisara tu caso.') }} style={{ background:`rgba(201,162,39,0.1)`, border:`1px solid rgba(201,162,39,0.25)`, borderRadius:9, padding:10, color:C.gold, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Enviar solicitud</button>
+            <button onClick={async () => { const nums2=(nums||[]).map(n=>String(n).padStart(2,'0')).join(', '); await supabase.from('support_messages').insert({ user_id:t.user_id, message:'Solicito mas tiempo para pagar mi boleto #'+nums2+' de la dinamica '+(t.raffles?.title||'')+'. Por favor extender el plazo.', from_admin:false }); setShowExtendModal(false); alert('Solicitud enviada! El admin revisara tu caso.') }} style={{ background:'rgba(201,162,39,0.1)', border:'1px solid rgba(201,162,39,0.25)', borderRadius:9, padding:10, color:C.gold, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Enviar solicitud</button>
             <button onClick={() => setShowExtendModal(false)} style={{ background:'transparent', border:`1px solid #2a2a2a`, borderRadius:9, padding:10, color:'#555', fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>Cancelar</button>
           </div>
         </div>
@@ -1560,7 +1560,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
               <div style={{ color:C.muted, fontSize:11, marginBottom:10 }}>{fmt(r.ticket_price)} Â· {r.lottery_name} Â· {r.number_range<=100?'00-99':'000-999'}</div>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={() => setEditingRaffle(r)} style={{ flex:1, background:'rgba(201,162,39,0.08)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:8, color:C.gold, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Editar</button>
-                <button onClick={async () => { const n=window.prompt(`Numero ganador (0-${r.number_range-1}):`); if(n!==null) alert(`Ganador: #${String(parseInt(n)).padStart(r.number_range<=100?2:3,'0')}`) }} style={{ flex:1, background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Realizar sorteo</button>
+                <button onClick={async () => { const n=window.prompt('Numero ganador (0-'+(r.number_range-1)+'):'); if(n!==null) alert('Ganador: #'+String(parseInt(n)).padStart(r.number_range<=100?2:3,'0')) }} style={{ flex:1, background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Realizar sorteo</button>
               </div>
             </div>
           ))}
@@ -2244,7 +2244,7 @@ function AdminSocietyPanel({ raffles, onBack }) {
             {/* Acciones */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
               {s.socio1?.phone && (
-                <button onClick={() => window.open(`https://wa.me/${(s.socio1.phone).replace(/\D/g,'')}?text=${encodeURIComponent(`Hola! Tu sociedad del numero #${pad(s.number)} en La Casa De Las Dinamicas`)}`)} style={{ background: '#075E54', border: 'none', borderRadius: 8, padding: '7px', color: '#fff', fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>WA Socio 1</button>
+                <button onClick={() => window.open('https://wa.me/'+(s.socio1.phone).replace(/\D/g,'')+'?text='+encodeURIComponent('Hola! Tu sociedad del numero #'+pad(s.number)+' en La Casa De Las Dinamicas'))} style={{ background: '#075E54', border: 'none', borderRadius: 8, padding: '7px', color: '#fff', fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>WA Socio 1</button>
               )}
               {!s.reveal_names && (
                 <button onClick={() => revealNames(s.id)} style={{ background: `rgba(201,162,39,0.1)`, border: `1px solid rgba(201,162,39,0.2)`, borderRadius: 8, padding: '7px', color: C.gold, fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Revelar nombres</button>
