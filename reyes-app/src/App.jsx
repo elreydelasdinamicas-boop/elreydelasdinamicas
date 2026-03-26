@@ -251,10 +251,8 @@ export default function App() {
   }
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+    <div style={{ minHeight: '100vh', background: C.bg }}>
       <style>{CSS}</style>
-      <div className="house-float"><LogoSVG size={72} /></div>
-      <div style={{ color: C.gold, fontWeight: 700, letterSpacing: 1 }}>Cargando La Casa...</div>
     </div>
   )
   if (authPage === 'choose') return <ChooseAuthScreen selectedRaffle={selectedRaffle} selectedNums={selectedNums} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onBack={() => { setAuthPage(null); setPage('raffle') }} />
@@ -1724,18 +1722,23 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
 }
 
 // âââ RAFFLE FORM ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// âââ FORM FIELD â definido fuera para evitar re-render y perdida de foco ââââ
+function FormField({ label, children }) {
+  return (
+    <div style={{ marginBottom:14 }}>
+      <label style={{ fontSize:10, fontWeight:700, color:'#555', textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
 function RaffleForm({ raffle, onBack, onSave }) {
   const isEdit = !!raffle
   const [form, setForm] = useState({ title:raffle?.title||'', ticket_price:raffle?.ticket_price||5000, number_range:raffle?.number_range||100, max_per_person:raffle?.max_per_person||5, raffle_date:raffle?.raffle_date?raffle.raffle_date.split('T')[0]:'', lottery_name:raffle?.lottery_name||'', card_color:raffle?.card_color||'#E67E22', is_free:raffle?.is_free||false, accepts_points:raffle?.accepts_points!==false, prizes:raffle?.prizes?raffle.prizes.map(p=>p.amount||p).join('\n'):'', society_numbers:raffle?.society_numbers?raffle.society_numbers.join(', '):'', status:raffle?.status||'active', description:raffle?.description||'', is_featured:raffle?.is_featured||false, release_hours:raffle?.release_hours||24 })
   const [saving, setSaving] = useState(false)
   const colors = ['#C9A227','#E74C3C','#3498DB','#27AE60','#9B59B6','#E67E22','#1ABC9C']
 
-  const F = ({ label, children }) => (
-    <div style={{ marginBottom:14 }}>
-      <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>{label}</label>
-      {children}
-    </div>
-  )
+  // F defined outside to prevent focus loss - see FormField component below
 
   async function save() {
     if (!form.title || !form.raffle_date || !form.lottery_name) { alert('Completa el titulo, fecha y loteria'); return }
@@ -1755,25 +1758,25 @@ function RaffleForm({ raffle, onBack, onSave }) {
         <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
         <div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>{isEdit?'Editar dinamica':'Crear nueva dinamica'}</div>
       </div>
-      <F label="Nombre del sorteo"><input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="Ej: MOTO YAMAHA MT-03 + $500.000" /></F>
-      <F label="Rango de numeros">
+      <FormField label="Nombre del sorteo"><input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="Ej: MOTO YAMAHA MT-03 + $500.000" /></FormField>
+      <FormField label="Rango de numeros">
         <div style={{ display:'flex', gap:8 }}>
           {[[100,'00 al 99'],[1000,'000 al 999']].map(([v,l]) => (
             <button key={v} onClick={()=>setForm(p=>({...p,number_range:v}))} style={{ flex:1, border:`1px solid ${form.number_range===v?C.gold:'rgba(201,162,39,0.2)'}`, background:form.number_range===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'10px', textAlign:'center', color:form.number_range===v?C.gold:C.muted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
           ))}
         </div>
-      </F>
-      <F label="Valor del boleto (COP)"><input type="number" value={form.ticket_price} onChange={e=>setForm(p=>({...p,ticket_price:e.target.value}))} placeholder="5000" /></F>
-      <F label="Maximo boletos por persona">
+      </FormField>
+      <FormField label="Valor del boleto (COP)"><input type="number" value={form.ticket_price} onChange={e=>setForm(p=>({...p,ticket_price:e.target.value}))} placeholder="5000" /></FormField>
+      <FormField label="Maximo boletos por persona">
         <div style={{ display:'flex', gap:6 }}>
           {[['1',1],['2',2],['5',5],['10',10],['Sin limite',999]].map(([l,v]) => (
             <button key={l} onClick={()=>setForm(p=>({...p,max_per_person:v}))} style={{ flex:1, border:`1px solid ${form.max_per_person===v?C.gold:'rgba(201,162,39,0.2)'}`, background:form.max_per_person===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:8, padding:'8px 2px', textAlign:'center', color:form.max_per_person===v?C.gold:C.muted, fontSize:9, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
           ))}
         </div>
-      </F>
-      <F label="Fecha del sorteo"><input type="date" value={form.raffle_date} onChange={e=>setForm(p=>({...p,raffle_date:e.target.value}))} /></F>
-      <F label="Loteria que juega"><input value={form.lottery_name} onChange={e=>setForm(p=>({...p,lottery_name:e.target.value}))} placeholder="Ej: Loteria de Bogota" /></F>
-      <F label="Color de la tarjeta">
+      </FormField>
+      <FormField label="Fecha del sorteo"><input type="date" value={form.raffle_date} onChange={e=>setForm(p=>({...p,raffle_date:e.target.value}))} /></FormField>
+      <FormField label="Loteria que juega"><input value={form.lottery_name} onChange={e=>setForm(p=>({...p,lottery_name:e.target.value}))} placeholder="Ej: Loteria de Bogota" /></FormField>
+      <FormField label="Color de la tarjeta">
         <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
           {[
             ['#E67E22','Naranja'],['#C9A227','Dorado'],['#C0392B','Rojo'],
@@ -1793,8 +1796,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
           <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${form.card_color},transparent)` }}></div>
           Vista previa â asi se vera la tarjeta en el home
         </div>
-      </F>
-      <F label="Marcar como destacado">
+      </FormField>
+      <FormField label="Marcar como destacado">
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:9, padding:'11px 14px' }}>
           <div>
             <div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>Sorteo destacado</div>
@@ -1802,16 +1805,16 @@ function RaffleForm({ raffle, onBack, onSave }) {
           </div>
           <Toggle on={form.is_featured||false} onToggle={()=>setForm(p=>({...p,is_featured:!p.is_featured}))} />
         </div>
-      </F>
-      <F label="Opciones">
+      </FormField>
+      <FormField label="Opciones">
         {[['accepts_points','Acepta pago con puntos'],['is_free','Sorteo gratis (sin costo)']].map(([key,label]) => (
           <div key={key} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:9, padding:'11px 14px', marginBottom:8 }}>
             <div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>{label}</div>
             <Toggle on={form[key]} onToggle={()=>setForm(p=>({...p,[key]:!p[key]}))} />
           </div>
         ))}
-      </F>
-      <F label="Tiempo para pagar (horas antes de liberar el numero)">
+      </FormField>
+      <FormField label="Tiempo para pagar (horas antes de liberar el numero)">
         <div style={{ display:'flex', gap:8, marginBottom:8 }}>
           {[[6,'6h'],[12,'12h'],[24,'24h'],[48,'48h'],[72,'72h']].map(([v,l]) => (
             <button key={v} onClick={()=>setForm(p=>({...p,release_hours:v}))} style={{ flex:1, border:`1px solid ${form.release_hours===v?C.gold:'rgba(201,162,39,0.2)'}`, background:form.release_hours===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:form.release_hours===v?C.gold:C.muted, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
@@ -1820,25 +1823,25 @@ function RaffleForm({ raffle, onBack, onSave }) {
         <div style={{ background:'rgba(201,162,39,0.06)', border:`1px solid rgba(201,162,39,0.15)`, borderRadius:9, padding:'9px 12px', color:C.muted, fontSize:11 }}>
           Si el usuario no paga en <span style={{ color:C.gold, fontWeight:700 }}>{form.release_hours} horas</span>, el numero se libera automaticamente para otra persona
         </div>
-      </F>
+      </FormField>
 
-      <F label="Estado">
+      <FormField label="Estado">
         <div style={{ display:'flex', gap:8 }}>
           {[['active','Activo'],['draft','Borrador'],['finished','Finalizado']].map(([v,l]) => (
             <button key={v} onClick={()=>setForm(p=>({...p,status:v}))} style={{ flex:1, border:`1px solid ${form.status===v?C.gold:'rgba(201,162,39,0.2)'}`, background:form.status===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:form.status===v?C.gold:C.muted, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
           ))}
         </div>
-      </F>
-      <F label="Premios (uno por linea)">
+      </FormField>
+      <FormField label="Premios (uno por linea)">
         <textarea rows={5} value={form.prizes} onChange={e=>setForm(p=>({...p,prizes:e.target.value}))} placeholder={"Moto Yamaha MT-03 0km\n$500.000 en efectivo\n$200.000 en efectivo"} style={{ background:'#1a1a1a', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:12, padding:'13px 16px', color:'#fff', fontSize:14, outline:'none', width:'100%', fontFamily:'inherit', resize:'none', boxSizing:'border-box' }} />
-      </F>
-      <F label="Numeros en sociedad (separados por coma)">
+      </FormField>
+      <FormField label="Numeros en sociedad (separados por coma)">
         <input value={form.society_numbers} onChange={e=>setForm(p=>({...p,society_numbers:e.target.value}))} placeholder="Ej: 07, 13, 42, 77, 88" />
         <div style={{ color:C.muted, fontSize:10, marginTop:4 }}>Estos numeros se pueden comprar en sociedad entre dos personas</div>
-      </F>
-      <F label="Descripcion opcional">
+      </FormField>
+      <FormField label="Descripcion opcional">
         <textarea rows={3} value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Informacion adicional..." style={{ background:'#1a1a1a', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:12, padding:'13px 16px', color:'#fff', fontSize:14, outline:'none', width:'100%', fontFamily:'inherit', resize:'none', boxSizing:'border-box' }} />
-      </F>
+      </FormField>
       <button onClick={save} disabled={saving} style={{ ...S.btnGold, marginBottom:10, opacity:saving?.7:1 }}>{saving?'Guardando...':isEdit?'Guardar cambios':'Crear dinamica'}</button>
       <button onClick={onBack} style={S.btnOutline}>Cancelar</button>
     </div>
