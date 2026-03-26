@@ -26,55 +26,15 @@
       html, body { height: 100%; background: #000; }
       body { font-family: 'DM Sans', system-ui, sans-serif; }
       #root { min-height: 100%; }
-      #splash {
-        position: fixed; inset: 0; background: #000;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 16px; z-index: 9999;
-        transition: opacity 0.3s ease;
-      }
-      #splash.hidden { opacity: 0; pointer-events: none; }
-      #splash-title {
-        color: #E6BE00; font-weight: 700; letter-spacing: 2px;
-        font-size: 13px; text-transform: uppercase;
-        font-family: 'DM Sans', system-ui, sans-serif;
-      }
       @supports (padding: env(safe-area-inset-bottom)) {
         body { padding-bottom: env(safe-area-inset-bottom); }
       }
     </style>
   </head>
   <body>
-    <div id="splash">
-      <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <polygon points="50,4 92,20 92,60 50,96 8,60 8,20" fill="#1a1000" stroke="#E6BE00" stroke-width="3"/>
-        <polygon points="50,22 72,36 28,36" fill="#E6BE00"/>
-        <rect x="30" y="36" width="40" height="26" fill="#2a1e00"/>
-        <rect x="45" y="50" width="10" height="12" rx="2" fill="#1a1000"/>
-        <rect x="33" y="40" width="5" height="5" rx="1" fill="#E6BE00"/>
-        <rect x="62" y="40" width="5" height="5" rx="1" fill="#E6BE00"/>
-        <rect x="20" y="67" width="60" height="22" rx="3" fill="#0d0900" stroke="#E6BE00" stroke-width="1.5"/>
-        <text x="50" y="74" text-anchor="middle" fill="#E6BE00" font-size="5.5" font-weight="bold">LA CASA</text>
-        <text x="50" y="80" text-anchor="middle" fill="#E6BE00" font-size="3.5">DE LAS</text>
-        <text x="50" y="86" text-anchor="middle" fill="#E6BE00" font-size="5" font-weight="bold">DINAMICAS</text>
-      </svg>
-      <div id="splash-title">Cargando La Casa...</div>
-    </div>
-
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-
     <script>
-      function hideSplash() {
-        var splash = document.getElementById('splash')
-        if (!splash) return
-        splash.classList.add('hidden')
-        setTimeout(function() { if (splash.parentNode) splash.parentNode.removeChild(splash) }, 400)
-      }
-      if (document.readyState === 'complete') { setTimeout(hideSplash, 300) }
-      document.addEventListener('DOMContentLoaded', function() { setTimeout(hideSplash, 300) })
-      window.addEventListener('load', function() { setTimeout(hideSplash, 200) })
-      setTimeout(hideSplash, 1500)
-
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/sw.js')
@@ -86,7 +46,6 @@
             .catch(function(err) { console.log('SW error:', err) })
         })
       }
-
       window.deferredInstallPrompt = null
       window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault()
