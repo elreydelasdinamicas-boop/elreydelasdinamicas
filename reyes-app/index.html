@@ -10,10 +10,6 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#E6BE00" />
     <meta name="description" content="La mejor plataforma de dinamicas y sorteos de Colombia." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://www.lacasadelasdinamicas.com/" />
-    <meta property="og:title" content="La Casa De Las Dinamicas" />
-    <meta property="og:description" content="La mejor plataforma de dinamicas del pais. Participa y gana!" />
     <link rel="icon" type="image/png" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
@@ -29,21 +25,38 @@
       @supports (padding: env(safe-area-inset-bottom)) {
         body { padding-bottom: env(safe-area-inset-bottom); }
       }
+      #loader {
+        position: fixed; inset: 0; background: #000;
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9999; transition: opacity 0.4s ease;
+      }
+      #loader.hide { opacity: 0; pointer-events: none; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .spinner {
+        width: 36px; height: 36px; border-radius: 50%;
+        border: 3px solid #1a1a1a;
+        border-top-color: #E6BE00;
+        animation: spin 0.8s linear infinite;
+      }
     </style>
   </head>
   <body>
+    <div id="loader"><div class="spinner"></div></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
+      function hideLoader() {
+        var l = document.getElementById('loader')
+        if (!l) return
+        l.classList.add('hide')
+        setTimeout(function() { if (l.parentNode) l.parentNode.removeChild(l) }, 450)
+      }
+      window.addEventListener('load', function() { setTimeout(hideLoader, 400) })
+      setTimeout(hideLoader, 3000)
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js')
-            .then(function(reg) {
-              navigator.serviceWorker.addEventListener('message', function(e) {
-                if (e.data && e.data.type === 'NAVIGATE') window.location.href = e.data.url
-              })
-            })
-            .catch(function(err) { console.log('SW error:', err) })
+          navigator.serviceWorker.register('/sw.js').catch(function(e) { console.log('SW:', e) })
         })
       }
       window.deferredInstallPrompt = null
