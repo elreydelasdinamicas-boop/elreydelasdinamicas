@@ -912,7 +912,9 @@ function WinnersPage({ onBack, onRaffle }) {
 }
 
 // âââ PROFILE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, onPromoter, onBecomePromoter, isAdmin, onAdmin, onRefresh, onSupport, appConfig, pwa }) {
+function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, isAdmin, onAdmin, onRefresh, onSupport, appConfig, pwa }) {
+  const [tab, setTab] = useState(0) // 0=todo, 1=reservas, 2=pagados, 3=historial
+
   if (!user) return (
     <div style={{ ...S.content, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:60, textAlign:'center' }}>
       <div style={{ width:72, height:72, borderRadius:16, overflow:'hidden', marginBottom:16 }} className="house-float"><LogoSVG size={72} /></div>
@@ -925,138 +927,214 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
 
   const reserved = myTickets.filter(t => t.status === 'reserved')
   const paid = myTickets.filter(t => t.status === 'paid')
+  const history = myTickets.filter(t => !['reserved','paid'].includes(t.status))
   const name = profile?.full_name || user.email
+  const phone = profile?.phone || ''
+
+  const tabTickets = tab === 0 ? myTickets : tab === 1 ? reserved : tab === 2 ? paid : history
 
   const downloadTicket = (ticket) => {
-    const nums = (ticket.numbers || []).map(n => `#${String(n).padStart(2,'0')}`).join('  ')
-    const blob = new Blob([`LA CASA DE LAS DINAMICAS\n${'='.repeat(32)}\n\nBOLETO CONFIRMADO\n\nDinamica: ${ticket.raffles?.title || ''}\nNumeros: ${nums}\nTotal: ${fmt(ticket.total_amount)}\nSorteo: ${ticket.raffles?.raffle_date ? fmtDate(ticket.raffles.raffle_date) : ''}\n\n${'='.repeat(32)}\nwww.lacasadelasdinamicas.com`], { type: 'text/plain' })
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `boleto-${(ticket.numbers||[]).join('-')}.txt`; a.click()
+    const nums = (ticket.numbers || []).map(n => '#'+String(n).padStart(2,'0')).join('  ')
+    const blob = new Blob(['LA CASA DE LAS DINAMICAS\n'+'='.repeat(32)+'\n\nBOLETO CONFIRMADO\n\nDinamica: '+(ticket.raffles?.title||'')+'\nNumeros: '+nums+'\nTotal: '+fmt(ticket.total_amount)+'\n\n'+'='.repeat(32)+'\nwww.lacasadelasdinamicas.com'], { type:'text/plain' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'boleto-'+((ticket.numbers||[]).join('-'))+'.txt'; a.click()
   }
 
   return (
-    <div style={S.content}>
-      <div style={{ background:`linear-gradient(160deg,#1a1200,${C.card})`, border:`1px solid ${C.cardBorder}`, borderRadius:18, padding:18, marginBottom:12, position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-          <div style={{ position:'relative' }}>
-            <div style={{ width:54, height:54, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:900, color:'#000', border:`3px solid rgba(201,162,39,0.3)` }}>{name[0].toUpperCase()}</div>
-            <div style={{ position:'absolute', bottom:-2, right:-2, width:18, height:18, background:C.green, borderRadius:'50%', border:`2px solid ${C.bg}` }}></div>
+    <div style={{ background:C.bg, minHeight:'100vh' }}>
+      {/* HEADER PERFIL */}
+      <div style={{ background:C.bg2, padding:'14px 16px', borderBottom:'1px solid #111' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:2 }}>
+          <div>
+            <div style={{ color:'#fff', fontSize:20, fontWeight:900, lineHeight:1.2 }}>
+              Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:4 }}>
+              {phone && <span style={{ color:C.muted, fontSize:10 }}>{phone}</span>}
+              <span style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'2px 8px', color:C.gold, fontSize:9, fontWeight:700, textTransform:'uppercase' }}>
+                {isAdmin ? 'Administrador' : 'Participante'}
+              </span>
+            </div>
           </div>
-          <div style={{ flex:1 }}>
-            <div style={{ color:C.muted, fontSize:10, marginBottom:2 }}>Hola de nuevo,</div>
-            <div style={{ color:'#fff', fontWeight:900, fontSize:18, lineHeight:1.1 }}>{name}</div>
-            <span style={{ background:'rgba(201,162,39,0.1)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:999, padding:'2px 10px', fontSize:10, fontWeight:700, color:C.gold, textTransform:'uppercase', marginTop:5, display:'inline-flex', alignItems:'center', gap:4 }}>
-              <span style={{ width:5, height:5, background:C.gold, borderRadius:'50%', display:'inline-block' }}></span>
-              {isAdmin?'Administrador':profile?.is_promoter?'Vendedor Oficial':'Participante'}
-            </span>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            {isAdmin && (
+              <button onClick={onAdmin} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:8, padding:'6px 10px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Admin</button>
+            )}
+            <button onClick={onLogout} style={{ display:'flex', alignItems:'center', gap:4, background:'transparent', border:'none', cursor:'pointer', padding:4 }}>
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#C0392B" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              <span style={{ color:'#C0392B', fontSize:10, fontWeight:700 }}>Salir</span>
+            </button>
           </div>
-          <button onClick={onLogout} style={{ width:36, height:36, background:C.bg3, border:`1px solid #2a2a2a`, borderRadius:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'#666' }}>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          </button>
         </div>
       </div>
 
-      {profile?.is_promoter
-        ? <button onClick={onPromoter} style={{ ...S.btnGold, marginBottom:10 }}>Panel de Vendedor Oficial â</button>
-        : <button onClick={onBecomePromoter} style={{ ...S.btnGold, marginBottom:10 }}>Quiero ser Vendedor Oficial</button>
-      }
+      <div style={{ padding:'12px 16px 88px' }}>
+        {/* SALDO Y PUNTOS â compactos */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
+          <div style={{ background:'#151515', border:'1px solid #1e1e1e', borderRadius:12, padding:'10px 12px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                <span style={{ fontSize:12 }}>ð°</span>
+                <span style={{ color:C.muted, fontSize:7, fontWeight:700, textTransform:'uppercase' }}>Mi Dinero</span>
+              </div>
+              <div style={{ background:C.gold, borderRadius:6, padding:'3px 7px', color:'#000', fontSize:7, fontWeight:800, cursor:'pointer' }}>+ Recargar</div>
+            </div>
+            <div style={{ display:'flex', alignItems:'baseline', gap:3 }}>
+              <div style={{ width:2, height:16, background:C.gold, borderRadius:2 }}></div>
+              <div style={{ color:'#fff', fontSize:20, fontWeight:900, lineHeight:1, marginLeft:4 }}>{fmt(profile?.credits || 0)}</div>
+            </div>
+          </div>
+          <div style={{ background:'#151515', border:'1px solid #1e1e1e', borderRadius:12, padding:'10px 12px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                <span style={{ fontSize:12 }}>ð</span>
+                <span style={{ color:C.muted, fontSize:7, fontWeight:700, textTransform:'uppercase' }}>Puntos</span>
+              </div>
+              <div style={{ width:16, height:16, background:'#1a0030', border:'1px solid rgba(155,89,182,0.3)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#9B59B6" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+            </div>
+            <div style={{ color:'#9B59B6', fontSize:20, fontWeight:900, lineHeight:1 }}>{(profile?.points || 0).toLocaleString()}</div>
+          </div>
+        </div>
 
-      {/* PWA INSTALL BANNER â se muestra si no ha descargado la app */}
-      {pwa && !pwa.isInstalled && (
-        <div style={{ background:'linear-gradient(135deg,#0d1428,#131b35)', border:'1px solid rgba(52,152,219,0.3)', borderRadius:16, padding:16, marginBottom:14, position:'relative', overflow:'hidden' }}>
-          <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:'linear-gradient(90deg,transparent,#3498DB,transparent)' }}></div>
-          <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
-            <div style={{ width:44, height:44, borderRadius:11, overflow:'hidden', border:`1px solid rgba(201,162,39,0.3)`, flexShrink:0 }}><LogoSVG size={44} /></div>
+        {/* PWA BANNER â compacto */}
+        {pwa && !pwa.isInstalled && (
+          <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:11, padding:'9px 12px', marginBottom:12, display:'flex', alignItems:'center', gap:9, position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:'linear-gradient(90deg,transparent,#E6BE00,transparent)' }}></div>
+            <div style={{ width:28, height:28, borderRadius:7, overflow:'hidden', flexShrink:0, border:'1px solid rgba(230,190,0,0.25)' }}><LogoSVG size={28} /></div>
             <div style={{ flex:1 }}>
-              <div style={{ color:'#fff', fontSize:13, fontWeight:800 }}>Instala La Casa en tu celular</div>
-              <div style={{ color:'#6a9bbf', fontSize:10, marginTop:2 }}>Acceso rapido, notificaciones y funciona sin internet</div>
+              <div style={{ color:'#fff', fontSize:10, fontWeight:800 }}>Instala La Casa</div>
+              <div style={{ color:C.muted, fontSize:8 }}>Offline + notificaciones</div>
             </div>
-            <button onClick={() => {}} style={{ background:'transparent', border:'none', color:'#555', cursor:'pointer', fontSize:18, padding:4, fontFamily:'inherit', lineHeight:1 }}>â</button>
+            {pwa.canInstall
+              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:7, padding:'6px 10px', color:'#000', fontSize:8, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
+              : <div style={{ color:C.muted, fontSize:8, flexShrink:0, maxWidth:80, textAlign:'right', lineHeight:1.3 }}>Menu â Agregar a pantalla</div>
+            }
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:12 }}>
-            {[['Acceso rapido','Desde tu pantalla de inicio'],['Sin internet','Consulta tus boletos offline'],['Notificaciones','Alertas de sorteos'],['Mas rapida','Carga al instante']].map(([t,d]) => (
-              <div key={t} style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'7px 10px' }}>
-                <div style={{ color:'#fff', fontSize:9, fontWeight:700, marginBottom:1 }}>{t}</div>
-                <div style={{ color:'#555', fontSize:8 }}>{d}</div>
-              </div>
-            ))}
-          </div>
-          {pwa.canInstall ? (
-            <button onClick={pwa.install} style={{ background:'linear-gradient(135deg,#1877F2,#3498DB)', border:'none', borderRadius:10, padding:'12px', color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', width:'100%', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:7 }}>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Instalar app ahora â es gratis!
+        )}
+
+        {/* TABS */}
+        <div style={{ background:'#111', borderRadius:11, padding:3, display:'flex', gap:2, marginBottom:14 }}>
+          {[['Todo', myTickets.length], ['Reservas', reserved.length], ['Pagados', paid.length], ['Historial', history.length]].map(([lb, count], i) => (
+            <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'7px 3px', borderRadius:8, border:'none', textAlign:'center', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
+              <span style={{ color:tab===i?'#000':C.muted, fontSize:8, fontWeight:tab===i?800:500 }}>{lb}</span>
+              {count > 0 && <span style={{ position:'absolute', top:2, right:4, background:tab===i?'rgba(0,0,0,0.3)':'rgba(230,190,0,0.3)', borderRadius:999, width:14, height:14, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:tab===i?'#000':C.gold }}>{count}</span>}
             </button>
-          ) : (
-            <div style={{ background:'rgba(52,152,219,0.08)', border:'1px solid rgba(52,152,219,0.2)', borderRadius:10, padding:'10px 14px' }}>
-              <div style={{ color:'#5DADE2', fontSize:11, fontWeight:700, marginBottom:4 }}>Como instalar manualmente:</div>
-              <div style={{ color:'#888', fontSize:10, lineHeight:1.6 }}>
-                iPhone: Toca el boton compartir y luego "Agregar a pantalla de inicio"<br/>
-                Android: Toca los 3 puntos del menu y "Agregar a pantalla de inicio"
-              </div>
+          ))}
+        </div>
+
+        {/* BOLETOS como tarjetas de color con numero grande */}
+        {tabTickets.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>ðï¸</div>
+            <div style={{ color:'#fff', fontSize:14, fontWeight:600, marginBottom:6 }}>
+              {tab === 0 ? 'Aun no tienes boletos' : 'No hay boletos aqui'}
             </div>
-          )}
+            <div style={{ fontSize:12 }}>Participa en una dinamica!</div>
+          </div>
+        ) : (
+          <>
+            {/* Reservados */}
+            {(tab === 0 || tab === 1) && reserved.length > 0 && (
+              <>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+                    <span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>Reservados</span>
+                  </div>
+                  <span style={{ background:'#1a1a1a', borderRadius:999, padding:'2px 8px', color:C.muted, fontSize:8, fontWeight:700 }}>{reserved.length}</span>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
+                  {reserved.map(t => <TicketColorCard key={t.id} ticket={t} onRefresh={onRefresh} profile={profile} appConfig={appConfig} downloadTicket={downloadTicket} onSupport={onSupport} />)}
+                </div>
+              </>
+            )}
+            {/* Pagados */}
+            {(tab === 0 || tab === 2) && paid.length > 0 && (
+              <>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#27AE60" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>Pagados</span>
+                  </div>
+                  <span style={{ background:'#1a1a1a', borderRadius:999, padding:'2px 8px', color:C.muted, fontSize:8, fontWeight:700 }}>{paid.length}</span>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
+                  {paid.map(t => <TicketColorCard key={t.id} ticket={t} paid onRefresh={onRefresh} profile={profile} appConfig={appConfig} downloadTicket={downloadTicket} onSupport={onSupport} />)}
+                </div>
+              </>
+            )}
+            {/* Historial */}
+            {(tab === 0 || tab === 3) && history.length > 0 && (
+              <>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                  <div style={{ color:'#fff', fontSize:12, fontWeight:900 }}>Historial</div>
+                  <span style={{ background:'#1a1a1a', borderRadius:999, padding:'2px 8px', color:C.muted, fontSize:8, fontWeight:700 }}>{history.length}</span>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  {history.map(t => <TicketColorCard key={t.id} ticket={t} finished onRefresh={onRefresh} profile={profile} appConfig={appConfig} downloadTicket={downloadTicket} onSupport={onSupport} />)}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// âââ TICKET COLOR CARD â tarjeta con numero grande estilo imagen ââââââââââââââ
+function TicketColorCard({ ticket: t, paid, finished, onRefresh, profile, appConfig, downloadTicket, onSupport }) {
+  const nums = t.numbers || []
+  const num = nums[0] !== undefined ? String(nums[0]).padStart(2,'0') : '?'
+  const extraNums = nums.slice(1)
+  const raffle = t.raffles || {}
+  const color = paid ? '#27AE60' : finished ? '#333' : (raffle.card_color || '#E67E22')
+  const expires = t.expires_at ? new Date(t.expires_at) : null
+  const now = Date.now()
+  const hoursLeft = expires ? Math.max(0, Math.floor((expires - now) / 3600000)) : null
+
+  return (
+    <div style={{ background:color, borderRadius:12, padding:'11px 10px', cursor:'pointer', position:'relative', overflow:'hidden' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:3 }}>
+        <div style={{ background:'rgba(0,0,0,0.22)', borderRadius:999, padding:'2px 6px', color:'#fff', fontSize:7, fontWeight:700 }}>
+          {raffle.lottery_name || ''}
+        </div>
+        <div style={{ width:16, height:16, background:'rgba(0,0,0,0.22)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }} onClick={() => onSupport && onSupport()}>
+          <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="white" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+      </div>
+      <div style={{ color:'rgba(255,255,255,0.75)', fontSize:7, fontWeight:700, marginBottom:1, textTransform:'uppercase', lineHeight:1.2 }}>
+        {(raffle.title || '').substring(0,20)}
+      </div>
+      <div style={{ color:'#fff', fontSize:32, fontWeight:900, lineHeight:1, marginBottom:extraNums.length > 0 ? 2 : 5 }}>{num}</div>
+      {extraNums.length > 0 && (
+        <div style={{ display:'flex', gap:3, marginBottom:5, flexWrap:'wrap' }}>
+          {extraNums.slice(0,3).map(n => <span key={n} style={{ background:'rgba(0,0,0,0.2)', borderRadius:4, padding:'1px 5px', color:'#fff', fontSize:8, fontWeight:700 }}>{String(n).padStart(2,'0')}</span>)}
+          {extraNums.length > 3 && <span style={{ color:'rgba(255,255,255,0.6)', fontSize:7 }}>+{extraNums.length-3}</span>}
         </div>
       )}
-
-      {isAdmin && <button onClick={onAdmin} style={{ ...S.btnOutline, marginBottom:10 }}>Panel de Administracion</button>}
-
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:12 }}>
-        <div style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:12, padding:10, textAlign:'center' }}>
-          <div style={{ color:C.gold, fontSize:20, fontWeight:900 }}>{myTickets.length}</div>
-          <div style={{ color:C.muted, fontSize:8, textTransform:'uppercase', marginTop:2 }}>Boletos</div>
+      {/* Timer para reservados */}
+      {!paid && !finished && hoursLeft !== null && (
+        <div style={{ background:'rgba(0,0,0,0.2)', borderRadius:6, padding:'3px 6px', display:'flex', alignItems:'center', gap:4, marginBottom:5 }}>
+          <svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span style={{ color:hoursLeft < 3 ? '#FFD700' : 'rgba(255,255,255,0.8)', fontSize:7, fontWeight:700 }}>
+            {hoursLeft}h restantes
+          </span>
         </div>
-        <div style={{ background:C.card, border:'1px solid rgba(39,174,96,0.2)', borderRadius:12, padding:10, textAlign:'center' }}>
-          <div style={{ color:C.green, fontSize:20, fontWeight:900 }}>{paid.length}</div>
-          <div style={{ color:C.muted, fontSize:8, textTransform:'uppercase', marginTop:2 }}>Pagados</div>
-        </div>
-        <div style={{ background:C.card, border:'1px solid rgba(192,57,43,0.2)', borderRadius:12, padding:10, textAlign:'center' }}>
-          <div style={{ color:'#E74C3C', fontSize:20, fontWeight:900 }}>{reserved.length}</div>
-          <div style={{ color:C.muted, fontSize:8, textTransform:'uppercase', marginTop:2 }}>Pendientes</div>
-        </div>
-      </div>
-
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
-        <div style={{ background:'linear-gradient(135deg,#0d1a2a,#0a1520)', border:'1px solid rgba(41,128,185,0.2)', borderRadius:14, padding:14 }}>
-          <div style={{ color:'#5DADE2', fontSize:10, fontWeight:700, textTransform:'uppercase', marginBottom:4 }}>Mi Saldo</div>
-          <div style={{ color:'#fff', fontSize:22, fontWeight:900 }}>{fmt(profile?.credits || 0)}</div>
-          <button style={{ marginTop:8, background:'rgba(41,128,185,0.15)', border:'1px solid rgba(41,128,185,0.3)', borderRadius:7, padding:'5px 10px', color:'#5DADE2', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Recargar</button>
-        </div>
-        <div style={{ background:`linear-gradient(135deg,#1a1200,#120e00)`, border:`1px solid rgba(201,162,39,0.2)`, borderRadius:14, padding:14 }}>
-          <div style={{ color:C.gold, fontSize:10, fontWeight:700, textTransform:'uppercase', marginBottom:4 }}>Mis Puntos</div>
-          <div style={{ color:'#fff', fontSize:22, fontWeight:900 }}>{(profile?.points || 0).toLocaleString()}</div>
-          <div style={{ color:C.muted, fontSize:10, marginTop:8 }}>pts de fidelidad</div>
-        </div>
-      </div>
-
-      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-        <div style={{ flex:1, height:1, background:`linear-gradient(90deg,${C.gold},transparent)` }}></div>
-        <h2 style={{ color:'#fff', fontWeight:900, fontSize:15, margin:0, textTransform:'uppercase', letterSpacing:1 }}>Mis Boletos</h2>
-        <div style={{ flex:1, height:1, background:`linear-gradient(90deg,transparent,${C.gold})` }}></div>
-      </div>
-
-      {paid.length > 0 && <>{
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}><div style={{ width:7, height:7, background:C.green, borderRadius:'50%' }}></div><span style={{ color:C.green, fontSize:11, fontWeight:800, textTransform:'uppercase' }}>Pago confirmado ({paid.length})</span></div>}
-        {paid.map(t => <TicketCard key={t.id} ticket={t} paid onRefresh={onRefresh} onDownload={downloadTicket} onSupport={onSupport} appConfig={appConfig} />)}
-      </>}
-
-      {reserved.length > 0 && <>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, marginTop:paid.length>0?12:0 }}>
-          <div style={{ width:7, height:7, background:C.gold, borderRadius:'50%' }} className="pulse"></div>
-          <span style={{ color:C.gold, fontSize:11, fontWeight:800, textTransform:'uppercase' }}>Pendientes de pago ({reserved.length})</span>
-        </div>
-        {reserved.map(t => <TicketCard key={t.id} ticket={t} onRefresh={onRefresh} onDownload={downloadTicket} onSupport={onSupport} appConfig={appConfig} />)}
-      </>}
-
-      {myTickets.length === 0 && (
-        <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
-          <div style={{ fontSize:44, marginBottom:12 }}>ðï¸</div>
-          <div style={{ fontSize:15, fontWeight:600, color:'#fff', marginBottom:6 }}>Aun no tienes boletos</div>
-          <div style={{ fontSize:13 }}>Participa en una dinamica y gana!</div>
-        </div>
+      )}
+      {/* Boton pagar / estado */}
+      {paid ? (
+        <div style={{ background:'rgba(0,0,0,0.2)', borderRadius:6, padding:'5px', textAlign:'center', color:'#fff', fontSize:7, fontWeight:700 }}>Pagado â</div>
+      ) : finished ? (
+        <div style={{ background:'rgba(0,0,0,0.15)', borderRadius:6, padding:'5px', textAlign:'center', color:'rgba(255,255,255,0.5)', fontSize:7 }}>Finalizado</div>
+      ) : (
+        <WAPayButton ticket={t} profile={profile} appConfig={appConfig} compact />
       )}
     </div>
   )
 }
+
 
 function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConfig }) {
   const nums = t.numbers || []
