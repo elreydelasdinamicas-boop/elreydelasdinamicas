@@ -130,7 +130,7 @@ export default function App() {
   const [page, setPage] = useState('home')
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [authPage, setAuthPage] = useState(null)
   const [raffles, setRaffles] = useState([])
   const [selectedRaffle, setSelectedRaffle] = useState(null)
@@ -250,11 +250,7 @@ export default function App() {
     await fetchProfile(user.id); alert('Ahora eres Vendedor Oficial!'); setPage('promoter')
   }
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: C.bg }}>
-      <style>{CSS}</style>
-    </div>
-  )
+  // Don't block render while loading - show home with empty raffles instead
   if (authPage === 'choose') return <ChooseAuthScreen selectedRaffle={selectedRaffle} selectedNums={selectedNums} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onBack={() => { setAuthPage(null); setPage('raffle') }} />
   if (authPage === 'login') return <LoginScreen onLogin={doLogin} onRegister={() => setAuthPage('register')} onBack={() => setAuthPage(null)} />
   if (authPage === 'register') return <RegisterScreen onRegister={doRegister} onLogin={() => setAuthPage('login')} appConfig={appConfig} />
@@ -281,7 +277,7 @@ export default function App() {
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
         {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
         {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={false} appConfig={appConfig} />}
-        {page === 'admin' && <AdminPage user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={() => setPage('home')} onOpenSupport={() => setPage('admin-support')} onRefreshRaffles={fetchRaffles} />}
+        {page === 'admin' && <AdminPage user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={() => setPage('home')} onOpenSupport={() => setPage('admin-support')} onOpenSociety={() => setPage('admin-society')} onOpenBingo={() => setPage('admin-bingo')} onRefreshRaffles={fetchRaffles} />}
         {page === 'admin-support' && <SupportPage user={user} profile={profile} isAdmin={true} onBack={() => setPage('admin')} appConfig={appConfig} />}
         {page === 'winners' && <WinnersPage onBack={() => setPage('home')} onRaffle={() => setPage('home')} />}
         {page === 'society' && societyData && <SocietyPage user={user} profile={profile} raffle={societyData.raffle} number={societyData.number} onBack={() => { setPage('raffle') }} onLogin={() => setAuthPage('login')} />}
