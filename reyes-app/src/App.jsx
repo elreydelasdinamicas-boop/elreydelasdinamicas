@@ -256,7 +256,7 @@ export default function App() {
   if (authPage === 'register') return <RegisterScreen onRegister={doRegister} onLogin={() => setAuthPage('login')} appConfig={appConfig} />
 
   const displayName = profile?.full_name || user?.user_metadata?.full_name || 'Amigo'
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = profile?.role === 'admin' || user?.user_metadata?.role === 'admin'
 
   return (
     <div style={{ background: C.bg, minHeight: '100vh' }}>
@@ -907,7 +907,7 @@ function WinnersPage({ onBack, onRaffle }) {
 
 // âââ PROFILE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, isAdmin, onAdmin, onRefresh, onSupport, appConfig, pwa }) {
-  const [tab, setTab] = useState(0) // 0=todo, 1=reservas, 2=pagados, 3=historial
+  const [tab, setTab] = useState(0)
 
   if (!user) return (
     <div style={{ ...S.content, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:60, textAlign:'center' }}>
@@ -919,90 +919,86 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
     </div>
   )
 
-  const reserved = myTickets.filter(t => t.status === 'reserved')
-  const paid = myTickets.filter(t => t.status === 'paid')
-  const history = myTickets.filter(t => !['reserved','paid'].includes(t.status))
-  const name = profile?.full_name || user.email
+  const name = profile?.full_name || user.email || ''
   const phone = profile?.phone || ''
 
-  const tabTickets = tab === 0 ? myTickets : tab === 1 ? reserved : tab === 2 ? paid : history
-
-  const downloadTicket = (ticket) => {
-    const nums = (ticket.numbers || []).map(n => '#'+String(n).padStart(2,'0')).join('  ')
-    const blob = new Blob(['LA CASA DE LAS DINAMICAS\n'+'='.repeat(32)+'\n\nBOLETO CONFIRMADO\n\nDinamica: '+(ticket.raffles?.title||'')+'\nNumeros: '+nums+'\nTotal: '+fmt(ticket.total_amount)+'\n\n'+'='.repeat(32)+'\nwww.lacasadelasdinamicas.com'], { type:'text/plain' })
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'boleto-'+((ticket.numbers||[]).join('-'))+'.txt'; a.click()
+  // Agrupar boletos por raffle_id
+  const groupTickets = (tickets) => {
+    const groups = {}
+    tickets.forEach(t => {
+      const key = t.raffle_id || t.raffles?.id || t.id
+      if (!groups[key]) groups[key] = { raffle: t.raffles, tickets: [], status: t.status }
+      groups[key].tickets.push(t)
+    })
+    return Object.values(groups)
   }
+
+  const reserved = myTickets.filter(t => t.status === 'reserved')
+  const paid     = myTickets.filter(t => t.status === 'paid')
+  const history  = myTickets.filter(t => !['reserved','paid'].includes(t.status))
+
+  const tabTickets = tab === 0 ? myTickets : tab === 1 ? reserved : tab === 2 ? paid : history
+  const groupedTickets = groupTickets(tabTickets)
+
+  const reservedGroups = groupTickets(reserved)
+  const paidGroups     = groupTickets(paid)
+  const historyGroups  = groupTickets(history)
 
   return (
     <div style={{ background:C.bg, minHeight:'100vh' }}>
-      {/* HEADER PERFIL */}
-      <div style={{ background:C.bg2, padding:'14px 16px', borderBottom:'1px solid #111' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:2 }}>
-          <div>
-            <div style={{ color:'#fff', fontSize:20, fontWeight:900, lineHeight:1.2 }}>
-              Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span>
+      {/* HEADER */}
+      <div style={{ background:'#111', padding:'13px 16px', borderBottom:'1px solid #1a1a1a' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ width:40, height:40, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:900, color:'#000', border:`2px solid rgba(230,190,0,0.25)`, flexShrink:0 }}>
+              {name[0]?.toUpperCase() || 'U'}
             </div>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:4 }}>
-              {phone && <span style={{ color:C.muted, fontSize:10 }}>{phone}</span>}
-              <span style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'2px 8px', color:C.gold, fontSize:9, fontWeight:700, textTransform:'uppercase' }}>
-                {isAdmin ? 'Administrador' : 'Participante'}
-              </span>
+            <div>
+              <div style={{ color:'#fff', fontSize:15, fontWeight:900 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
+              <div style={{ background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:999, padding:'1px 9px', display:'inline-block', marginTop:3 }}>
+                <span style={{ color:'#777', fontSize:8, fontWeight:600 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
+              </div>
             </div>
           </div>
-          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-            {isAdmin && (
-              <button onClick={onAdmin} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:8, padding:'6px 10px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Admin</button>
-            )}
-            <button onClick={onLogout} style={{ display:'flex', alignItems:'center', gap:4, background:'transparent', border:'none', cursor:'pointer', padding:4 }}>
+          <div style={{ display:'flex', gap:7, alignItems:'center' }}>
+            {isAdmin && <button onClick={onAdmin} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:7, padding:'5px 10px', color:C.gold, fontSize:9, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Admin</button>}
+            <button onClick={onLogout} style={{ width:30, height:30, background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#C0392B" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              <span style={{ color:'#C0392B', fontSize:10, fontWeight:700 }}>Salir</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div style={{ padding:'12px 16px 88px' }}>
-        {/* SALDO Y PUNTOS â compactos */}
+      <div style={{ padding:'12px 16px 90px' }}>
+        {/* DINERO + PUNTOS */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
-          <div style={{ background:'#151515', border:'1px solid #1e1e1e', borderRadius:12, padding:'10px 12px' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                <span style={{ fontSize:12 }}>ð°</span>
-                <span style={{ color:C.muted, fontSize:7, fontWeight:700, textTransform:'uppercase' }}>Mi Dinero</span>
-              </div>
-              <div style={{ background:C.gold, borderRadius:6, padding:'3px 7px', color:'#000', fontSize:7, fontWeight:800, cursor:'pointer' }}>+ Recargar</div>
+          <div style={{ background:'linear-gradient(135deg,#0d1628,#0a1220)', border:'1px solid rgba(41,128,185,0.3)', borderRadius:13, padding:'11px 13px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:6 }}>
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#5DADE2" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              <span style={{ color:'#5DADE2', fontSize:8, fontWeight:700, textTransform:'uppercase' }}>Mi Dinero</span>
             </div>
-            <div style={{ display:'flex', alignItems:'baseline', gap:3 }}>
-              <div style={{ width:2, height:16, background:C.gold, borderRadius:2 }}></div>
-              <div style={{ color:'#fff', fontSize:20, fontWeight:900, lineHeight:1, marginLeft:4 }}>{fmt(profile?.credits || 0)}</div>
-            </div>
+            <div style={{ color:'#fff', fontSize:20, fontWeight:900, marginBottom:6 }}>{fmt(profile?.credits || 0)}</div>
+            <div style={{ background:'#E67E22', borderRadius:6, padding:'4px 9px', color:'#fff', fontSize:7, fontWeight:800, display:'inline-block', cursor:'pointer' }}>+ Recargar</div>
           </div>
-          <div style={{ background:'#151515', border:'1px solid #1e1e1e', borderRadius:12, padding:'10px 12px' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                <span style={{ fontSize:12 }}>ð</span>
-                <span style={{ color:C.muted, fontSize:7, fontWeight:700, textTransform:'uppercase' }}>Puntos</span>
-              </div>
-              <div style={{ width:16, height:16, background:'#1a0030', border:'1px solid rgba(155,89,182,0.3)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#9B59B6" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              </div>
+          <div style={{ background:'#0d0d0d', border:`1px solid rgba(230,190,0,0.25)`, borderRadius:13, padding:'11px 13px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:6 }}>
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+              <span style={{ color:C.gold, fontSize:8, fontWeight:700, textTransform:'uppercase' }}>Mis Puntos</span>
             </div>
-            <div style={{ color:'#9B59B6', fontSize:20, fontWeight:900, lineHeight:1 }}>{(profile?.points || 0).toLocaleString()}</div>
+            <div style={{ color:'#fff', fontSize:20, fontWeight:900, marginBottom:6 }}>{(profile?.points || 0).toLocaleString()}</div>
+            <div style={{ color:'#444', fontSize:7 }}>pts disponibles</div>
           </div>
         </div>
 
-        {/* PWA BANNER â compacto */}
+        {/* PWA BANNER compacto */}
         {pwa && !pwa.isInstalled && (
           <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:11, padding:'9px 12px', marginBottom:12, display:'flex', alignItems:'center', gap:9, position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:'linear-gradient(90deg,transparent,#E6BE00,transparent)' }}></div>
-            <div style={{ width:28, height:28, borderRadius:7, overflow:'hidden', flexShrink:0, border:'1px solid rgba(230,190,0,0.25)' }}><LogoSVG size={28} /></div>
-            <div style={{ flex:1 }}>
-              <div style={{ color:'#fff', fontSize:10, fontWeight:800 }}>Instala La Casa</div>
-              <div style={{ color:C.muted, fontSize:8 }}>Offline + notificaciones</div>
-            </div>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
+            <div style={{ width:28, height:28, borderRadius:7, overflow:'hidden', flexShrink:0, border:`1px solid rgba(230,190,0,0.25)` }}><LogoSVG size={28} /></div>
+            <div style={{ flex:1 }}><div style={{ color:'#fff', fontSize:10, fontWeight:800 }}>Instala La Casa</div><div style={{ color:C.muted, fontSize:8 }}>Offline + notificaciones</div></div>
             {pwa.canInstall
               ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:7, padding:'6px 10px', color:'#000', fontSize:8, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
-              : <div style={{ color:C.muted, fontSize:8, flexShrink:0, maxWidth:80, textAlign:'right', lineHeight:1.3 }}>Menu â Agregar a pantalla</div>
+              : <div style={{ color:C.muted, fontSize:8, flexShrink:0, maxWidth:70, textAlign:'right', lineHeight:1.4 }}>Menu â Agregar pantalla</div>
             }
           </div>
         )}
@@ -1010,64 +1006,52 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
         {/* TABS */}
         <div style={{ background:'#111', borderRadius:11, padding:3, display:'flex', gap:2, marginBottom:14 }}>
           {[['Todo', myTickets.length], ['Reservas', reserved.length], ['Pagados', paid.length], ['Historial', history.length]].map(([lb, count], i) => (
-            <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'7px 3px', borderRadius:8, border:'none', textAlign:'center', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
+            <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'7px 2px', borderRadius:8, border:'none', textAlign:'center', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
               <span style={{ color:tab===i?'#000':C.muted, fontSize:8, fontWeight:tab===i?800:500 }}>{lb}</span>
-              {count > 0 && <span style={{ position:'absolute', top:2, right:4, background:tab===i?'rgba(0,0,0,0.3)':'rgba(230,190,0,0.3)', borderRadius:999, width:14, height:14, display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:700, color:tab===i?'#000':C.gold }}>{count}</span>}
+              {count > 0 && <span style={{ position:'absolute', top:2, right:3, background:tab===i?'rgba(0,0,0,0.25)':'rgba(230,190,0,0.2)', borderRadius:999, width:13, height:13, display:'flex', alignItems:'center', justifyContent:'center', fontSize:6, fontWeight:700, color:tab===i?'#000':C.gold }}>{count}</span>}
             </button>
           ))}
         </div>
 
-        {/* BOLETOS como tarjetas de color con numero grande */}
-        {tabTickets.length === 0 ? (
+        {/* TITULO MIS BOLETOS */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+          <div style={{ width:3, height:18, background:C.gold, borderRadius:2 }}></div>
+          <span style={{ color:'#fff', fontSize:14, fontWeight:900, textTransform:'uppercase', letterSpacing:.5 }}>Mis Boletos</span>
+        </div>
+
+        {myTickets.length === 0 ? (
           <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>ðï¸</div>
-            <div style={{ color:'#fff', fontSize:14, fontWeight:600, marginBottom:6 }}>
-              {tab === 0 ? 'Aun no tienes boletos' : 'No hay boletos aqui'}
-            </div>
+            <div style={{ fontSize:44, marginBottom:12 }}>ðï¸</div>
+            <div style={{ color:'#fff', fontSize:14, fontWeight:600, marginBottom:6 }}>Aun no tienes boletos</div>
             <div style={{ fontSize:12 }}>Participa en una dinamica!</div>
           </div>
         ) : (
           <>
-            {/* Reservados */}
-            {(tab === 0 || tab === 1) && reserved.length > 0 && (
+            {(tab === 0 || tab === 1) && reservedGroups.length > 0 && (
               <>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
-                    <span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>Reservados</span>
-                  </div>
-                  <span style={{ background:'#1a1a1a', borderRadius:999, padding:'2px 8px', color:C.muted, fontSize:8, fontWeight:700 }}>{reserved.length}</span>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
+                  <div style={{ width:7, height:7, background:C.gold, borderRadius:'50%' }} className="pulse"></div>
+                  <span style={{ color:C.gold, fontSize:11, fontWeight:800, textTransform:'uppercase' }}>Reservados ({reserved.length})</span>
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
-                  {reserved.map(t => <TicketColorCard key={t.id} ticket={t} onRefresh={onRefresh} profile={profile} appConfig={appConfig} downloadTicket={downloadTicket} onSupport={onSupport} />)}
-                </div>
+                {reservedGroups.map((g, i) => <RaffleTicketGroup key={i} group={g} status="reserved" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)}
               </>
             )}
-            {/* Pagados */}
-            {(tab === 0 || tab === 2) && paid.length > 0 && (
+            {(tab === 0 || tab === 2) && paidGroups.length > 0 && (
               <>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#27AE60" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>Pagados</span>
-                  </div>
-                  <span style={{ background:'#1a1a1a', borderRadius:999, padding:'2px 8px', color:C.muted, fontSize:8, fontWeight:700 }}>{paid.length}</span>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10, marginTop: tab===0 && reservedGroups.length>0 ? 14 : 0 }}>
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#27AE60" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span style={{ color:'#27AE60', fontSize:11, fontWeight:800, textTransform:'uppercase' }}>Pagados ({paid.length})</span>
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
-                  {paid.map(t => <TicketColorCard key={t.id} ticket={t} paid onRefresh={onRefresh} profile={profile} appConfig={appConfig} downloadTicket={downloadTicket} onSupport={onSupport} />)}
-                </div>
+                {paidGroups.map((g, i) => <RaffleTicketGroup key={i} group={g} status="paid" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)}
               </>
             )}
-            {/* Historial */}
-            {(tab === 0 || tab === 3) && history.length > 0 && (
+            {(tab === 0 || tab === 3) && historyGroups.length > 0 && (
               <>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                  <div style={{ color:'#fff', fontSize:12, fontWeight:900 }}>Historial</div>
-                  <span style={{ background:'#1a1a1a', borderRadius:999, padding:'2px 8px', color:C.muted, fontSize:8, fontWeight:700 }}>{history.length}</span>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10, marginTop: tab===0 ? 14 : 0 }}>
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#555" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <span style={{ color:'#555', fontSize:11, fontWeight:800, textTransform:'uppercase' }}>Historial ({history.length})</span>
                 </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                  {history.map(t => <TicketColorCard key={t.id} ticket={t} finished onRefresh={onRefresh} profile={profile} appConfig={appConfig} downloadTicket={downloadTicket} onSupport={onSupport} />)}
-                </div>
+                {historyGroups.map((g, i) => <RaffleTicketGroup key={i} group={g} status="finished" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)}
               </>
             )}
           </>
@@ -1077,53 +1061,114 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
   )
 }
 
-// âââ TICKET COLOR CARD â tarjeta con numero grande estilo imagen ââââââââââââââ
-function TicketColorCard({ ticket: t, paid, finished, onRefresh, profile, appConfig, downloadTicket, onSupport }) {
-  const nums = t.numbers || []
-  const num = nums[0] !== undefined ? String(nums[0]).padStart(2,'0') : '?'
-  const extraNums = nums.slice(1)
-  const raffle = t.raffles || {}
-  const color = paid ? '#27AE60' : finished ? '#333' : (raffle.card_color || '#E67E22')
-  const expires = t.expires_at ? new Date(t.expires_at) : null
-  const now = Date.now()
-  const hoursLeft = expires ? Math.max(0, Math.floor((expires - now) / 3600000)) : null
+// âââ RAFFLE TICKET GROUP â todos los numeros del mismo sorteo en una tarjeta ââ
+function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSupport }) {
+  const { raffle, tickets } = group
+  const allNums = tickets.flatMap(t => t.numbers || [])
+  const totalAmount = tickets.reduce((s, t) => s + (t.total_amount || 0), 0)
+  const firstTicket = tickets[0] || {}
+  const expires = firstTicket.expires_at ? new Date(firstTicket.expires_at) : null
+  const hoursLeft = expires ? Math.max(0, Math.floor((expires - Date.now()) / 3600000)) : null
+  const isReserved = status === 'reserved'
+  const isPaid = status === 'paid'
+  const isFinished = status === 'finished'
+
+  const borderColor = isPaid ? 'rgba(39,174,96,0.35)' : isFinished ? '#1a1a1a' : 'rgba(230,190,0,0.35)'
+  const lineColor = isPaid ? '#27AE60' : isFinished ? '#333' : C.gold
+  const numColor = isPaid ? '#27AE60' : isFinished ? '#444' : C.gold
+  const labelColor = isPaid ? '#27AE60' : isFinished ? '#555' : C.gold
+
+  // Build WA message with all numbers
+  const numsStr = allNums.map(n => '#'+String(n).padStart(2,'0')).join(', ')
+  const waNum = (appConfig?.paymentWhatsapp || appConfig?.payment_whatsapp || '').replace(/\D/g,'')
+  const waMsg = 'Hola! Quiero pagar mis boletos:
+
+Sorteo: '+(raffle?.title||'')+'
+Numeros: '+numsStr+'
+Total: '+fmt(totalAmount)+'
+Fecha sorteo: '+(raffle?.raffle_date ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : '')+'
+Loteria: '+(raffle?.lottery_name||'')+'
+Nombre: '+(profile?.full_name||'')
+  const waUrl = waNum ? 'https://wa.me/'+waNum+'?text='+encodeURIComponent(waMsg) : null
 
   return (
-    <div style={{ background:color, borderRadius:12, padding:'11px 10px', cursor:'pointer', position:'relative', overflow:'hidden' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:3 }}>
-        <div style={{ background:'rgba(0,0,0,0.22)', borderRadius:999, padding:'2px 6px', color:'#fff', fontSize:7, fontWeight:700 }}>
-          {raffle.lottery_name || ''}
+    <div style={{ background:'#0d0d0d', border:`1px solid ${borderColor}`, borderRadius:14, padding:14, marginBottom:10, position:'relative', overflow:'hidden' }}>
+      <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${lineColor},transparent)` }}></div>
+
+      {/* HEADER tarjeta */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:4 }}>
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={labelColor} strokeWidth="2"><rect x="1" y="6" width="22" height="14" rx="2"/><path d="M16 2H8v4h8z"/></svg>
+            <span style={{ color:labelColor, fontSize:8, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 }}>Sorteo</span>
+          </div>
+          <div style={{ color:'#fff', fontSize:13, fontWeight:900, textTransform:'uppercase', lineHeight:1.25 }}>{raffle?.title || 'Sorteo'}</div>
+          <div style={{ color:'#555', fontSize:9, marginTop:3 }}>
+            ð {raffle?.raffle_date ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : ''} Â· ð± {raffle?.lottery_name || ''}
+          </div>
         </div>
-        <div style={{ width:16, height:16, background:'rgba(0,0,0,0.22)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }} onClick={() => onSupport && onSupport()}>
-          <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="white" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div style={{ textAlign:'right' }}>
+          {isReserved && hoursLeft !== null && (
+            <div style={{ background:hoursLeft<3?'rgba(231,76,60,0.15)':'rgba(230,190,0,0.1)', border:`1px solid ${hoursLeft<3?'rgba(231,76,60,0.3)':'rgba(230,190,0,0.25)'}`, borderRadius:999, padding:'3px 8px', marginBottom:3 }}>
+              <span style={{ color:hoursLeft<3?'#E74C3C':C.gold, fontSize:8, fontWeight:700 }}>{hoursLeft < 1 ? 'Vence pronto!' : 'Vence en '+hoursLeft+'h'}</span>
+            </div>
+          )}
+          {isPaid && (
+            <div style={{ background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.3)', borderRadius:999, padding:'3px 8px', display:'flex', alignItems:'center', gap:4 }}>
+              <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#27AE60" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span style={{ color:'#27AE60', fontSize:8, fontWeight:700 }}>Confirmado</span>
+            </div>
+          )}
+          {isReserved && <div style={{ display:'flex', alignItems:'center', gap:4 }}><div style={{ width:5, height:5, background:C.gold, borderRadius:'50%' }} className="pulse"></div><span style={{ color:C.gold, fontSize:8, fontWeight:700 }}>Reservado</span></div>}
         </div>
       </div>
-      <div style={{ color:'rgba(255,255,255,0.75)', fontSize:7, fontWeight:700, marginBottom:1, textTransform:'uppercase', lineHeight:1.2 }}>
-        {(raffle.title || '').substring(0,20)}
+
+      {/* NUMEROS â todos juntos */}
+      <div style={{ marginBottom:10 }}>
+        <div style={{ color:'#444', fontSize:8, textTransform:'uppercase', letterSpacing:.8, marginBottom:8 }}>Tus numeros ({allNums.length})</div>
+        <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
+          {allNums.map((n, i) => (
+            <div key={i} style={{ background:isPaid?'rgba(39,174,96,0.08)':isFinished?'rgba(255,255,255,0.03)':'rgba(230,190,0,0.08)', border:`1.5px solid ${isPaid?'rgba(39,174,96,0.35)':isFinished?'#2a2a2a':'rgba(230,190,0,0.4)'}`, borderRadius:10, padding:'7px 12px', textAlign:'center' }}>
+              <div style={{ color:numColor, fontSize:26, fontWeight:900, lineHeight:1 }}>{'#'+String(n).padStart(2,'0')}</div>
+            </div>
+          ))}
+        </div>
       </div>
-      <div style={{ color:'#fff', fontSize:32, fontWeight:900, lineHeight:1, marginBottom:extraNums.length > 0 ? 2 : 5 }}>{num}</div>
-      {extraNums.length > 0 && (
-        <div style={{ display:'flex', gap:3, marginBottom:5, flexWrap:'wrap' }}>
-          {extraNums.slice(0,3).map(n => <span key={n} style={{ background:'rgba(0,0,0,0.2)', borderRadius:4, padding:'1px 5px', color:'#fff', fontSize:8, fontWeight:700 }}>{String(n).padStart(2,'0')}</span>)}
-          {extraNums.length > 3 && <span style={{ color:'rgba(255,255,255,0.6)', fontSize:7 }}>+{extraNums.length-3}</span>}
+
+      {/* PREMIO + TOTAL */}
+      <div style={{ background:'#111', borderRadius:9, padding:'9px 11px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+          <span style={{ fontSize:12 }}>ð°</span>
+          <span style={{ color:'#666', fontSize:9 }}>Premio:</span>
+          <span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>{raffle?.prizes?.[0]?.amount || raffle?.prizes?.[0] || ''}</span>
+        </div>
+        <div style={{ textAlign:'right' }}>
+          <div style={{ color:'#444', fontSize:8 }}>{isPaid?'Total pagado':'Total a pagar'}</div>
+          <div style={{ color:numColor, fontSize:17, fontWeight:900, lineHeight:1 }}>{fmt(totalAmount)}</div>
+        </div>
+      </div>
+
+      {/* BOTON WA o estado */}
+      {isReserved && waUrl && (
+        <a href={waUrl} target="_blank" rel="noreferrer" style={{ textDecoration:'none', display:'block' }}>
+          <div style={{ background:'#25D366', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:1, background:'rgba(255,255,255,0.2)' }}></div>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>Pagar {fmt(totalAmount)} por WhatsApp</span>
+          </div>
+        </a>
+      )}
+      {isReserved && !waUrl && (
+        <div style={{ background:'#1a1a1a', borderRadius:10, padding:11, textAlign:'center', color:C.muted, fontSize:10 }}>Contacta al administrador para pagar</div>
+      )}
+      {isPaid && (
+        <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:10, padding:10, display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#27AE60" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span style={{ color:'#27AE60', fontSize:11, fontWeight:700 }}>Pago confirmado</span>
         </div>
       )}
-      {/* Timer para reservados */}
-      {!paid && !finished && hoursLeft !== null && (
-        <div style={{ background:'rgba(0,0,0,0.2)', borderRadius:6, padding:'3px 6px', display:'flex', alignItems:'center', gap:4, marginBottom:5 }}>
-          <svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span style={{ color:hoursLeft < 3 ? '#FFD700' : 'rgba(255,255,255,0.8)', fontSize:7, fontWeight:700 }}>
-            {hoursLeft}h restantes
-          </span>
-        </div>
-      )}
-      {/* Boton pagar / estado */}
-      {paid ? (
-        <div style={{ background:'rgba(0,0,0,0.2)', borderRadius:6, padding:'5px', textAlign:'center', color:'#fff', fontSize:7, fontWeight:700 }}>Pagado â</div>
-      ) : finished ? (
-        <div style={{ background:'rgba(0,0,0,0.15)', borderRadius:6, padding:'5px', textAlign:'center', color:'rgba(255,255,255,0.5)', fontSize:7 }}>Finalizado</div>
-      ) : (
-        <WAPayButton ticket={t} profile={profile} appConfig={appConfig} compact />
+      {isFinished && (
+        <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, padding:10, textAlign:'center', color:'#444', fontSize:10 }}>Sorteo finalizado</div>
       )}
     </div>
   )
@@ -1655,10 +1700,15 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
                 {t.users_profile?.phone && <div style={{ color:C.muted, fontSize:11, marginBottom:6 }}>ð± {t.users_profile.phone}</div>}
                 <div style={{ color:C.muted, fontSize:12, marginBottom:6 }}>Numeros: <span style={{ color:C.gold, fontWeight:700 }}>{(t.numbers||[]).map(n=>String(n).padStart(2,'0')).join(', ')}</span></div>
                 <div style={{ color:C.gold, fontWeight:900, fontSize:16, marginBottom:12 }}>{fmt(t.total_amount)}</div>
-                <div style={{ display:'flex', gap:8 }}>
-                  <button onClick={async () => { await supabase.from('tickets').update({status:'paid'}).eq('id',t.id); setTickets(prev=>prev.map(x=>x.id===t.id?{...x,status:'paid'}:x)) }} style={{ flex:1, background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:12, fontWeight:700, padding:10, cursor:'pointer', fontFamily:'inherit' }}>Confirmar</button>
-                  <button onClick={async () => { await supabase.from('tickets').update({status:'rejected'}).eq('id',t.id); setTickets(prev=>prev.filter(x=>x.id!==t.id)) }} style={{ flex:1, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.25)', borderRadius:8, color:'#E74C3C', fontSize:12, fontWeight:700, padding:10, cursor:'pointer', fontFamily:'inherit' }}>Rechazar</button>
-                  <button onClick={async () => { const extra = window.prompt('Horas adicionales (ej: 12, 24, 48):', '24'); if(!extra || isNaN(extra)) return; const newDate = new Date(new Date(t.created_at).getTime() + parseInt(extra)*3600000).toISOString(); await supabase.from('tickets').update({ created_at: newDate }).eq('id',t.id); await supabase.from('support_messages').insert({ user_id:t.user_id, message:`El administrador te dio ${extra} horas adicionales para pagar tu boleto ${(t.numbers||[]).map(n=>String(n).padStart(2,'0')).join(', ')} de ${t.raffles?.title||''}. Aprovecha este tiempo!`, from_admin:true }); setTickets(prev=>prev.map(x=>x.id===t.id?{...x,created_at:newDate}:x)); alert('Plazo extendido y usuario notificado!') }} style={{ flex:1, background:'rgba(201,162,39,0.08)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:8, color:C.gold, fontSize:12, fontWeight:700, padding:10, cursor:'pointer', fontFamily:'inherit' }}>+Tiempo</button>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:7 }}>
+                  <button onClick={async () => { await supabase.from('tickets').update({status:'paid'}).eq('id',t.id); setTickets(prev=>prev.map(x=>x.id===t.id?{...x,status:'paid'}:x)) }} style={{ background:'#27AE60', border:'none', borderRadius:9, color:'#fff', fontSize:11, fontWeight:800, padding:11, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5 }}><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="white" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>Confirmar Pago</button>
+                  <a href={'https://wa.me/'+(t.users_profile?.phone||'').replace(/\D/g,'')+'?text='+encodeURIComponent('Hola '+( t.users_profile?.full_name||'')+', tu pago del boleto #'+(t.numbers||[]).map(n=>String(n).padStart(2,'0')).join(', ')+' del sorteo '+(t.raffles?.title||'')+' por '+fmt(t.total_amount)+' fue confirmado. Gracias!')} target="_blank" rel="noreferrer" style={{ textDecoration:'none' }}>
+                    <div style={{ background:'#075E54', borderRadius:9, color:'#fff', fontSize:11, fontWeight:800, padding:11, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5, height:'100%' }}><svg viewBox="0 0 24 24" width="13" height="13" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>WhatsApp</div>
+                  </a>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7 }}>
+                  <AdminSMSButton ticket={t} />
+                  <button onClick={async () => { await supabase.from('tickets').update({status:'rejected'}).eq('id',t.id); setTickets(prev=>prev.filter(x=>x.id!==t.id)) }} style={{ background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:9, color:'#E74C3C', fontSize:11, fontWeight:700, padding:11, cursor:'pointer', fontFamily:'inherit' }}>Rechazar</button>
                 </div>
               </div>
             ))
