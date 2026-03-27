@@ -4,7 +4,7 @@ import { supabase } from './lib/supabase.js'
 const fmt = v => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v)
 const fmtDate = d => new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
 const fmtTime = d => new Date(d).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-const medals = ['ð¥', 'ð¥', 'ð¥', 'ð¯', 'ðï¸']
+const medals = ['🥇', '🥈', '🥉', '🎯', '🎖️']
 
 const C = {
   gold: '#E6BE00', goldLight: '#f0d060', goldDark: '#8B6914',
@@ -83,11 +83,13 @@ const DEFAULT_CONFIG = {
   whatsapp: '', canal: '', instagram: '', facebook: '', telegram: '',
   supportWhatsapp: '', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
   paymentWhatsapp: '', imgDeleteDays: 3,
+  winnersInstagram: '',
+  paymentNequi: '', paymentDaviplata: '', paymentBancolombia: '', paymentOtro: '', paymentNota: '',
   notifAutoNewRaffle: true, notifAuto24h: true, notifAuto2h: true,
   notifAutoPaymentConfirmed: true, notifAutoUnpaidReminder: true, notifAutoResult: false,
 }
 
-// âââ PWA HOOK âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── PWA HOOK ─────────────────────────────────────────────────────────────────
 function usePWA() {
   const [canInstall, setCanInstall] = useState(false)
   const [isInstalled, setIsInstalled] = useState(false)
@@ -125,7 +127,7 @@ function usePWA() {
   return { canInstall, isInstalled, notifPermission, install, requestNotif }
 }
 
-// âââ APP PRINCIPAL ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── APP PRINCIPAL ────────────────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState('home')
   const [user, setUser] = useState(null)
@@ -140,7 +142,8 @@ export default function App() {
   const [showReservePopup, setShowReservePopup] = useState(false)
   const [pendingNums, setPendingNums] = useState(null)
   const [appConfig, setAppConfig] = useState(DEFAULT_CONFIG)
-  const [societyData, setSocietyData] = useState(null) // { raffle, number }
+  const [societyData, setSocietyData] = useState(null)
+  const [supportTicketContext, setSupportTicketContext] = useState(null) // { raffle, number }
   const [bingoVisible, setBingoVisible] = useState(false)
   const pwa = usePWA()
 
@@ -270,10 +273,10 @@ export default function App() {
       <main>
         {page === 'home' && <HomePage raffles={raffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
         {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={num => { setSocietyData({ raffle: selectedRaffle, number: num }); setPage('society') }} />}
-        {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={() => setPage('support')} appConfig={appConfig} pwa={pwa} />}
+        {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { if(ctx) setSupportTicketContext(ctx); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
         {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
-        {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={false} appConfig={appConfig} />}
+        {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={isAdmin} onBack={() => setPage('home')} appConfig={appConfig} ticketContext={supportTicketContext} />}
         {page === 'admin' && <AdminPage user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={() => setPage('home')} onOpenSupport={() => setPage('admin-support')} onOpenSociety={() => setPage('admin-society')} onOpenBingo={() => setPage('admin-bingo')} onRefreshRaffles={fetchRaffles} />}
         {page === 'admin-support' && <SupportPage user={user} profile={profile} isAdmin={true} onBack={() => setPage('admin')} appConfig={appConfig} />}
         {page === 'winners' && <WinnersPage onBack={() => setPage('home')} onRaffle={() => setPage('home')} />}
@@ -315,7 +318,7 @@ export default function App() {
   )
 }
 
-// âââ CHOOSE AUTH ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── CHOOSE AUTH ──────────────────────────────────────────────────────────────
 function ChooseAuthScreen({ selectedRaffle, selectedNums, onLogin, onRegister, onBack }) {
   const r = selectedRaffle
   const pad = n => r ? String(n).padStart(r.number_range <= 100 ? 2 : 3, '0') : String(n).padStart(2, '0')
@@ -353,14 +356,14 @@ function ChooseAuthScreen({ selectedRaffle, selectedNums, onLogin, onRegister, o
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#000" strokeWidth="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
           </div>
           <div style={{ flex: 1 }}><div style={{ color: '#fff', fontWeight: 900, fontSize: 15, marginBottom: 3 }}>Crear cuenta gratis</div><div style={{ color: C.muted, fontSize: 12 }}>$500 en saldo + 1.000 puntos de bienvenida</div></div>
-          <div style={{ color: C.gold, fontSize: 18 }}>â</div>
+          <div style={{ color: C.gold, fontSize: 18 }}>→</div>
         </div>
         <div onClick={onLogin} style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 48, height: 48, background: 'rgba(201,162,39,0.1)', border: `1px solid rgba(201,162,39,0.25)`, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke={C.gold} strokeWidth="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
           </div>
           <div style={{ flex: 1 }}><div style={{ color: '#fff', fontWeight: 900, fontSize: 15, marginBottom: 3 }}>Ya tengo cuenta</div><div style={{ color: C.muted, fontSize: 12 }}>Iniciar sesion y reclamar mis numeros</div></div>
-          <div style={{ color: '#666', fontSize: 18 }}>â</div>
+          <div style={{ color: '#666', fontSize: 18 }}>→</div>
         </div>
         <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', width: '100%', textAlign: 'center', fontSize: 13, fontFamily: 'inherit' }}>Volver al sorteo</button>
       </div>
@@ -368,8 +371,8 @@ function ChooseAuthScreen({ selectedRaffle, selectedNums, onLogin, onRegister, o
   )
 }
 
-// âââ HOME PAGE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// âââ RAFFLE CARD â nuevo estilo negro + borde amarillo ââââââââââââââââââââââ
+// ─── HOME PAGE ────────────────────────────────────────────────────────────────
+// ─── RAFFLE CARD — nuevo estilo negro + borde amarillo ──────────────────────
 function RaffleCard({ r, onRaffle, featured }) {
   const prizes = Array.isArray(r.prizes) ? r.prizes : []
   const hasSociety = Array.isArray(r.society_numbers) && r.society_numbers.length > 0
@@ -383,24 +386,24 @@ function RaffleCard({ r, onRaffle, featured }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
           <span style={{ background: '#27AE60', borderRadius: 999, padding: '3px 9px', color: '#fff', fontSize: 7, fontWeight: 800 }}>ACTIVO</span>
-          {isFeatured && <span style={{ background: `rgba(230,190,0,0.15)`, border: `1px solid rgba(230,190,0,0.4)`, borderRadius: 999, padding: '3px 9px', color: C.gold, fontSize: 7, fontWeight: 800 }}>â­ DESTACADO</span>}
-          {hasSociety && <span style={{ background: 'rgba(155,89,182,0.15)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 999, padding: '3px 8px', color: '#CE93D8', fontSize: 7, fontWeight: 700 }}>ð¥ Sociedad</span>}
+          {isFeatured && <span style={{ background: `rgba(230,190,0,0.15)`, border: `1px solid rgba(230,190,0,0.4)`, borderRadius: 999, padding: '3px 9px', color: C.gold, fontSize: 7, fontWeight: 800 }}>⭐ DESTACADO</span>}
+          {hasSociety && <span style={{ background: 'rgba(155,89,182,0.15)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 999, padding: '3px 8px', color: '#CE93D8', fontSize: 7, fontWeight: 700 }}>👥 Sociedad</span>}
           {hasPresale && <span style={{ background: 'rgba(155,89,182,0.15)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 999, padding: '3px 8px', color: '#CE93D8', fontSize: 7, fontWeight: 700 }}>Preventa</span>}
         </div>
-        <span style={{ color: C.muted, fontSize: 10 }}>ð± {r.lottery_name}</span>
+        <span style={{ color: C.muted, fontSize: 10 }}>🎱 {r.lottery_name}</span>
       </div>
       {/* Titulo */}
       <h3 style={{ color: '#fff', fontSize: 15, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 8px', lineHeight: 1.3 }}>{r.title}</h3>
       {/* Info fecha/loteria/numeros */}
       <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
-        {[['ð', new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'})], ['ð±', r.lottery_name], ['ð¢', `00 â ${String(r.number_range-1).padStart(2,'0')}`]].map(([ic,v]) => (
+        {[['📅', new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'})], ['🎱', r.lottery_name], ['🔢', `00 — ${String(r.number_range-1).padStart(2,'0')}`]].map(([ic,v]) => (
           <div key={ic} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 7, padding: '5px 6px', flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 9 }}>{ic}</div>
             <div style={{ color: '#fff', fontSize: 7, fontWeight: 700, marginTop: 1 }}>{v}</div>
           </div>
         ))}
       </div>
-      {/* Premios â hasta 4 */}
+      {/* Premios — hasta 4 */}
       <div style={{ marginBottom: 10 }}>
         <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Premios</div>
         {prizes.slice(0, 4).map((p, i) => (
@@ -413,7 +416,7 @@ function RaffleCard({ r, onRaffle, featured }) {
       {/* Preventa */}
       {hasPresale && (
         <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.2)', borderRadius: 8, padding: '6px 10px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#CE93D8', fontSize: 9, fontWeight: 700 }}>Preventa â</span>
+          <span style={{ color: '#CE93D8', fontSize: 9, fontWeight: 700 }}>Preventa —</span>
           <span style={{ color: '#C9A0E8', fontSize: 14, fontWeight: 900 }}>{fmt(r.presale_price)}</span>
           <span style={{ color: C.muted, fontSize: 9, textDecoration: 'line-through' }}>{fmt(r.ticket_price)}</span>
         </div>
@@ -425,7 +428,7 @@ function RaffleCard({ r, onRaffle, featured }) {
           <div style={{ color: C.muted, fontSize: 9 }}>Valor del boleto</div>
           <div style={{ color: isFeatured ? C.gold : cardColor, fontSize: 24, fontWeight: 900, lineHeight: 1 }}>{fmt(r.ticket_price)}</div>
         </div>
-        <button style={{ background: C.gold, color: '#000', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 900, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>Participar â</button>
+        <button style={{ background: C.gold, color: '#000', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 900, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>Participar ↗</button>
       </div>
     </div>
   )
@@ -453,7 +456,7 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWi
         </div>
         <div style={{ color: C.muted, fontSize: 11 }}>Hoy puede ser tu dia de <span style={{ color: C.gold, fontWeight: 700 }}>SUERTE</span></div>
       </div>
-      {/* Redes sociales â solo si configuradas */}
+      {/* Redes sociales — solo si configuradas */}
       {socials.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
           {socials.map(s => (
@@ -472,7 +475,16 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWi
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
         {appConfig.showHowItWorks && <button onClick={onHow} style={{ flex: 1, background: C.bg3, border: `1px solid ${C.cardBorder}`, borderRadius: 10, padding: '9px 10px', color: C.gold, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Como funciona?</button>}
-        {appConfig.showWinners && <button onClick={onWinners} style={{ flex: 1, background: C.bg3, border: '1px solid rgba(39,174,96,0.2)', borderRadius: 10, padding: '9px 10px', color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>ð Ganadores</button>}
+        {appConfig.showWinners && (
+          appConfig.winnersInstagram
+            ? <a href={appConfig.winnersInstagram} target="_blank" rel="noreferrer" style={{ flex:1, textDecoration:'none' }}>
+                <div style={{ background:'linear-gradient(135deg,rgba(240,148,51,0.1),rgba(188,24,136,0.1))', border:'1px solid rgba(220,39,67,0.3)', borderRadius:10, padding:'9px 10px', fontSize:11, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5, width:'100%' }}>
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" strokeWidth="2" strokeLinecap="round"><defs><linearGradient id="igG" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#f09433"/><stop offset="100%" stopColor="#bc1888"/></linearGradient></defs><rect x="2" y="2" width="20" height="20" rx="5" stroke="url(#igG)"/><circle cx="12" cy="12" r="4" stroke="url(#igG)"/><circle cx="17.5" cy="6.5" r="1" fill="#dc2743" stroke="none"/></svg>
+                  <span style={{ background:'linear-gradient(90deg,#f09433,#bc1888)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Ganadores</span>
+                </div>
+              </a>
+            : <button onClick={onWinners} style={{ flex: 1, background: C.bg3, border: '1px solid rgba(39,174,96,0.2)', borderRadius: 10, padding: '9px 10px', color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>🏆 Ganadores</button>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -486,7 +498,7 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWi
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
-            <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 13, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}><span>â­</span> Destacados</h2>
+            <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 13, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}><span>⭐</span> Destacados</h2>
             <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,transparent,${C.gold})` }}></div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
@@ -511,7 +523,7 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWi
   )
 }
 
-// âââ RAFFLE PAGE con SOCIEDAD visual âââââââââââââââââââââââââââââââââââââââââ
+// ─── RAFFLE PAGE con SOCIEDAD visual ─────────────────────────────────────────
 function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelectedNums, onShowPopup, onBack, onSociety }) {
   const range = r.number_range || 100
   const cols = range <= 100 ? 10 : 20
@@ -558,7 +570,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
     <div style={{ paddingBottom: 88 }}>
       <div style={{ background: `linear-gradient(180deg,#1a1200 0%,${C.bg} 100%)`, padding: '16px 16px 0', borderBottom: `1px solid ${C.cardBorder}` }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>â Volver</button>
+          <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>← Volver</button>
           <button onClick={shareWA} style={{ background: 'rgba(39,174,96,0.15)', border: '1px solid rgba(39,174,96,0.3)', borderRadius: 8, color: C.green, cursor: 'pointer', padding: '6px 12px', fontSize: 11, fontWeight: 700, fontFamily: 'inherit' }}>Compartir</button>
         </div>
         <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
@@ -625,7 +637,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
         {/* PROMO ACTIVA */}
         {activePromo && (
           <div style={{ background: 'rgba(39,174,96,0.08)', border: '1px solid rgba(39,174,96,0.25)', borderRadius: 11, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>ð</span>
+            <span style={{ fontSize: 20 }}>🎁</span>
             <div><div style={{ color: C.green, fontSize: 11, fontWeight: 800 }}>{activePromo.label}</div><div style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>{activePromo.get} numero(s) gratis seran asignados automaticamente</div></div>
           </div>
         )}
@@ -651,7 +663,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
             {societyNums.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <div style={{ width: 13, height: 13, background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1px solid #9B59B6', borderRadius: 3 }}></div>
-                <span style={{ fontSize: 10, color: C.purple, fontWeight: 700 }}>ð¥ Sociedad â mitad precio!</span>
+                <span style={{ fontSize: 10, color: C.purple, fontWeight: 700 }}>👥 Sociedad — mitad precio!</span>
               </div>
             )}
           </div>
@@ -668,10 +680,10 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
                   style={{ aspectRatio: 1, borderRadius: 6, background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1.5px solid #9B59B6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg,transparent,rgba(201,160,232,0.8),transparent)' }}></div>
                   <div style={{ fontSize: range <= 100 ? 8 : 7, fontWeight: 900, color: '#C9A0E8', lineHeight: 1 }}>{pad(n)}</div>
-                  <div style={{ fontSize: 7, lineHeight: 1, marginTop: 1 }}>ð¥</div>
+                  <div style={{ fontSize: 7, lineHeight: 1, marginTop: 1 }}>👥</div>
                 </div>
               )
-              if (isRes) return <div key={n} style={{ aspectRatio: 1, border: '1px solid #111', borderRadius: 6, background: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, cursor: 'not-allowed' }}>ð</div>
+              if (isRes) return <div key={n} style={{ aspectRatio: 1, border: '1px solid #111', borderRadius: 6, background: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, cursor: 'not-allowed' }}>🔒</div>
               if (isSel) return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio: 1, border: `2px solid ${C.gold}`, borderRadius: 6, background: 'rgba(201,162,39,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, color: C.gold, cursor: 'pointer' }}>{pad(n)}</div>
               return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio: 1, border: '1px solid #1a1a1a', borderRadius: 6, background: '#0d0d0d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#333', cursor: 'pointer' }}>{pad(n)}</div>
             })}
@@ -682,7 +694,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
               <div style={{ background: 'rgba(201,162,39,0.06)', border: `1px solid rgba(201,162,39,0.15)`, borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ color: C.muted, fontSize: 12 }}>Seleccionados</span>
-                  <span style={{ color: C.gold, fontSize: 12, fontWeight: 700 }}>{selectedNums.map(n => pad(n)).join(' Â· ')}</span>
+                  <span style={{ color: C.gold, fontSize: 12, fontWeight: 700 }}>{selectedNums.map(n => pad(n)).join(' · ')}</span>
                 </div>
                 {freeNums > 0 && <div style={{ color: C.green, fontSize: 11, marginBottom: 6 }}>+ {freeNums} numero(s) GRATIS por la promo!</div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -700,8 +712,8 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
           <div style={{ background: 'linear-gradient(135deg,#0f0619,#1a0d2a)', border: '1px solid rgba(155,89,182,0.35)', borderRadius: 18, padding: 18, marginBottom: 14, position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,transparent,#9B59B6,#C9A0E8,#9B59B6,transparent)' }}></div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>ð¥</div>
-              <div><div style={{ color: '#C9A0E8', fontSize: 13, fontWeight: 900 }}>Numeros en Sociedad</div><div style={{ color: '#7b5cad', fontSize: 9, marginTop: 1 }}>Compra la mitad â gana todo el premio</div></div>
+              <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>👥</div>
+              <div><div style={{ color: '#C9A0E8', fontSize: 13, fontWeight: 900 }}>Numeros en Sociedad</div><div style={{ color: '#7b5cad', fontSize: 9, marginTop: 1 }}>Compra la mitad — gana todo el premio</div></div>
             </div>
             <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.18)', borderRadius: 10, padding: 12, marginBottom: 12 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -724,7 +736,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
               ))}
             </div>
             <button onClick={() => setSocietyModal(societyNums[0])} style={S.btnPurple}>
-              <span>ð¥</span> Unirme a un numero en sociedad
+              <span>👥</span> Unirme a un numero en sociedad
             </button>
           </div>
         )}
@@ -736,7 +748,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
           <p style={{ color: C.muted, fontSize: 12, margin: '0 0 14px', textAlign: 'center' }}>Consulta si tu numero esta correctamente apartado</p>
           <label style={{ fontSize: 10, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Nombre del participante</label>
           <input value={verifyName} onChange={e => setVerifyName(e.target.value)} placeholder="Ej: Carlos Rodriguez" style={{ marginBottom: 8 }} />
-          <div style={{ textAlign: 'center', color: '#333', fontSize: 11, margin: '6px 0' }}>â o â</div>
+          <div style={{ textAlign: 'center', color: '#333', fontSize: 11, margin: '6px 0' }}>— o —</div>
           <label style={{ fontSize: 10, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Celular / WhatsApp</label>
           <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="3001234567" style={{ marginBottom: 14 }} />
           <button onClick={verifyTicket} style={S.btnGold}>Verificar boleto</button>
@@ -745,7 +757,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
               {verifyResult.length === 0 ? <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: '16px 0' }}>No se encontraron boletos con esos datos</div>
                 : verifyResult.map((t, i) => (
                   <div key={i} style={{ background: C.bg3, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: 14, marginBottom: 8 }}>
-                    <div style={{ color: C.gold, fontSize: 18, fontWeight: 900, marginBottom: 4 }}>#{(t.numbers||[]).map(n => pad(n)).join(' Â· ')}</div>
+                    <div style={{ color: C.gold, fontSize: 18, fontWeight: 900, marginBottom: 4 }}>#{(t.numbers||[]).map(n => pad(n)).join(' · ')}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={S.badge(t.status === 'paid' ? 'green' : 'dim')}>{t.status === 'paid' ? 'Pago confirmado' : 'Pendiente'}</span>
                       <span style={{ color: '#fff', fontWeight: 700 }}>{fmt(t.total_amount)}</span>
@@ -769,7 +781,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
                 <div style={{ color: '#7b5cad', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Numero en Sociedad</div>
                 <div style={{ color: '#C9A0E8', fontSize: 52, fontWeight: 900, lineHeight: 1 }}>{pad(societyModal)}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                  <span style={{ fontSize: 14 }}>ð¥</span>
+                  <span style={{ fontSize: 14 }}>👥</span>
                   <span style={{ color: '#9B59B6', fontSize: 10, fontWeight: 700 }}>{r.title}</span>
                 </div>
               </div>
@@ -784,12 +796,12 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
                 <span style={{ color: C.purple, fontSize: 20, fontWeight: 900 }}>{fmt(r.ticket_price / 2)}</span>
               </div>
               <div style={{ background: 'rgba(39,174,96,0.08)', borderRadius: 8, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ fontSize: 14 }}>ð</span>
+                <span style={{ fontSize: 14 }}>🏆</span>
                 <div><div style={{ color: C.green, fontSize: 9, fontWeight: 700 }}>Si el numero gana, AMBOS reciben el premio completo</div><div style={{ color: C.muted, fontSize: 8, marginTop: 1 }}>{prizes[0]?.amount || 'Premio principal'}</div></div>
               </div>
             </div>
             <button onClick={() => { setSocietyModal(null); if(onSociety) onSociety(societyModal) }} style={{ ...S.btnPurple, marginBottom: 10 }}>
-              <span>ð¥</span> Unirme como socio â {fmt(r.ticket_price / 2)}
+              <span>👥</span> Unirme como socio — {fmt(r.ticket_price / 2)}
             </button>
             <button onClick={() => setSocietyModal(null)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#444', fontSize: 13, cursor: 'pointer', padding: 8, fontFamily: 'inherit' }}>Cancelar</button>
           </div>
@@ -798,59 +810,63 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
     </div>
   )
 }
-// âââ COMO FUNCIONA ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── COMO FUNCIONA ────────────────────────────────────────────────────────────
 function HowItWorksPage({ onBack, onRegister }) {
   const steps = [
-    { n:'1', icon:'ð°', title:'Elige tu dinamica', desc:'Explora las dinamicas activas. Cada una tiene sus premios, fecha de sorteo y valor del boleto.' },
-    { n:'2', icon:'ð¢', title:'Aparta tu numero', desc:'Selecciona el numero que quieres y apartalo en tiempo real antes de que lo tome otra persona.' },
-    { n:'3', icon:'ð³', title:'Confirma tu pago', desc:'Paga por Nequi, Daviplata o transferencia. Envia tu comprobante por WhatsApp o desde la app.' },
-    { n:'4', icon:'ð', title:'Gana tu premio!', desc:'El sorteo se realiza en la fecha indicada con la loteria oficial. Si tu numero coincide, ganas!' },
-  ]
-  const faqs = [
-    ['Es seguro participar?','Si. Todos los sorteos se realizan con loterias oficiales y publicamos los resultados en vivo.'],
-    ['Cuanto tiempo tengo para pagar?','Tienes 24 horas despues de apartar tu numero para enviar el comprobante de pago.'],
-    ['Como recibo mi premio?','Nos contactamos contigo directamente por WhatsApp para coordinar la entrega.'],
-    ['Puedo apartar varios numeros?','Depende del sorteo. Cada dinamica tiene configurado el maximo de boletos por persona.'],
+    { num:'1', color:'#E6BE00', icon:'M3 3h18v18H3z M9 9h6 M9 13h6 M9 17h4', title:'Elige tu dinamica', desc:'Explora las dinamicas activas. Cada una tiene sus premios, fecha de sorteo y valor del boleto.' },
+    { num:'2', color:'#E6BE00', icon:'M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z M12 10m-3 0a3 3 0 1 0 6 0 3 3 0 0 0-6 0', title:'Aparta tu numero', desc:'Selecciona el numero que quieres y apartalo en tiempo real antes que otra persona lo tome.' },
+    { num:'3', color:'#27AE60', icon:'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z', title:'Confirma el pago', desc:'Envia el comprobante de pago por WhatsApp. Lo validamos y aseguramos tu numero de inmediato.' },
+    { num:'4', color:'#9B59B6', icon:'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75', title:'Espera el sorteo', desc:'El sorteo se realiza en la fecha indicada. El numero ganador lo determina la loteria oficial colombiana.' },
+    { num:'5', color:'#E67E22', icon:'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M8 12l3 3 5-5', title:'Cobra tu premio', desc:'Si tu numero gana, te contactamos directamente para hacer efectivo el pago del premio en efectivo.' },
   ]
   return (
-    <div style={S.content}>
-      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:20, fontSize:14, padding:0, fontFamily:'inherit' }}>â Volver</button>
-      <div style={{ textAlign:'center', marginBottom:28 }}>
-        <div style={{ width:64, height:64, borderRadius:16, overflow:'hidden', margin:'0 auto 16px', border:`1px solid rgba(201,162,39,0.3)` }} className="house-float"><LogoSVG size={64} /></div>
-        <h1 style={{ color:'#fff', fontWeight:900, fontSize:22, margin:'0 0 8px' }}>Como funciona?</h1>
-        <p style={{ color:C.muted, fontSize:14, margin:0 }}>Participar es muy facil, solo sigue estos pasos</p>
+    <div style={{ background:C.bg, minHeight:'100vh' }}>
+      <style>{CSS}</style>
+      <div style={{ background:C.bg2, padding:'11px 16px', borderBottom:'1px solid #111', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>← Volver</button>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ width:22, height:22, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:5, display:'flex', alignItems:'center', justifyContent:'center' }}><LogoSVG size={22} /></div>
+          <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>La Casa</span>
+        </div>
+        <div style={{ width:40 }}></div>
       </div>
-      {steps.map((s, i) => (
-        <div key={i} style={{ display:'flex', gap:14, marginBottom:16, position:'relative' }}>
-          {i < steps.length-1 && <div style={{ position:'absolute', left:19, top:44, bottom:-16, width:1, background:'rgba(201,162,39,0.2)' }}></div>}
-          <div style={{ width:40, height:40, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:16, flexShrink:0, zIndex:1 }}>{s.n}</div>
-          <div style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:14, padding:'14px 16px', flex:1, position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-            <div style={{ fontSize:24, marginBottom:6 }}>{s.icon}</div>
-            <div style={{ color:'#fff', fontWeight:800, fontSize:14, marginBottom:4 }}>{s.title}</div>
-            <div style={{ color:C.muted, fontSize:12, lineHeight:1.6 }}>{s.desc}</div>
+      <div style={{ padding:'20px 16px 40px', maxWidth:500, margin:'0 auto' }}>
+        <div style={{ textAlign:'center', marginBottom:24 }}>
+          <div style={{ width:60, height:60, background:'linear-gradient(135deg,#1a1200,#2a1e00)', border:'2px solid #E6BE00', borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px' }}>
+            <LogoSVG size={36} />
           </div>
+          <div style={{ color:'#fff', fontSize:20, fontWeight:900, marginBottom:5 }}>Como funciona?</div>
+          <div style={{ color:C.muted, fontSize:12 }}>Participar es muy facil, solo sigue estos pasos</div>
         </div>
-      ))}
-      <div style={{ textAlign:'center', margin:'24px 0 14px', color:C.gold, fontSize:14, fontWeight:800 }}>Preguntas frecuentes</div>
-      {faqs.map(([q,a],i) => (
-        <div key={i} style={{ ...S.card, marginBottom:10, position:'relative', overflow:'hidden' }}>
-          <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-          <div style={{ color:'#fff', fontSize:13, fontWeight:700, marginBottom:5 }}>{q}</div>
-          <div style={{ color:C.muted, fontSize:12, lineHeight:1.6 }}>{a}</div>
-        </div>
-      ))}
-      <div style={{ background:`linear-gradient(135deg,rgba(201,162,39,0.1),rgba(201,162,39,0.04))`, border:`1px solid rgba(201,162,39,0.2)`, borderRadius:16, padding:22, textAlign:'center', marginTop:10 }}>
-        <div style={{ fontSize:34, marginBottom:10 }}>ð</div>
-        <div style={{ color:C.gold, fontSize:15, fontWeight:800, marginBottom:4 }}>Registrate y recibe bono!</div>
-        <div style={{ color:C.muted, fontSize:13, marginBottom:18 }}>$500 en saldo + 1.000 puntos de fidelidad al crear tu cuenta</div>
-        <button onClick={onRegister} style={S.btnGold}>Crear cuenta gratis</button>
+        {steps.map((step, idx) => (
+          <div key={idx} style={{ display:'flex', gap:12, marginBottom: idx < steps.length-1 ? 4 : 0 }}>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
+              <div style={{ width:32, height:32, background:step.color, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:900, color:'#000' }}>{step.num}</div>
+              {idx < steps.length-1 && <div style={{ width:2, flex:1, minHeight:14, background:`linear-gradient(180deg,${step.color},transparent)`, margin:'3px 0' }}></div>}
+            </div>
+            <div style={{ background:'#111', border:'1px solid rgba(255,255,255,0.05)', borderRadius:14, padding:'14px 14px', flex:1, marginBottom:12 }}>
+              <div style={{ marginBottom:10 }}>
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke={step.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  {step.icon.split(' ').reduce((acc, token, i, arr) => {
+                    if (token === 'M' || token === 'm') return acc
+                    return acc
+                  }, null)}
+                  <path d={step.icon.split(' M ').map((p,i) => i===0 ? p : 'M '+p).join(' ')} />
+                </svg>
+              </div>
+              <div style={{ color:'#fff', fontSize:13, fontWeight:800, marginBottom:5 }}>{step.title}</div>
+              <div style={{ color:C.muted, fontSize:11, lineHeight:1.6 }}>{step.desc}</div>
+            </div>
+          </div>
+        ))}
+        <button onClick={onRegister} style={{ ...S.btnGold, marginTop:8 }}>Participar ahora →</button>
       </div>
     </div>
   )
 }
 
-// âââ GANADORES ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+
+// ─── GANADORES ────────────────────────────────────────────────────────────────
 function WinnersPage({ onBack, onRaffle }) {
   const [winners, setWinners] = useState([])
   useEffect(() => {
@@ -870,21 +886,21 @@ function WinnersPage({ onBack, onRaffle }) {
 
   return (
     <div style={S.content}>
-      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:20, fontSize:14, padding:0, fontFamily:'inherit' }}>â Volver</button>
+      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:20, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
       <div style={{ textAlign:'center', marginBottom:26 }}>
-        <div style={{ fontSize:52, marginBottom:14 }}>ð</div>
+        <div style={{ fontSize:52, marginBottom:14 }}>🏆</div>
         <h1 style={{ color:'#fff', fontWeight:900, fontSize:22, margin:'0 0 8px' }}>Ganadores de La Casa</h1>
         <p style={{ color:C.muted, fontSize:14, margin:0 }}>Personas reales que ganaron sus premios</p>
       </div>
       {list.map((w,i) => (
         <div key={i} style={{ background:`linear-gradient(160deg,#1a1200,${C.card})`, border:`1px solid ${C.cardBorder}`, borderRadius:16, padding:16, marginBottom:12, display:'flex', gap:14, alignItems:'center', position:'relative', overflow:'hidden' }}>
           <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-          <div style={{ width:50, height:50, background:`${w.color}20`, border:`2px solid ${w.color}40`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:22 }}>ð</div>
+          <div style={{ width:50, height:50, background:`${w.color}20`, border:`2px solid ${w.color}40`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:22 }}>🏆</div>
           <div style={{ flex:1 }}>
             <div style={{ color:'#fff', fontWeight:800, fontSize:14 }}>{w.name}</div>
             <div style={{ color:C.gold, fontSize:13, fontWeight:700, margin:'2px 0' }}>{w.prize}</div>
             <div style={{ display:'flex', gap:10, fontSize:10, color:C.muted }}>
-              <span>ð {w.city}</span><span>ð {w.date}</span>
+              <span>📍 {w.city}</span><span>📅 {w.date}</span>
             </div>
           </div>
           <div style={{ background:`${w.color}18`, border:`1px solid ${w.color}30`, borderRadius:10, padding:'6px 12px', textAlign:'center' }}>
@@ -902,9 +918,27 @@ function WinnersPage({ onBack, onRaffle }) {
   )
 }
 
-// âââ PROFILE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── PROFILE ──────────────────────────────────────────────────────────────────
 function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, isAdmin, onAdmin, onRefresh, onSupport, appConfig, pwa }) {
   const [tab, setTab] = useState(0)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editForm, setEditForm] = useState({ full_name:'', phone:'' })
+  const [showInfoDinero, setShowInfoDinero] = useState(false)
+  const [showInfoPuntos, setShowInfoPuntos] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (profile) setEditForm({ full_name: profile.full_name||'', phone: profile.phone||'' })
+  }, [profile])
+
+  async function saveProfile() {
+    if (!editForm.full_name.trim()) { alert('Ingresa tu nombre'); return }
+    setSaving(true)
+    await supabase.from('users_profile').update({ full_name: editForm.full_name, phone: editForm.phone }).eq('id', user.id)
+    setSaving(false)
+    setShowEditModal(false)
+    onRefresh && onRefresh()
+  }
 
   if (!user) return (
     <div style={{ ...S.content, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:60, textAlign:'center' }}>
@@ -919,7 +953,6 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
   const name = profile?.full_name || user.email || ''
   const phone = profile?.phone || ''
 
-  // Agrupar boletos por raffle_id
   const groupTickets = (tickets) => {
     const groups = {}
     tickets.forEach(t => {
@@ -931,71 +964,112 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
   }
 
   const reserved = myTickets.filter(t => t.status === 'reserved')
-  const paid     = myTickets.filter(t => t.status === 'paid')
-  const history  = myTickets.filter(t => !['reserved','paid'].includes(t.status))
-
-  const tabTickets = tab === 0 ? myTickets : tab === 1 ? reserved : tab === 2 ? paid : history
-  const groupedTickets = groupTickets(tabTickets)
-
+  const paid = myTickets.filter(t => t.status === 'paid')
+  const history = myTickets.filter(t => !['reserved','paid'].includes(t.status))
   const reservedGroups = groupTickets(reserved)
-  const paidGroups     = groupTickets(paid)
-  const historyGroups  = groupTickets(history)
+  const paidGroups = groupTickets(paid)
+  const historyGroups = groupTickets(history)
 
   return (
     <div style={{ background:C.bg, minHeight:'100vh' }}>
-      {/* HEADER */}
-      <div style={{ background:'#111', padding:'13px 16px', borderBottom:'1px solid #1a1a1a' }}>
+      <style>{CSS}</style>
+
+      {/* HEADER con fondo dorado oscuro */}
+      <div style={{ background:'linear-gradient(160deg,#1a1200,#0d0900)', padding:'16px 16px 14px', position:'relative', overflow:'hidden' }}>
+        <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#E6BE00,transparent)' }}></div>
+        <div style={{ position:'absolute', top:-20, right:-20, width:80, height:80, background:'radial-gradient(circle,rgba(230,190,0,0.06),transparent)', borderRadius:'50%' }}></div>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:40, height:40, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:900, color:'#000', border:`2px solid rgba(230,190,0,0.25)`, flexShrink:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            {/* Avatar con borde dorado */}
+            <div style={{ width:50, height:50, background:'#1a1200', borderRadius:'50%', border:'2.5px solid #E6BE00', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, fontWeight:900, color:C.gold, flexShrink:0, position:'relative' }}>
               {name[0]?.toUpperCase() || 'U'}
+              <div style={{ position:'absolute', bottom:1, right:1, width:12, height:12, background:C.green, borderRadius:'50%', border:'2px solid #0d0900' }}></div>
             </div>
             <div>
-              <div style={{ color:'#fff', fontSize:15, fontWeight:900 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
-              <div style={{ background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:999, padding:'1px 9px', display:'inline-block', marginTop:3 }}>
-                <span style={{ color:'#777', fontSize:8, fontWeight:600 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
+              <div style={{ color:'#fff', fontSize:16, fontWeight:900, lineHeight:1.2 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
+                <div style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'1px 8px' }}>
+                  <span style={{ color:C.gold, fontSize:8, fontWeight:700 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
+                </div>
+                {phone && <span style={{ color:'#444', fontSize:9 }}>{phone}</span>}
               </div>
             </div>
           </div>
-          <div style={{ display:'flex', gap:7, alignItems:'center' }}>
-            {isAdmin && <button onClick={onAdmin} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:7, padding:'5px 10px', color:C.gold, fontSize:9, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Admin</button>}
-            <button onClick={onLogout} style={{ width:30, height:30, background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#C0392B" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <div style={{ display:'flex', gap:7 }}>
+            {/* Boton editar */}
+            <button onClick={() => setShowEditModal(true)} style={{ width:34, height:34, background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.gold} strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            {isAdmin && <button onClick={onAdmin} style={{ height:34, background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:9, color:C.gold, fontSize:9, fontWeight:700, cursor:'pointer', padding:'0 10px', fontFamily:'inherit' }}>Admin</button>}
+            {/* Boton salir */}
+            <button onClick={onLogout} style={{ width:34, height:34, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.25)', borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#E74C3C" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           </div>
         </div>
       </div>
 
       <div style={{ padding:'12px 16px 90px' }}>
-        {/* DINERO + PUNTOS */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
-          <div style={{ background:'linear-gradient(135deg,#0d1628,#0a1220)', border:'1px solid rgba(41,128,185,0.3)', borderRadius:13, padding:'11px 13px' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:6 }}>
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#5DADE2" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-              <span style={{ color:'#5DADE2', fontSize:8, fontWeight:700, textTransform:'uppercase' }}>Mi Dinero</span>
+        {/* MI DINERO — tarjeta sola */}
+        <div style={{ background:'linear-gradient(135deg,#0d1628,#0a1220)', border:'1px solid rgba(41,128,185,0.3)', borderRadius:14, padding:'14px 16px', marginBottom:10 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#5DADE2" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              <span style={{ color:'#5DADE2', fontSize:10, fontWeight:700, textTransform:'uppercase' }}>MI DINERO</span>
+              <button onClick={() => setShowInfoDinero(!showInfoDinero)} style={{ width:18, height:18, background:'rgba(93,173,226,0.15)', border:'1px solid rgba(93,173,226,0.3)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#5DADE2" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </button>
             </div>
-            <div style={{ color:'#fff', fontSize:20, fontWeight:900, marginBottom:6 }}>{fmt(profile?.credits || 0)}</div>
-            <div style={{ background:'#E67E22', borderRadius:6, padding:'4px 9px', color:'#fff', fontSize:7, fontWeight:800, display:'inline-block', cursor:'pointer' }}>+ Recargar</div>
+            <button style={{ background:'#E67E22', border:'none', borderRadius:8, padding:'7px 12px', color:'#fff', fontSize:9, fontWeight:900, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:4 }}>
+              <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="white" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Recargar
+            </button>
           </div>
-          <div style={{ background:'#0d0d0d', border:`1px solid rgba(230,190,0,0.25)`, borderRadius:13, padding:'11px 13px' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:6 }}>
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
-              <span style={{ color:C.gold, fontSize:8, fontWeight:700, textTransform:'uppercase' }}>Mis Puntos</span>
+          <div style={{ color:'#fff', fontSize:26, fontWeight:900, lineHeight:1, marginBottom:2 }}>{fmt(profile?.credits || 0)}</div>
+          <div style={{ color:'#4a7a9b', fontSize:8, textTransform:'uppercase', letterSpacing:.5 }}>DISPONIBLE</div>
+          {showInfoDinero && (
+            <div style={{ background:'rgba(93,173,226,0.08)', border:'1px solid rgba(93,173,226,0.2)', borderRadius:9, padding:'9px 11px', marginTop:10 }}>
+              <div style={{ color:'#5DADE2', fontSize:9, fontWeight:700, marginBottom:3 }}>Para que sirve el saldo?</div>
+              <div style={{ color:'#4a7a9b', fontSize:9, lineHeight:1.6 }}>Puedes usarlo para pagar boletos de sorteos directamente desde la app sin necesidad de hacer transferencias.</div>
             </div>
-            <div style={{ color:'#fff', fontSize:20, fontWeight:900, marginBottom:6 }}>{(profile?.points || 0).toLocaleString()}</div>
-            <div style={{ color:'#444', fontSize:7 }}>pts disponibles</div>
+          )}
+        </div>
+
+        {/* MIS PUNTOS — tarjeta sola */}
+        <div style={{ background:'#0d0d0d', border:'1px solid rgba(230,190,0,0.25)', borderRadius:14, padding:'14px 16px', marginBottom:14 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+              <span style={{ color:C.gold, fontSize:10, fontWeight:700, textTransform:'uppercase' }}>MIS PUNTOS</span>
+              <button onClick={() => setShowInfoPuntos(!showInfoPuntos)} style={{ width:18, height:18, background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </button>
+            </div>
+            <button style={{ background:'transparent', border:'1px solid rgba(230,190,0,0.2)', borderRadius:8, padding:'6px 11px', color:C.gold, fontSize:8, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:5 }}>
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              HISTORIAL
+            </button>
           </div>
+          <div style={{ color:C.gold, fontSize:26, fontWeight:900, display:'flex', alignItems:'baseline', gap:6, marginBottom:0 }}>
+            {(profile?.points || 0).toLocaleString()} <span style={{ color:'#444', fontSize:12, fontWeight:400 }}>pts</span>
+          </div>
+          {showInfoPuntos && (
+            <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:9, padding:'9px 11px', marginTop:10 }}>
+              <div style={{ color:C.gold, fontSize:9, fontWeight:700, marginBottom:3 }}>Para que sirven los puntos?</div>
+              <div style={{ color:'#666', fontSize:9, lineHeight:1.6 }}>Acumulas puntos al participar en dinamicas. Puedes usarlos para descuentos en futuros boletos.</div>
+            </div>
+          )}
         </div>
 
         {/* PWA BANNER compacto */}
         {pwa && !pwa.isInstalled && (
           <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:11, padding:'9px 12px', marginBottom:12, display:'flex', alignItems:'center', gap:9, position:'relative', overflow:'hidden' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-            <div style={{ width:28, height:28, borderRadius:7, overflow:'hidden', flexShrink:0, border:`1px solid rgba(230,190,0,0.25)` }}><LogoSVG size={28} /></div>
+            <div style={{ width:28, height:28, borderRadius:7, overflow:'hidden', flexShrink:0, border:'1px solid rgba(230,190,0,0.25)' }}><LogoSVG size={28} /></div>
             <div style={{ flex:1 }}><div style={{ color:'#fff', fontSize:10, fontWeight:800 }}>Instala La Casa</div><div style={{ color:C.muted, fontSize:8 }}>Offline + notificaciones</div></div>
             {pwa.canInstall
               ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:7, padding:'6px 10px', color:'#000', fontSize:8, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
-              : <div style={{ color:C.muted, fontSize:8, flexShrink:0, maxWidth:70, textAlign:'right', lineHeight:1.4 }}>Menu â Agregar pantalla</div>
+              : <div style={{ color:C.muted, fontSize:8, flexShrink:0, maxWidth:70, textAlign:'right', lineHeight:1.4 }}>Menu → Agregar pantalla</div>
             }
           </div>
         )}
@@ -1004,21 +1078,21 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
         <div style={{ background:'#111', borderRadius:11, padding:3, display:'flex', gap:2, marginBottom:14 }}>
           {[['Todo', myTickets.length], ['Reservas', reserved.length], ['Pagados', paid.length], ['Historial', history.length]].map(([lb, count], i) => (
             <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'7px 2px', borderRadius:8, border:'none', textAlign:'center', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
-              <span style={{ color:tab===i?'#000':C.muted, fontSize:8, fontWeight:tab===i?800:500 }}>{lb}</span>
-              {count > 0 && <span style={{ position:'absolute', top:2, right:3, background:tab===i?'rgba(0,0,0,0.25)':'rgba(230,190,0,0.2)', borderRadius:999, width:13, height:13, display:'flex', alignItems:'center', justifyContent:'center', fontSize:6, fontWeight:700, color:tab===i?'#000':C.gold }}>{count}</span>}
+              <span style={{ color:tab===i?'#000':C.muted, fontSize:8, fontWeight:tab===i?800:400 }}>{lb}</span>
+              {count > 0 && <span style={{ position:'absolute', top:2, right:2, background:tab===i?'rgba(0,0,0,0.2)':'rgba(230,190,0,0.2)', borderRadius:999, width:12, height:12, display:'flex', alignItems:'center', justifyContent:'center', fontSize:6, fontWeight:700, color:tab===i?'#000':C.gold }}>{count}</span>}
             </button>
           ))}
         </div>
 
-        {/* TITULO MIS BOLETOS */}
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+        {/* MIS BOLETOS titulo */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
           <div style={{ width:3, height:18, background:C.gold, borderRadius:2 }}></div>
-          <span style={{ color:'#fff', fontSize:14, fontWeight:900, textTransform:'uppercase', letterSpacing:.5 }}>Mis Boletos</span>
+          <span style={{ color:'#fff', fontSize:14, fontWeight:900, textTransform:'uppercase', letterSpacing:.5 }}>MIS BOLETOS</span>
         </div>
 
         {myTickets.length === 0 ? (
           <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
-            <div style={{ fontSize:44, marginBottom:12 }}>ðï¸</div>
+            <div style={{ fontSize:44, marginBottom:12 }}>🎟️</div>
             <div style={{ color:'#fff', fontSize:14, fontWeight:600, marginBottom:6 }}>Aun no tienes boletos</div>
             <div style={{ fontSize:12 }}>Participa en una dinamica!</div>
           </div>
@@ -1028,7 +1102,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
               <>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
                   <div style={{ width:7, height:7, background:C.gold, borderRadius:'50%' }} className="pulse"></div>
-                  <span style={{ color:C.gold, fontSize:11, fontWeight:800, textTransform:'uppercase' }}>Reservados ({reserved.length})</span>
+                  <span style={{ color:C.gold, fontSize:11, fontWeight:800, textTransform:'uppercase' }}>RESERVADOS ({reserved.length})</span>
                 </div>
                 {reservedGroups.map((g, i) => <RaffleTicketGroup key={i} group={g} status="reserved" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)}
               </>
@@ -1036,8 +1110,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             {(tab === 0 || tab === 2) && paidGroups.length > 0 && (
               <>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10, marginTop: tab===0 && reservedGroups.length>0 ? 14 : 0 }}>
-                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#27AE60" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
-                  <span style={{ color:'#27AE60', fontSize:11, fontWeight:800, textTransform:'uppercase' }}>Pagados ({paid.length})</span>
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#27AE60" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span style={{ color:'#27AE60', fontSize:11, fontWeight:800, textTransform:'uppercase' }}>PAGADOS ({paid.length})</span>
                 </div>
                 {paidGroups.map((g, i) => <RaffleTicketGroup key={i} group={g} status="paid" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)}
               </>
@@ -1045,8 +1119,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             {(tab === 0 || tab === 3) && historyGroups.length > 0 && (
               <>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10, marginTop: tab===0 ? 14 : 0 }}>
-                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#555" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  <span style={{ color:'#555', fontSize:11, fontWeight:800, textTransform:'uppercase' }}>Historial ({history.length})</span>
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#555" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <span style={{ color:'#555', fontSize:11, fontWeight:800, textTransform:'uppercase' }}>HISTORIAL ({history.length})</span>
                 </div>
                 {historyGroups.map((g, i) => <RaffleTicketGroup key={i} group={g} status="finished" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)}
               </>
@@ -1054,11 +1128,39 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
           </>
         )}
       </div>
+
+      {/* MODAL EDITAR DATOS */}
+      {showEditModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowEditModal(false)}>
+          <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:24, width:'100%', maxWidth:500, border:'1px solid rgba(230,190,0,0.2)', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#E6BE00,transparent)' }}></div>
+            <div style={{ width:40, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
+            <div style={{ color:'#fff', fontSize:15, fontWeight:900, marginBottom:16 }}>Editar mis datos</div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Nombre completo</label>
+              <input value={editForm.full_name} onChange={e => setEditForm(p=>({...p, full_name:e.target.value}))} placeholder="Tu nombre completo" />
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Numero de WhatsApp</label>
+              <div style={{ position:'relative' }}>
+                <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)' }}>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="#25D366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </div>
+                <input value={editForm.phone} onChange={e => setEditForm(p=>({...p, phone:e.target.value}))} placeholder="+57 300 000 0000" style={{ paddingLeft:36 }} />
+              </div>
+              <div style={{ color:'#444', fontSize:9, marginTop:4 }}>Este numero recibe los mensajes de pago</div>
+            </div>
+            <button onClick={saveProfile} disabled={saving} style={{ ...S.btnGold, marginBottom:10, opacity:saving?.7:1 }}>{saving?'Guardando...':'Guardar cambios'}</button>
+            <button onClick={() => setShowEditModal(false)} style={{ width:'100%', background:'transparent', border:'none', color:'#444', fontSize:12, cursor:'pointer', padding:8, fontFamily:'inherit' }}>Cancelar</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// âââ RAFFLE TICKET GROUP â todos los numeros del mismo sorteo en una tarjeta ââ
+
+// ─── RAFFLE TICKET GROUP — todos los numeros del mismo sorteo en una tarjeta ──
 function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSupport }) {
   const { raffle, tickets } = group
   const allNums = tickets.flatMap(t => t.numbers || [])
@@ -1094,7 +1196,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
           </div>
           <div style={{ color:'#fff', fontSize:13, fontWeight:900, textTransform:'uppercase', lineHeight:1.25 }}>{raffle?.title || 'Sorteo'}</div>
           <div style={{ color:'#555', fontSize:9, marginTop:3 }}>
-            ð {raffle?.raffle_date ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : ''} Â· ð± {raffle?.lottery_name || ''}
+            📅 {raffle?.raffle_date ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : ''} · 🎱 {raffle?.lottery_name || ''}
           </div>
         </div>
         <div style={{ textAlign:'right' }}>
@@ -1113,7 +1215,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
         </div>
       </div>
 
-      {/* NUMEROS â todos juntos */}
+      {/* NUMEROS — todos juntos */}
       <div style={{ marginBottom:10 }}>
         <div style={{ color:'#444', fontSize:8, textTransform:'uppercase', letterSpacing:.8, marginBottom:8 }}>Tus numeros ({allNums.length})</div>
         <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
@@ -1128,7 +1230,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
       {/* PREMIO + TOTAL */}
       <div style={{ background:'#111', borderRadius:9, padding:'9px 11px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-          <span style={{ fontSize:12 }}>ð°</span>
+          <span style={{ fontSize:12 }}>💰</span>
           <span style={{ color:'#666', fontSize:9 }}>Premio:</span>
           <span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>{raffle?.prizes?.[0]?.amount || raffle?.prizes?.[0] || ''}</span>
         </div>
@@ -1227,7 +1329,7 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
             <div key={n} style={{ background:paid?'rgba(39,174,96,0.1)':'rgba(201,162,39,0.1)', border:`1px solid ${paid?'rgba(39,174,96,0.25)':'rgba(201,162,39,0.25)'}`, borderRadius:8, padding:'6px 8px', display:'flex', alignItems:'center', gap:5 }}>
               <span style={{ color:paid?C.green:C.gold, fontSize:16, fontWeight:900 }}>#{pad}</span>
               {!paid && (
-                <button onClick={() => releaseOne(n)} style={{ width:16, height:16, background:'rgba(192,57,43,0.2)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'#E74C3C', fontSize:8, fontWeight:700, padding:0, fontFamily:'inherit' }}>â</button>
+                <button onClick={() => releaseOne(n)} style={{ width:16, height:16, background:'rgba(192,57,43,0.2)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'#E74C3C', fontSize:8, fontWeight:700, padding:0, fontFamily:'inherit' }}>✕</button>
               )}
             </div>
           )
@@ -1280,14 +1382,14 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
             <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
             <div style={{ width:40, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
             <div style={{ color:'#fff', fontWeight:900, fontSize:16, marginBottom:4 }}>Confirmar pago</div>
-            <div style={{ color:C.muted, fontSize:12, marginBottom:16 }}>Numeros {nums.map(n=>String(n).padStart(2,'0')).join(', ')} â {fmt(t.total_amount)}</div>
+            <div style={{ color:C.muted, fontSize:12, marginBottom:16 }}>Numeros {nums.map(n=>String(n).padStart(2,'0')).join(', ')} — {fmt(t.total_amount)}</div>
             <a href={waLink()} target="_blank" rel="noreferrer" style={{ textDecoration:'none' }}>
               <div style={{ background:'#0f1e1a', border:'1px solid rgba(39,174,96,0.25)', borderRadius:12, padding:14, marginBottom:10, display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
                 <div style={{ width:40, height:40, background:'#128C7E', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </div>
                 <div style={{ flex:1 }}><div style={{ color:'#fff', fontSize:13, fontWeight:700 }}>Pagar por WhatsApp</div><div style={{ color:C.green, fontSize:10 }}>Enviar comprobante directo</div></div>
-                <div style={{ color:C.green, fontSize:16 }}>â</div>
+                <div style={{ color:C.green, fontSize:16 }}>→</div>
               </div>
             </a>
             <div onClick={() => { setShowPayModal(false); onSupport() }} style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:12, padding:14, marginBottom:14, display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
@@ -1295,7 +1397,7 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke={C.gold} strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               </div>
               <div style={{ flex:1 }}><div style={{ color:'#fff', fontSize:13, fontWeight:700 }}>Chat de soporte</div><div style={{ color:C.muted, fontSize:10 }}>Adjuntar comprobante en el chat</div></div>
-              <div style={{ color:'#666', fontSize:16 }}>â</div>
+              <div style={{ color:'#666', fontSize:16 }}>→</div>
             </div>
             <button onClick={() => setShowPayModal(false)} style={{ width:'100%', background:'transparent', border:'none', color:'#444', fontSize:13, cursor:'pointer', padding:8, fontFamily:'inherit' }}>Cancelar</button>
           </div>
@@ -1305,7 +1407,7 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
   )
 }
 
-// âââ PROMOTER âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── PROMOTER ─────────────────────────────────────────────────────────────────
 function PromoterPage({ user, profile, onBack }) {
   const [referrals, setReferrals] = useState([])
   useEffect(() => { if(user) supabase.from('referrals').select('*').eq('promoter_id', user.id).then(({ data }) => { if(data) setReferrals(data) }) }, [user])
@@ -1313,13 +1415,13 @@ function PromoterPage({ user, profile, onBack }) {
   const refUrl = `https://www.lacasadelasdinamicas.com/?ref=${profile?.referral_code}`
   return (
     <div style={S.content}>
-      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>â Volver</button>
+      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
       <div style={{ background:`linear-gradient(160deg,#1a1200,${C.card})`, border:`1px solid ${C.cardBorder}`, borderRadius:18, padding:18, marginBottom:16, position:'relative', overflow:'hidden' }}>
         <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}><span style={{ fontSize:26 }}>ð£</span><div><h2 style={{ color:'#fff', fontWeight:900, fontSize:18, margin:0 }}>Panel del Vendedor</h2><span style={S.badge('green')}>Activo</span></div></div>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}><span style={{ fontSize:26 }}>📣</span><div><h2 style={{ color:'#fff', fontWeight:900, fontSize:18, margin:0 }}>Panel del Vendedor</h2><span style={S.badge('green')}>Activo</span></div></div>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
-        {[[referrals.length,'Referidos','ð¥'],[fmt(profile?.total_earnings||0),'Ganancias','ðµ'],[fmt(profile?.pending_earnings||0),'Por cobrar','ð°'],['15%','Comision N1','ð']].map(([val,label,icon]) => (
+        {[[referrals.length,'Referidos','👥'],[fmt(profile?.total_earnings||0),'Ganancias','💵'],[fmt(profile?.pending_earnings||0),'Por cobrar','💰'],['15%','Comision N1','📈']].map(([val,label,icon]) => (
           <div key={label} style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:14, padding:14, textAlign:'center' }}>
             <div style={{ fontSize:18, marginBottom:4 }}>{icon}</div>
             <div style={{ fontSize:20, fontWeight:900, color:C.gold }}>{val}</div>
@@ -1337,7 +1439,7 @@ function PromoterPage({ user, profile, onBack }) {
       </div>
       <div style={S.card}>
         <div style={{ fontSize:13, fontWeight:700, color:'#fff', marginBottom:12 }}>Estructura de comisiones</div>
-        {[['Nivel 1 â Venta directa','15%'],['Nivel 2 â Referido de referido','7%'],['Nivel 3','3%']].map(([label,pct]) => (
+        {[['Nivel 1 — Venta directa','15%'],['Nivel 2 — Referido de referido','7%'],['Nivel 3','3%']].map(([label,pct]) => (
           <div key={label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:9, padding:'10px 12px', marginBottom:8 }}>
             <span style={{ color:'#ccc', fontSize:12 }}>{label}</span>
             <span style={S.badge('gold')}>{pct}</span>
@@ -1348,18 +1450,18 @@ function PromoterPage({ user, profile, onBack }) {
   )
 }
 
-// âââ POINTS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── POINTS ───────────────────────────────────────────────────────────────────
 function PointsPage({ user, profile, onLogin }) {
   return (
     <div style={S.content}>
       <div style={{ background:`linear-gradient(160deg,#1a1200,${C.card})`, border:`1px solid ${C.cardBorder}`, borderRadius:20, padding:24, marginBottom:20, textAlign:'center', position:'relative', overflow:'hidden' }}>
         <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-        <div style={{ fontSize:36, marginBottom:10 }}>â­</div>
+        <div style={{ fontSize:36, marginBottom:10 }}>⭐</div>
         <div style={{ color:C.gold, fontSize:36, fontWeight:900 }}>{(profile?.points || 0).toLocaleString()}</div>
         <div style={{ color:C.muted, fontSize:13, marginTop:4 }}>Puntos de fidelidad</div>
         {!user && <button onClick={onLogin} style={{ ...S.btnGold, marginTop:16 }}>Ingresar para ganar puntos</button>}
       </div>
-      {[['ðï¸','Comprar un boleto','Por cada boleto confirmado','+100 pts'],['ð¥','Referir un amigo','Cuando se registra con tu enlace','+500 pts'],['ð±','Compartir dinamica','Por cada publicacion compartida','+50 pts'],['ð°','Recargar saldo','Por cada recarga realizada','+200 pts'],['ð¸','Seguirnos en Instagram','@lacasadelasdinamicas','+30 pts']].map(([icon,title,desc,pts]) => (
+      {[['🎟️','Comprar un boleto','Por cada boleto confirmado','+100 pts'],['👥','Referir un amigo','Cuando se registra con tu enlace','+500 pts'],['📱','Compartir dinamica','Por cada publicacion compartida','+50 pts'],['💰','Recargar saldo','Por cada recarga realizada','+200 pts'],['📸','Seguirnos en Instagram','@lacasadelasdinamicas','+30 pts']].map(([icon,title,desc,pts]) => (
         <div key={title} style={{ ...S.card, display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}><span style={{ fontSize:22 }}>{icon}</span><div><div style={{ color:'#fff', fontWeight:700, fontSize:13 }}>{title}</div><div style={{ color:C.muted, fontSize:11, marginTop:2 }}>{desc}</div></div></div>
           <span style={S.badge('dim')}>{pts}</span>
@@ -1369,16 +1471,21 @@ function PointsPage({ user, profile, onLogin }) {
   )
 }
 
-// âââ SUPPORT ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
+// ─── SUPPORT ──────────────────────────────────────────────────────────────────
+function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext }) {
   const [conversations, setConversations] = useState([])
   const [selectedConv, setSelectedConv] = useState(null)
   const [messages, setMessages] = useState([])
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(false)
+  const [filter, setFilter] = useState('all')
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
+  const [notaModal, setNotaModal] = useState(false)
+  const [notaText, setNotaText] = useState('')
+
   const quickReplies = ['Como pago mi boleto?','Cuando es el sorteo?','Quiero liberar un numero','Quiero ser vendedor','Tuve un problema tecnico']
+  const adminReplies = ['Pago confirmado ✓ Tu numero esta asegurado!','Pago rechazado, el comprobante no es valido.','Tu pago esta en revision, en breve te confirmamos.','Necesitamos mas informacion del comprobante.','Tu numero fue liberado exitosamente.']
 
   useEffect(() => {
     if (isAdmin) {
@@ -1387,209 +1494,359 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig }) {
       return () => supabase.removeChannel(ch)
     } else if (user) {
       loadMyMessages()
+      // Auto mensaje bienvenida si viene desde boton Pagar
+      if (ticketContext) sendWelcomeMsg(ticketContext)
       const ch = supabase.channel(`support-${user.id}`).on('postgres_changes', { event:'INSERT', schema:'public', table:'support_messages', filter:`user_id=eq.${user.id}` }, loadMyMessages).subscribe()
       return () => supabase.removeChannel(ch)
     }
   }, [user, isAdmin])
 
-  useEffect(() => { if(selectedConv && isAdmin) loadConvMessages(selectedConv.user_id) }, [selectedConv])
+  useEffect(() => { if (selectedConv && isAdmin) loadConvMessages(selectedConv.user_id) }, [selectedConv])
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior:'smooth' }) }, [messages])
+
+  async function sendWelcomeMsg(ctx) {
+    if (!user || !ctx) return
+    // Check if already has messages to avoid duplicates
+    const { data: existing } = await supabase.from('support_messages').select('id').eq('user_id', user.id).limit(1)
+    if (existing && existing.length > 0) return
+    // Send welcome message from admin
+    const welcomeMsg = `Hola, ${profile?.full_name?.split(' ')[0] || 'bienvenido'}! 👋 Veo que quieres pagar el boleto #${String(ctx.number).padStart(2,'0')} de ${ctx.title} por ${fmt(ctx.price)}. Adjunta aqui el comprobante de pago y lo validamos de inmediato.`
+    await supabase.from('support_messages').insert({ user_id:user.id, message:welcomeMsg, from_admin:true })
+    // Send payment data
+    const payData = buildPaymentMsg()
+    if (payData) await supabase.from('support_messages').insert({ user_id:user.id, message:payData, from_admin:true })
+    await loadMyMessages()
+  }
+
+  function buildPaymentMsg() {
+    const lines = []
+    if (appConfig?.paymentNequi) lines.push(`📱 Nequi: ${appConfig.paymentNequi}`)
+    if (appConfig?.paymentDaviplata) lines.push(`📱 Daviplata: ${appConfig.paymentDaviplata}`)
+    if (appConfig?.paymentBancolombia) lines.push(`🏦 Bancolombia: ${appConfig.paymentBancolombia}`)
+    if (appConfig?.paymentOtro) lines.push(`💳 ${appConfig.paymentOtro}`)
+    if (appConfig?.paymentNota) lines.push(`\n${appConfig.paymentNota}`)
+    return lines.length > 0 ? 'Datos para el pago:\n' + lines.join('\n') : null
+  }
 
   async function loadConversations() {
     const { data } = await supabase.from('support_messages').select('*, users_profile(full_name,phone)').order('created_at', { ascending:false })
     if (!data) return
     const map = {}
     data.forEach(m => {
-      if (!map[m.user_id]) map[m.user_id] = { user_id:m.user_id, name:m.users_profile?.full_name||'Usuario', phone:m.users_profile?.phone, last_msg:m.image_url?'Imagen adjunta':m.message, unread:!m.from_admin?1:0 }
-      else if (!m.from_admin) map[m.user_id].unread++
+      if (!map[m.user_id]) map[m.user_id] = { user_id:m.user_id, name:m.users_profile?.full_name||'Usuario', phone:m.users_profile?.phone, last_msg:m.image_url?'📷 Imagen adjunta':m.message, last_time:m.created_at, unread:0, hasImage:!!m.image_url }
+      if (!m.from_admin) map[m.user_id].unread++
+      if (m.image_url) map[m.user_id].hasImage = true
     })
     setConversations(Object.values(map))
   }
+
   async function loadMyMessages() {
     const { data } = await supabase.from('support_messages').select('*').eq('user_id', user.id).order('created_at', { ascending:true })
     setMessages(data || [])
   }
+
   async function loadConvMessages(userId) {
     const { data } = await supabase.from('support_messages').select('*').eq('user_id', userId).order('created_at', { ascending:true })
     if (data) setMessages(data)
   }
+
   async function handleImageUpload(file) {
     if (!file || !user) return
-
-    // Validar tipo y tamaÃ±o
     const allowed = ['image/jpeg','image/jpg','image/png','image/webp','image/gif']
-    if (!allowed.includes(file.type)) {
-      alert('Solo se permiten imagenes JPG, PNG, WEBP o GIF.')
-      return
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      alert('La imagen no puede pesar mas de 10MB.')
-      return
-    }
-
+    if (!allowed.includes(file.type)) { alert('Solo se permiten imagenes JPG, PNG, WEBP o GIF.'); return }
+    if (file.size > 10 * 1024 * 1024) { alert('La imagen no puede pesar mas de 10MB.'); return }
     const ext = file.name.split('.').pop().toLowerCase()
     const fileName = `${Date.now()}_${Math.random().toString(36).substr(2,6)}.${ext}`
     const path = `support/${user.id}/${fileName}`
-
     try {
-      // Subir al bucket
-      const { data: uploadData, error: upErr } = await supabase.storage
-        .from('support-images')
-        .upload(path, file, {
-          cacheControl: '3600',
-          upsert: false,
-          contentType: file.type
-        })
-
-      if (upErr) {
-        console.error('Upload error:', upErr)
-        if (upErr.message?.includes('row-level security') || upErr.message?.includes('policy')) {
-          alert('Error de permisos en Storage. Ejecuta el SQL de fix-storage en Supabase.')
-        } else if (upErr.message?.includes('Bucket not found')) {
-          alert('El bucket support-images no existe. Crealo en Supabase Storage â New Bucket â nombre: support-images â Public.')
-        } else {
-          alert('Error al subir: ' + upErr.message)
-        }
-        return
-      }
-
-      // Obtener URL publica
-      const { data: urlData } = supabase.storage
-        .from('support-images')
-        .getPublicUrl(path)
-
+      const { error: upErr } = await supabase.storage.from('support-images').upload(path, file, { cacheControl:'3600', upsert:false, contentType:file.type })
+      if (upErr) { alert('Error al subir imagen: ' + upErr.message); return }
+      const { data: urlData } = supabase.storage.from('support-images').getPublicUrl(path)
       const publicUrl = urlData?.publicUrl
       if (!publicUrl) { alert('No se pudo obtener la URL de la imagen.'); return }
-
-      // Auto-eliminar en 48 horas fijo
       const deleteAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
-
-      // Guardar en support_messages
-      const { error: msgErr } = await supabase.from('support_messages').insert({
-        user_id: user.id,
-        message: 'Comprobante de pago adjunto',
-        from_admin: false,
-        image_url: publicUrl,
-        delete_at: deleteAt
-      })
-
-      if (msgErr) {
-        console.error('Message error:', msgErr)
-        alert('Imagen subida pero no se pudo registrar el mensaje. Intenta de nuevo.')
-        return
-      }
-
+      await supabase.from('support_messages').insert({ user_id:user.id, message:'Comprobante de pago adjunto', from_admin:false, image_url:publicUrl, delete_at:deleteAt })
       await loadMyMessages()
-
-    } catch(e) {
-      console.error('handleImageUpload exception:', e)
-      alert('Error inesperado al procesar la imagen. Intenta de nuevo.')
-    }
+      // Auto respuesta al recibir imagen
+      setTimeout(async () => {
+        await supabase.from('support_messages').insert({ user_id:user.id, message:'✅ Recibimos tu comprobante! Tu pago esta en validacion. En breve actualizaremos tu boleto y te notificamos. Gracias por tu paciencia!', from_admin:true })
+        await loadMyMessages()
+      }, 1200)
+    } catch(e) { alert('Error inesperado al procesar la imagen.') }
   }
+
   async function sendMessage(text) {
     const content = text || msg
     if (!content.trim()) return
     setMsg(''); setLoading(true)
-    if (isAdmin && selectedConv) { await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:content, from_admin:true }); await loadConvMessages(selectedConv.user_id) }
-    else if (user) { await supabase.from('support_messages').insert({ user_id:user.id, message:content, from_admin:false }); await loadMyMessages() }
+    if (isAdmin && selectedConv) {
+      await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:content, from_admin:true })
+      await loadConvMessages(selectedConv.user_id)
+    } else if (user) {
+      await supabase.from('support_messages').insert({ user_id:user.id, message:content, from_admin:false })
+      await loadMyMessages()
+    }
     setLoading(false)
   }
+
+  async function confirmPayment() {
+    if (!selectedConv) return
+    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'✅ Pago confirmado! Tu numero esta asegurado. Mucha suerte en el sorteo!', from_admin:true })
+    await loadConvMessages(selectedConv.user_id)
+  }
+
+  async function rejectPayment() {
+    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'❌ Tu pago fue rechazado. El comprobante no es valido o no coincide con el monto. Por favor envia un nuevo comprobante.', from_admin:true })
+    await loadConvMessages(selectedConv.user_id)
+  }
+
+  async function giveMoreTime() {
+    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'⏱ Te hemos dado 24 horas adicionales para completar tu pago. Aprovechalas!', from_admin:true })
+    await loadConvMessages(selectedConv.user_id)
+  }
+
+  async function saveNota() {
+    if (!notaText.trim()) return
+    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:`[NOTA INTERNA] ${notaText}`, from_admin:true, is_internal:true })
+    await loadConvMessages(selectedConv.user_id)
+    setNotaModal(false); setNotaText('')
+  }
+
   const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
 
+  const filteredConvs = conversations.filter(c => {
+    if (filter === 'image') return c.hasImage
+    if (filter === 'unread') return c.unread > 0
+    if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
+    return true
+  })
+
+  // ── ADMIN VIEW ──────────────────────────────────────────────────────────────
   if (isAdmin) return (
     <div style={{ height:'calc(100vh - 64px)', display:'flex', flexDirection:'column', background:C.bg }}>
-      <div style={{ padding:'12px 16px', borderBottom:`1px solid ${C.cardBorder}`, display:'flex', alignItems:'center', gap:10 }}>
-        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:14, padding:0, fontFamily:'inherit' }}>â Volver</button>
-        <h2 style={{ color:'#fff', fontWeight:800, fontSize:16, margin:0 }}>Centro de Atencion</h2>
+      <div style={{ padding:'10px 16px', borderBottom:`1px solid ${C.cardBorder}`, display:'flex', alignItems:'center', gap:10 }}>
+        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>← Volver</button>
+        <h2 style={{ color:'#fff', fontWeight:800, fontSize:15, margin:0, flex:1 }}>Soporte</h2>
+        {conversations.filter(c=>c.unread>0).length > 0 && <span style={{ background:'rgba(192,57,43,0.15)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:999, padding:'2px 9px', color:'#E74C3C', fontSize:9, fontWeight:700 }}>{conversations.filter(c=>c.unread>0).length} nuevos</span>}
       </div>
+
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        <div style={{ width:selectedConv?'35%':'100%', borderRight:`1px solid ${C.cardBorder}`, overflowY:'auto' }}>
-          {conversations.length===0 ? <div style={{ textAlign:'center', padding:'40px 16px', color:C.muted }}><div style={{ fontSize:36, marginBottom:8 }}>ð¬</div>Sin mensajes aun</div>
-            : conversations.map((c,i) => (
-              <div key={i} onClick={() => setSelectedConv(c)} style={{ padding:'12px 14px', borderBottom:`1px solid rgba(255,255,255,0.04)`, cursor:'pointer', background:selectedConv?.user_id===c.user_id?'rgba(201,162,39,0.06)':'transparent', display:'flex', gap:10, alignItems:'center' }}>
-                <div style={{ width:38, height:38, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:14, flexShrink:0 }}>{(c.name||'U')[0].toUpperCase()}</div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ color:'#fff', fontWeight:700, fontSize:13, marginBottom:2 }}>{c.name}</div>
-                  <div style={{ color:C.muted, fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.last_msg}</div>
-                </div>
-                {c.unread>0 && <div style={{ width:18, height:18, background:'#C0392B', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#fff', fontWeight:700, flexShrink:0 }}>{c.unread}</div>}
-              </div>
+        {/* Lista conversaciones */}
+        <div style={{ width: selectedConv ? '35%' : '100%', borderRight:`1px solid ${C.cardBorder}`, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+          {/* Filtros */}
+          <div style={{ padding:'7px 10px', display:'flex', gap:5, overflowX:'auto', scrollbarWidth:'none', borderBottom:'1px solid #111', flexShrink:0 }}>
+            {[['all','Todos'],['unread','Sin leer'],['image','Con imagen'],['today','Hoy']].map(([val,label]) => (
+              <button key={val} onClick={() => setFilter(val)} style={{ flexShrink:0, background:filter===val?'rgba(230,190,0,0.15)':'#111', border:`1px solid ${filter===val?'rgba(230,190,0,0.4)':'#1a1a1a'}`, borderRadius:999, padding:'4px 9px', color:filter===val?C.gold:'#555', fontSize:8, fontWeight:filter===val?700:400, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{label}</button>
             ))}
+          </div>
+          {/* Stats */}
+          {!selectedConv && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:5, padding:'8px 10px', borderBottom:'1px solid #111', flexShrink:0 }}>
+              {[[conversations.length,'Total',C.gold],[conversations.filter(c=>c.unread>0).length,'Sin leer','#E74C3C'],[conversations.filter(c=>{ const t=new Date().toDateString(); return new Date(c.last_time).toDateString()===t }).length,'Hoy','#27AE60']].map(([v,l,col]) => (
+                <div key={l} style={{ background:'#111', borderRadius:8, padding:'7px 6px', textAlign:'center' }}>
+                  <div style={{ color:col, fontSize:16, fontWeight:900, lineHeight:1 }}>{v}</div>
+                  <div style={{ color:'#444', fontSize:7, marginTop:2 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Lista */}
+          <div style={{ flex:1, overflowY:'auto' }}>
+            {filteredConvs.length === 0
+              ? <div style={{ textAlign:'center', padding:'30px 16px', color:C.muted }}><div style={{ fontSize:32, marginBottom:8 }}>💬</div>Sin conversaciones</div>
+              : filteredConvs.map((conv,i) => (
+                <div key={i} onClick={() => setSelectedConv(conv)} style={{ padding:'11px 12px', borderBottom:'1px solid #0d0d0d', cursor:'pointer', background:selectedConv?.user_id===conv.user_id?'rgba(230,190,0,0.05)':'transparent', display:'flex', gap:9, alignItems:'center' }}>
+                  <div style={{ width:36, height:36, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:13, flexShrink:0 }}>{(conv.name||'U')[0].toUpperCase()}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2 }}>
+                      <div style={{ color:'#fff', fontWeight:700, fontSize:11 }}>{conv.name}</div>
+                      <div style={{ color:'#444', fontSize:8 }}>{conv.last_time ? fmtTime(conv.last_time) : ''}</div>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                      {conv.hasImage && <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#888" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#888" stroke="none"/><polyline points="21 15 16 10 5 21"/></svg>}
+                      <div style={{ color:C.muted, fontSize:10, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{conv.last_msg}</div>
+                    </div>
+                  </div>
+                  {conv.unread > 0 && <div style={{ width:18, height:18, background:'#C0392B', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, color:'#fff', fontWeight:700, flexShrink:0 }}>{conv.unread}</div>}
+                </div>
+              ))
+            }
+          </div>
         </div>
+
+        {/* Conversacion abierta */}
         {selectedConv && (
           <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-            <div style={{ padding:'10px 14px', borderBottom:`1px solid ${C.cardBorder}`, display:'flex', alignItems:'center', gap:10 }}>
-              <button onClick={() => setSelectedConv(null)} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontSize:18, padding:0 }}>â</button>
-              <div style={{ flex:1 }}><div style={{ color:'#fff', fontWeight:700, fontSize:13 }}>{selectedConv.name}</div>{selectedConv.phone && <div style={{ color:C.muted, fontSize:11 }}>{selectedConv.phone}</div>}</div>
-              <button onClick={() => window.open(`https://wa.me/${(selectedConv.phone||'').replace(/\D/g,'')}`)} style={{ background:'rgba(39,174,96,0.15)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:11, fontWeight:700, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit' }}>WhatsApp</button>
-            </div>
-            <div style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:8 }}>
-              {messages.map((m,i) => (
-                <div key={i} style={{ display:'flex', justifyContent:m.from_admin?'flex-end':'flex-start' }}>
-                  <div style={{ maxWidth:'78%', background:m.from_admin?`linear-gradient(135deg,${C.gold},${C.goldLight})`:C.card, color:m.from_admin?'#000':'#fff', borderRadius:m.from_admin?'16px 16px 4px 16px':'16px 16px 16px 4px', padding:'9px 13px', fontSize:13, border:m.from_admin?'none':`1px solid ${C.cardBorder}` }}>
-                    {m.image_url && <img src={m.image_url} alt="comprobante" style={{ width:'100%', borderRadius:8, marginBottom:m.message?6:0, display:'block' }} />}
-                    {m.message}
-                    <div style={{ fontSize:10, color:m.from_admin?'rgba(0,0,0,.4)':'#555', marginTop:3, textAlign:'right' }}>{fmtTime(m.created_at)}</div>
-                  </div>
+            {/* Header conv */}
+            <div style={{ padding:'9px 12px', borderBottom:`1px solid ${C.cardBorder}`, flexShrink:0 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <button onClick={() => setSelectedConv(null)} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontSize:16, padding:0, flexShrink:0 }}>←</button>
+                <div style={{ width:32, height:32, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:12, flexShrink:0 }}>{(selectedConv.name||'U')[0].toUpperCase()}</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ color:'#fff', fontWeight:700, fontSize:12 }}>{selectedConv.name}</div>
+                  {selectedConv.phone && <div style={{ color:C.muted, fontSize:10 }}>{selectedConv.phone}</div>}
                 </div>
-              ))}
+                <div style={{ display:'flex', gap:5 }}>
+                  <button onClick={() => window.open(`https://wa.me/${(selectedConv.phone||'').replace(/\D/g,'')}`)} style={{ background:'rgba(37,211,102,0.1)', border:'1px solid rgba(37,211,102,0.25)', borderRadius:7, padding:'5px 8px', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="#25D366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <span style={{ color:'#25D366', fontSize:8, fontWeight:700 }}>WA</span>
+                  </button>
+                </div>
+              </div>
+              {/* Herramientas admin */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:4, marginTop:9 }}>
+                {[
+                  { label:'Confirmar', icon:'M20 6 9 17 4 12', color:'#27AE60', bg:'rgba(39,174,96,0.12)', action:confirmPayment },
+                  { label:'Rechazar', icon:'M18 6 6 18 M6 6l12 12', color:'#E74C3C', bg:'rgba(192,57,43,0.1)', action:rejectPayment },
+                  { label:'+24h', icon:'M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 5.477 10 10-4.477 10-10 10z M12 6v6l4 2', color:C.gold, bg:'rgba(230,190,0,0.08)', action:giveMoreTime },
+                  { label:'Boletos', icon:'M2 6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6z M8 2v4 M16 2v4', color:'#888', bg:'#111', action:()=>{} },
+                  { label:'Nota', icon:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6', color:'#888', bg:'#111', action:()=>setNotaModal(true) },
+                  { label:'Bloquear', icon:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4.93 4.93l14.14 14.14', color:'#E74C3C', bg:'rgba(192,57,43,0.08)', action:()=>{ if(window.confirm('Bloquear usuario?')) alert('Usuario bloqueado') } },
+                ].map((tool,i) => (
+                  <button key={i} onClick={tool.action} style={{ background:tool.bg, border:`1px solid ${tool.color}30`, borderRadius:8, padding:'6px 2px', textAlign:'center', cursor:'pointer', fontFamily:'inherit' }}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={tool.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ display:'block', margin:'0 auto 3px' }}><path d={tool.icon}/></svg>
+                    <div style={{ color:tool.color, fontSize:6, fontWeight:700 }}>{tool.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Mensajes */}
+            <div style={{ flex:1, overflowY:'auto', padding:'10px 12px', display:'flex', flexDirection:'column', gap:7 }}>
+              {messages.map((m,i) => {
+                const isInternal = m.message?.startsWith('[NOTA INTERNA]')
+                if (isInternal) return (
+                  <div key={i} style={{ background:'#1a1500', border:'1px dashed rgba(230,190,0,0.25)', borderRadius:8, padding:'7px 10px', display:'flex', alignItems:'center', gap:5 }}>
+                    <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={C.gold} strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span style={{ color:C.gold, fontSize:9, fontStyle:'italic' }}>{m.message.replace('[NOTA INTERNA] ','')}</span>
+                  </div>
+                )
+                return (
+                  <div key={i} style={{ display:'flex', justifyContent:m.from_admin?'flex-end':'flex-start' }}>
+                    <div style={{ maxWidth:'80%', background:m.from_admin?`linear-gradient(135deg,${C.gold},${C.goldLight})`:C.card, color:m.from_admin?'#000':'#fff', borderRadius:m.from_admin?'14px 14px 4px 14px':'14px 14px 14px 4px', padding:'9px 12px', fontSize:12, border:m.from_admin?'none':`1px solid ${C.cardBorder}` }}>
+                      {m.image_url && <img src={m.image_url} alt="comprobante" style={{ width:'100%', borderRadius:8, marginBottom:m.message&&m.message!=='Comprobante de pago adjunto'?6:0, display:'block' }} />}
+                      {m.message && m.message !== 'Comprobante de pago adjunto' && <div>{m.message}</div>}
+                      <div style={{ fontSize:9, color:m.from_admin?'rgba(0,0,0,.4)':'#555', marginTop:3, textAlign:'right' }}>{fmtTime(m.created_at)}</div>
+                    </div>
+                  </div>
+                )
+              })}
               <div ref={messagesEndRef} />
             </div>
-            <div style={{ padding:'8px 14px', overflowX:'auto', display:'flex', gap:6, scrollbarWidth:'none' }}>
-              {['Pago confirmado','Pago rechazado','En revision','Ganaste!'].map(r => (
-                <button key={r} onClick={() => sendMessage(r)} style={{ flexShrink:0, background:C.bg3, border:`1px solid #2a2a2a`, borderRadius:999, padding:'5px 12px', color:'#ccc', fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{r}</button>
+            {/* Respuestas rapidas admin */}
+            <div style={{ padding:'6px 10px', overflowX:'auto', display:'flex', gap:5, scrollbarWidth:'none', borderTop:'1px solid #111', flexShrink:0 }}>
+              {adminReplies.map(r => (
+                <button key={r} onClick={() => sendMessage(r)} style={{ flexShrink:0, background:C.bg3, border:'1px solid #2a2a2a', borderRadius:999, padding:'4px 10px', color:'#ccc', fontSize:10, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{r}</button>
               ))}
             </div>
-            <div style={{ padding:'10px 14px', borderTop:`1px solid ${C.cardBorder}`, display:'flex', gap:8 }}>
-              <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key==='Enter'&&sendMessage()} placeholder="Responder..." style={{ flex:1 }} />
-              <button onClick={() => sendMessage()} disabled={loading} style={{ ...S.btnGold, width:'auto', padding:'10px 16px', borderRadius:10 }}>â</button>
+            {/* Input */}
+            <div style={{ padding:'9px 12px', borderTop:`1px solid ${C.cardBorder}`, display:'flex', gap:7, flexShrink:0 }}>
+              <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key==='Enter'&&sendMessage()} placeholder={`Responder a ${selectedConv.name}...`} style={{ flex:1 }} />
+              <button onClick={() => sendMessage()} disabled={loading} style={{ ...S.btnGold, width:'auto', padding:'10px 16px', borderRadius:10 }}>↑</button>
             </div>
           </div>
         )}
       </div>
+
+      {/* Modal nota interna */}
+      {notaModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div style={{ background:'#141414', borderRadius:18, padding:20, width:'100%', maxWidth:400, border:`1px solid ${C.cardBorder}` }}>
+            <div style={{ color:'#fff', fontWeight:800, fontSize:15, marginBottom:12 }}>Nota interna</div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:12 }}>Solo tu puedes ver esta nota. No se envia al usuario.</div>
+            <textarea value={notaText} onChange={e=>setNotaText(e.target.value)} placeholder="Escribe tu nota aqui..." style={{ height:80, marginBottom:12 }} />
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={saveNota} style={{ ...S.btnGold, flex:1 }}>Guardar nota</button>
+              <button onClick={() => setNotaModal(false)} style={{ ...S.btnOutline, flex:1 }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 
-  if (!user) return (<div style={{ ...S.content, textAlign:'center', paddingTop:60 }}><div style={{ fontSize:48, marginBottom:16 }}>ð¬</div><h2 style={{ color:'#fff', fontWeight:800, marginBottom:8 }}>Atencion al Cliente</h2><p style={{ color:C.muted, fontSize:14 }}>Inicia sesion para chatear con nosotros</p></div>)
+  // ── USUARIO sin sesion ──────────────────────────────────────────────────────
+  if (!user) return (<div style={{ ...S.content, textAlign:'center', paddingTop:60 }}><div style={{ fontSize:48, marginBottom:16 }}>💬</div><h2 style={{ color:'#fff', fontWeight:800, marginBottom:8 }}>Atencion al Cliente</h2><p style={{ color:C.muted, fontSize:14 }}>Inicia sesion para chatear con nosotros</p></div>)
 
+  // ── USUARIO con sesion ──────────────────────────────────────────────────────
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 128px)', background:C.bg }}>
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={e => { if(e.target.files[0]) handleImageUpload(e.target.files[0]); e.target.value='' }} />
+
+      {/* Header */}
       <div style={{ padding:'10px 16px', borderBottom:`1px solid ${C.cardBorder}`, display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-        <div style={{ width:42, height:42, borderRadius:'50%', overflow:'hidden', border:`1px solid rgba(201,162,39,0.3)`, flexShrink:0 }}><LogoSVG size={42} /></div>
+        <div style={{ width:40, height:40, borderRadius:'50%', overflow:'hidden', border:`1px solid rgba(201,162,39,0.3)`, flexShrink:0 }}><LogoSVG size={40} /></div>
         <div style={{ flex:1 }}>
-          <div style={{ color:'#fff', fontWeight:700, fontSize:14 }}>La Casa â Soporte</div>
-          <div style={{ display:'flex', alignItems:'center', gap:5 }}><span style={{ width:7, height:7, background:C.green, borderRadius:'50%', display:'inline-block' }} className="pulse"></span><span style={{ color:C.green, fontSize:11 }}>En linea</span></div>
+          <div style={{ color:'#fff', fontWeight:700, fontSize:14 }}>La Casa — Soporte</div>
+          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+            <span style={{ width:7, height:7, background:C.green, borderRadius:'50%', display:'inline-block' }} className="pulse"></span>
+            <span style={{ color:C.green, fontSize:11 }}>En linea</span>
+          </div>
         </div>
-        {waLink() && (<a href={waLink()} target="_blank" rel="noreferrer" style={{ textDecoration:'none', flexShrink:0 }}><div style={{ background:'#075E54', borderRadius:10, padding:'7px 10px', display:'flex', alignItems:'center', gap:5 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg><span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>{appConfig?.supportWhatsappText||'WhatsApp'}</span></div></a>)}
+        {waLink() && (
+          <a href={waLink()} target="_blank" rel="noreferrer" style={{ textDecoration:'none', flexShrink:0 }}>
+            <div style={{ background:'#075E54', borderRadius:10, padding:'7px 10px', display:'flex', alignItems:'center', gap:5 }}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>WA Directo</span>
+            </div>
+          </a>
+        )}
       </div>
-      <div style={{ flex:1, overflowY:'auto', padding:'14px 16px', display:'flex', flexDirection:'column', gap:8 }}>
-        {messages.length===0 && <div style={{ background:C.card, borderRadius:'16px 16px 16px 4px', padding:'12px 16px', fontSize:13, color:'#fff', maxWidth:'82%', border:`1px solid ${C.cardBorder}` }}>Bienvenido! En que te podemos ayudar hoy?</div>}
+
+      {/* Contexto boleto (si viene desde Pagar) */}
+      {ticketContext && (
+        <div style={{ margin:'8px 14px 0', background:'#1a1200', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={C.gold} strokeWidth="2"><rect x="1" y="6" width="22" height="14" rx="2"/><path d="M16 2H8v4h8z"/></svg>
+          <div>
+            <div style={{ color:C.gold, fontSize:8, fontWeight:700 }}>Quieres pagar:</div>
+            <div style={{ color:'#fff', fontSize:10, fontWeight:900 }}>{ticketContext.title} · #{String(ticketContext.number).padStart(2,'0')} · {fmt(ticketContext.price)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Mensajes */}
+      <div style={{ flex:1, overflowY:'auto', padding:'12px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+        {messages.length === 0 && (
+          <div style={{ background:C.card, borderRadius:'16px 16px 16px 4px', padding:'12px 16px', fontSize:13, color:'#fff', maxWidth:'82%', border:`1px solid ${C.cardBorder}` }}>
+            Hola{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! 👋 En que te podemos ayudar hoy?
+          </div>
+        )}
         {messages.map((m,i) => (
           <div key={i} style={{ display:'flex', justifyContent:m.from_admin?'flex-start':'flex-end' }}>
-            <div style={{ maxWidth:'80%', background:m.from_admin?C.card:`linear-gradient(135deg,${C.gold},${C.goldLight})`, color:m.from_admin?'#fff':'#000', border:m.from_admin?`1px solid ${C.cardBorder}`:'none', borderRadius:m.from_admin?'16px 16px 16px 4px':'16px 16px 4px 16px', padding:'10px 14px', fontSize:13 }}>
-              {m.image_url && <div style={{ marginBottom:m.message?6:0 }}><img src={m.image_url} alt="comprobante" style={{ width:'100%', borderRadius:8, display:'block' }} />{m.delete_at && <div style={{ fontSize:9, color:m.from_admin?'#555':'rgba(0,0,0,.4)', marginTop:3 }}>Expira el {new Date(m.delete_at).toLocaleDateString('es-CO')}</div>}</div>}
-              {m.message}
-              <div style={{ fontSize:10, color:m.from_admin?'#555':'rgba(0,0,0,.4)', marginTop:4, textAlign:'right' }}>{fmtTime(m.created_at)}</div>
+            <div style={{ maxWidth:'82%', background:m.from_admin?C.card:`linear-gradient(135deg,${C.gold},${C.goldLight})`, color:m.from_admin?'#fff':'#000', border:m.from_admin?`1px solid ${C.cardBorder}`:'none', borderRadius:m.from_admin?'16px 16px 16px 4px':'16px 16px 4px 16px', padding:'10px 14px', fontSize:12 }}>
+              {m.image_url && <img src={m.image_url} alt="comprobante" style={{ width:'100%', borderRadius:8, marginBottom:6, display:'block' }} />}
+              {m.message && m.message !== 'Comprobante de pago adjunto' && <div style={{ lineHeight:1.5 }}>{m.message}</div>}
+              <div style={{ fontSize:10, color:m.from_admin?'#555':'rgba(0,0,0,.4)', marginTop:3, textAlign:'right' }}>{fmtTime(m.created_at)}</div>
             </div>
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
-      <div style={{ padding:'8px 16px', borderTop:`1px solid rgba(255,255,255,0.04)`, overflowX:'auto', display:'flex', gap:6, scrollbarWidth:'none', flexShrink:0 }}>
-        {quickReplies.map(q => (<button key={q} onClick={() => sendMessage(q)} style={{ flexShrink:0, background:'rgba(201,162,39,0.07)', border:`1px solid rgba(201,162,39,0.18)`, borderRadius:999, padding:'6px 12px', color:C.gold, fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{q}</button>))}
-      </div>
-      <div style={{ padding:'10px 16px', borderTop:`1px solid ${C.cardBorder}`, display:'flex', gap:8, flexShrink:0, alignItems:'center' }}>
-        <button onClick={() => fileInputRef.current?.click()} style={{ width:44, height:44, background:C.bg3, border:`1px solid rgba(201,162,39,0.2)`, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, padding:0 }}>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke={C.gold} strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill={C.gold} stroke="none"/><polyline points="21 15 16 10 5 21"/></svg>
+
+      {/* Respuestas rapidas usuario */}
+      {messages.length === 0 && (
+        <div style={{ padding:'6px 14px', overflowX:'auto', display:'flex', gap:6, scrollbarWidth:'none', flexShrink:0 }}>
+          {quickReplies.map(r => (
+            <button key={r} onClick={() => sendMessage(r)} style={{ flexShrink:0, background:C.bg3, border:`1px solid #2a2a2a`, borderRadius:999, padding:'5px 12px', color:'#ccc', fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{r}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Input */}
+      <div style={{ padding:'10px 14px', borderTop:`1px solid ${C.cardBorder}`, display:'flex', gap:8, flexShrink:0 }}>
+        <button onClick={() => fileInputRef.current?.click()} style={{ width:38, height:38, background:C.bg3, border:'1px solid #2a2a2a', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 }}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#888" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#888" stroke="none"/><polyline points="21 15 16 10 5 21"/></svg>
         </button>
-        <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key==='Enter'&&sendMessage()} placeholder="Escribe o adjunta comprobante..." style={{ flex:1 }} />
-        <button onClick={() => sendMessage()} disabled={loading} style={{ ...S.btnGold, width:'auto', padding:'11px 16px', borderRadius:10, flexShrink:0 }}>â</button>
+        <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key==='Enter'&&sendMessage()} placeholder="Escribe tu mensaje..." style={{ flex:1 }} />
+        <button onClick={() => sendMessage()} disabled={loading} style={{ ...S.btnGold, width:'auto', padding:'10px 16px', borderRadius:10 }}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#000" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
       </div>
     </div>
   )
 }
-// âââ ADMIN ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+
+
+// ─── ADMIN ────────────────────────────────────────────────────────────────────
 function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, onOpenSupport, onOpenSociety, onOpenBingo, onRefreshRaffles }) {
   const [tab, setTab] = useState(0)
   const [tickets, setTickets] = useState([])
@@ -1624,7 +1881,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
     alert('Configuracion guardada')
   }
 
-  if (!isAdmin) return <div style={{ ...S.content, textAlign:'center', paddingTop:60 }}><div style={{ fontSize:48 }}>ð</div><p style={{ color:C.muted, marginTop:16 }}>Acceso restringido</p></div>
+  if (!isAdmin) return <div style={{ ...S.content, textAlign:'center', paddingTop:60 }}><div style={{ fontSize:48 }}>🔒</div><p style={{ color:C.muted, marginTop:16 }}>Acceso restringido</p></div>
   if (showCreateRaffle || editingRaffle) return <RaffleForm raffle={editingRaffle} onBack={() => { setShowCreateRaffle(false); setEditingRaffle(null) }} onSave={() => { setShowCreateRaffle(false); setEditingRaffle(null); onRefreshRaffles(); loadAdminData() }} />
 
   const pending = tickets.filter(t => t.status === 'reserved')
@@ -1632,7 +1889,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
 
   return (
     <div style={S.content}>
-      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>â Volver</button>
+      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
       <div style={{ background:`linear-gradient(160deg,#1a1200,${C.card})`, border:`1px solid ${C.cardBorder}`, borderRadius:18, padding:18, marginBottom:14, position:'relative', overflow:'hidden' }}>
         <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -1641,7 +1898,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
         </div>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-        {[['ð°',adminRaffles.length,'Dinamicas'],['ðï¸',tickets.length,'Boletos'],['â³',pending.length,'Por confirmar'],['ð¬',unreadCount,'Mensajes']].map(([icon,val,label]) => (
+        {[['🎰',adminRaffles.length,'Dinamicas'],['🎟️',tickets.length,'Boletos'],['⏳',pending.length,'Por confirmar'],['💬',unreadCount,'Mensajes']].map(([icon,val,label]) => (
           <div key={label} style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:14, padding:14, textAlign:'center' }}>
             <div style={{ fontSize:20, marginBottom:4 }}>{icon}</div>
             <div style={{ fontSize:22, fontWeight:900, color:C.gold }}>{val}</div>
@@ -1651,17 +1908,17 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
       </div>
       <div style={{ background:'linear-gradient(135deg,rgba(39,174,96,0.08),rgba(39,174,96,0.03))', border:'1px solid rgba(39,174,96,0.2)', borderRadius:14, padding:'14px 18px', marginBottom:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div><div style={{ color:C.green, fontSize:10, fontWeight:700, textTransform:'uppercase', marginBottom:3 }}>Total recaudado</div><div style={{ color:'#fff', fontSize:24, fontWeight:900 }}>{fmt(totalRecaudo)}</div></div>
-        <div style={{ fontSize:32 }}>ð°</div>
+        <div style={{ fontSize:32 }}>💰</div>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
         <button onClick={onOpenSupport} style={{ ...S.btnGold, fontSize:13, position:'relative' }}>
           Atender Clientes
           {unreadCount > 0 && <span style={{ position:'absolute', top:-8, right:-8, width:22, height:22, background:'#C0392B', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:'#fff', fontWeight:700 }}>{unreadCount}</span>}
         </button>
-        <button onClick={() => onOpenSociety && onOpenSociety()} style={{ background:'linear-gradient(135deg,#5b2d8a,#7c3db8)', border:'1px solid rgba(155,89,182,0.4)', borderRadius:12, color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', padding:'14px' }}>ð¥ Sociedades</button>
+        <button onClick={() => onOpenSociety && onOpenSociety()} style={{ background:'linear-gradient(135deg,#5b2d8a,#7c3db8)', border:'1px solid rgba(155,89,182,0.4)', borderRadius:12, color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', padding:'14px' }}>👥 Sociedades</button>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
-        <button onClick={() => onOpenBingo && onOpenBingo()} style={{ background:'linear-gradient(135deg,#1a5a1a,#27AE60)', border:'1px solid rgba(39,174,96,0.4)', borderRadius:12, color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', padding:'14px' }}>ð± Panel Bingo</button>
+        <button onClick={() => onOpenBingo && onOpenBingo()} style={{ background:'linear-gradient(135deg,#1a5a1a,#27AE60)', border:'1px solid rgba(39,174,96,0.4)', borderRadius:12, color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', padding:'14px' }}>🎱 Panel Bingo</button>
         <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'14px', display:'flex', alignItems:'center', justifyContent:'center', color:C.muted, fontSize:11 }}>+ Mas pronto</div>
       </div>
       <div style={{ display:'flex', gap:3, background:'rgba(255,255,255,0.03)', borderRadius:10, padding:4, marginBottom:16 }}>
@@ -1673,12 +1930,12 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
       {tab === 0 && (
         <>
           <button onClick={() => setShowCreateRaffle(true)} style={{ ...S.btnGold, marginBottom:14 }}>+ Crear nueva dinamica</button>
-          {adminRaffles.length === 0 && <div style={{ textAlign:'center', padding:'30px 0', color:C.muted }}><div style={{ fontSize:32, marginBottom:8 }}>ð°</div><div>No hay dinamicas aun</div></div>}
+          {adminRaffles.length === 0 && <div style={{ textAlign:'center', padding:'30px 0', color:C.muted }}><div style={{ fontSize:32, marginBottom:8 }}>🎰</div><div>No hay dinamicas aun</div></div>}
           {adminRaffles.map(r => (
             <div key={r.id} style={{ ...S.card, marginBottom:10, position:'relative', overflow:'hidden', opacity: r.status==='draft'?0.7:1 }}>
               <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
               <div style={{ fontWeight:700, color:'#fff', fontSize:13, marginBottom:6 }}>{r.title}</div>
-              <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:6 }}><span style={{ background:r.status==='active'?'rgba(39,174,96,0.15)':'rgba(255,255,255,0.05)', border:`1px solid ${r.status==='active'?'rgba(39,174,96,0.3)':'rgba(255,255,255,0.1)'}`, borderRadius:999, padding:'2px 8px', color:r.status==='active'?'#27AE60':'#888', fontSize:9, fontWeight:700 }}>{r.status==='active'?'ACTIVO':r.status==='draft'?'BORRADOR':'FINALIZADO'}</span><span style={{ color:C.muted, fontSize:10 }}>{fmt(r.ticket_price)} Â· {r.lottery_name}</span></div>
+              <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:6 }}><span style={{ background:r.status==='active'?'rgba(39,174,96,0.15)':'rgba(255,255,255,0.05)', border:`1px solid ${r.status==='active'?'rgba(39,174,96,0.3)':'rgba(255,255,255,0.1)'}`, borderRadius:999, padding:'2px 8px', color:r.status==='active'?'#27AE60':'#888', fontSize:9, fontWeight:700 }}>{r.status==='active'?'ACTIVO':r.status==='draft'?'BORRADOR':'FINALIZADO'}</span><span style={{ color:C.muted, fontSize:10 }}>{fmt(r.ticket_price)} · {r.lottery_name}</span></div>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={() => setEditingRaffle(r)} style={{ flex:1, background:'rgba(201,162,39,0.08)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:8, color:C.gold, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Editar</button>
                 <button onClick={async () => { const n=window.prompt('Numero ganador (0-'+(r.number_range-1)+'):'); if(n!==null) alert('Ganador: #'+String(parseInt(n)).padStart(r.number_range<=100?2:3,'0')) }} style={{ flex:1, background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Realizar sorteo</button>
@@ -1700,8 +1957,8 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
               <div key={t.id} style={{ ...S.card, marginBottom:10, position:'relative', overflow:'hidden' }}>
                 <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
                 <div style={{ color:'#fff', fontWeight:700, fontSize:13, marginBottom:4 }}>{t.raffles?.title}</div>
-                <div style={{ color:C.muted, fontSize:12, marginBottom:3 }}>ð¤ {t.users_profile?.full_name}</div>
-                {t.users_profile?.phone && <div style={{ color:C.muted, fontSize:11, marginBottom:6 }}>ð± {t.users_profile.phone}</div>}
+                <div style={{ color:C.muted, fontSize:12, marginBottom:3 }}>👤 {t.users_profile?.full_name}</div>
+                {t.users_profile?.phone && <div style={{ color:C.muted, fontSize:11, marginBottom:6 }}>📱 {t.users_profile.phone}</div>}
                 <div style={{ color:C.muted, fontSize:12, marginBottom:6 }}>Numeros: <span style={{ color:C.gold, fontWeight:700 }}>{(t.numbers||[]).map(n=>String(n).padStart(2,'0')).join(', ')}</span></div>
                 <div style={{ color:C.gold, fontWeight:900, fontSize:16, marginBottom:12 }}>{fmt(t.total_amount)}</div>
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:7 }}>
@@ -1764,6 +2021,57 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
               ))}
             </div>
           </div>
+          {/* DATOS DE PAGO */}
+          <div style={S.card}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={C.gold} strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              <div style={{ color:C.gold, fontSize:13, fontWeight:800 }}>Datos de Pago</div>
+            </div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:12 }}>Estos datos aparecen automaticamente en el chat cuando un usuario quiere pagar.</div>
+            {[
+              ['paymentNequi','Nequi','Numero Nequi','rgba(168,85,247,0.25)'],
+              ['paymentDaviplata','Daviplata','Numero Daviplata','rgba(248,113,113,0.25)'],
+              ['paymentBancolombia','Bancolombia','Ej: Ahorros 123 456789 00','rgba(230,190,0,0.2)'],
+              ['paymentOtro','Otro metodo (opcional)','Ej: Bold, Nequi empresarial...','rgba(255,255,255,0.06)'],
+              ['paymentNota','Nota adicional (opcional)','Ej: Enviar comprobante por este chat','rgba(255,255,255,0.06)'],
+            ].map(([key,label,ph,border]) => (
+              <div key={key} style={{ marginBottom:10 }}>
+                <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>{label}</label>
+                <input value={localConfig[key]||''} onChange={e => setLocalConfig(p=>({...p,[key]:e.target.value}))} placeholder={ph} style={{ borderColor:border }} />
+              </div>
+            ))}
+            {/* Preview */}
+            {(localConfig.paymentNequi || localConfig.paymentDaviplata || localConfig.paymentBancolombia) && (
+              <div style={{ background:'#0d1a0d', border:'1px solid rgba(39,174,96,0.2)', borderRadius:10, padding:'10px 12px', marginTop:4 }}>
+                <div style={{ color:C.green, fontSize:9, fontWeight:700, marginBottom:5 }}>Preview — como lo ve el usuario:</div>
+                <div style={{ color:'#ccc', fontSize:10, lineHeight:1.8 }}>
+                  {localConfig.paymentNequi && <div>📱 Nequi: <b style={{ color:'#fff' }}>{localConfig.paymentNequi}</b></div>}
+                  {localConfig.paymentDaviplata && <div>📱 Daviplata: <b style={{ color:'#fff' }}>{localConfig.paymentDaviplata}</b></div>}
+                  {localConfig.paymentBancolombia && <div>🏦 Bancolombia: <b style={{ color:'#fff' }}>{localConfig.paymentBancolombia}</b></div>}
+                  {localConfig.paymentOtro && <div>💳 {localConfig.paymentOtro}</div>}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* GANADORES INSTAGRAM */}
+          <div style={S.card}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:'linear-gradient(90deg,transparent,#dc2743,transparent)' }}></div>
+            <div style={{ color:'#fff', fontSize:13, fontWeight:800, marginBottom:4 }}>Boton Ganadores</div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:12 }}>Configura el boton Ganadores del home. Si pones un link de Instagram, redirige ahi.</div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:10, padding:'10px 14px', marginBottom:10 }}>
+              <div>
+                <div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>Mostrar boton Ganadores</div>
+                <div style={{ color:C.muted, fontSize:10, marginTop:2 }}>Visible en la pantalla de inicio</div>
+              </div>
+              <div onClick={() => setLocalConfig(p=>({...p, showWinners:!p.showWinners}))} style={{ width:40, height:22, background:localConfig.showWinners?C.gold:'#2a2a2a', borderRadius:11, position:'relative', cursor:'pointer', transition:'background .2s', flexShrink:0 }}>
+                <div style={{ position:'absolute', width:16, height:16, background:'#fff', borderRadius:'50%', top:3, left:localConfig.showWinners?21:3, transition:'left .2s' }}></div>
+              </div>
+            </div>
+            <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Link de Instagram (ganadores)</label>
+            <input value={localConfig.winnersInstagram||''} onChange={e => setLocalConfig(p=>({...p,winnersInstagram:e.target.value}))} placeholder="https://instagram.com/tu_perfil" />
+            <div style={{ color:C.muted, fontSize:10, marginTop:6 }}>Si esta vacio, el boton muestra la pagina de Ganadores interna.</div>
+          </div>
           <button onClick={saveConfig} style={S.btnGold}>Guardar toda la configuracion</button>
         </div>
       )}
@@ -1771,8 +2079,8 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
   )
 }
 
-// âââ RAFFLE FORM ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// âââ FORM FIELD â definido fuera para evitar re-render y perdida de foco ââââ
+// ─── RAFFLE FORM ──────────────────────────────────────────────────────────────
+// ─── FORM FIELD — definido fuera para evitar re-render y perdida de foco ────
 function FormField({ label, children }) {
   return (
     <div style={{ marginBottom:14 }}>
@@ -1812,7 +2120,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
 
   return (
     <div style={S.content}>
-      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>â Volver</button>
+      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
       <div style={{ ...S.card, marginBottom:14, position:'relative', overflow:'hidden' }}>
         <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
         <div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>{isEdit?'Editar dinamica':'Crear nueva dinamica'}</div>
@@ -1845,7 +2153,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
             <div key={color} onClick={()=>setForm(p=>({...p,card_color:color}))} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor:'pointer' }}>
               <div style={{ width:38, height:38, background:`linear-gradient(135deg,${color}cc,${color}88)`, borderRadius:10, border:form.card_color===color?`3px solid #fff`:`1px solid ${color}60`, transition:'all .2s', position:'relative', overflow:'hidden' }}>
                 <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:color }}></div>
-                {form.card_color===color && <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:16, fontWeight:900 }}>â</div>}
+                {form.card_color===color && <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:16, fontWeight:900 }}>✓</div>}
               </div>
               <span style={{ fontSize:7, color:form.card_color===color?'#fff':'#555', fontWeight:form.card_color===color?700:400 }}>{name}</span>
             </div>
@@ -1853,7 +2161,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
         </div>
         <div style={{ background:`linear-gradient(160deg,${form.card_color}22,${form.card_color}11)`, border:`1px solid ${form.card_color}44`, borderRadius:11, padding:'8px 12px', fontSize:10, color:'#fff', fontWeight:600, position:'relative', overflow:'hidden' }}>
           <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${form.card_color},transparent)` }}></div>
-          Vista previa â asi se vera la tarjeta en el home
+          Vista previa — asi se vera la tarjeta en el home
         </div>
       </FormField>
       <FormField label="Marcar como destacado">
@@ -1907,7 +2215,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
   )
 }
 
-// âââ MANUAL SALE ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── MANUAL SALE ──────────────────────────────────────────────────────────────
 function ManualSaleForm({ raffles, onSaved }) {
   const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
   const [saving, setSaving] = useState(false)
@@ -1959,8 +2267,8 @@ function ManualSaleForm({ raffles, onSaved }) {
   )
 }
 
-// âââ LOGIN ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// âââ LOGIN ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin, onRegister, onBack }) {
   const [email, setEmail] = useState(''); const [pwd, setPwd] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('')
   const submit = async () => { setLoading(true); setError(''); try { await onLogin(email, pwd) } catch { setError('Correo o contrasena incorrectos') } finally { setLoading(false) } }
@@ -1976,7 +2284,7 @@ function LoginScreen({ onLogin, onRegister, onBack }) {
         </div>
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div><label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Correo electronico</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tuemail@correo.com" /></div>
-          <div><label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Contrasena</label><input type="password" value={pwd} onChange={e=>setPwd(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="â¢â¢â¢â¢â¢â¢â¢â¢" /></div>
+          <div><label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Contrasena</label><input type="password" value={pwd} onChange={e=>setPwd(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="••••••••" /></div>
           {error && <div style={{ color:'#E74C3C', fontSize:13, textAlign:'center', padding:'8px 12px', background:'rgba(192,57,43,0.1)', borderRadius:8 }}>{error}</div>}
           <button onClick={submit} disabled={loading} style={{ ...S.btnGold, opacity:loading?.7:1, marginTop:4 }}>{loading?'Ingresando...':'Ingresar a La Casa'}</button>
         </div>
@@ -1987,7 +2295,7 @@ function LoginScreen({ onLogin, onRegister, onBack }) {
   )
 }
 
-// âââ REGISTER âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── REGISTER ─────────────────────────────────────────────────────────────────
 function RegisterScreen({ onRegister, onLogin, appConfig }) {
   const [form, setForm] = useState({ name:'', phone:'', email:'', password:'', ref:'' }); const [loading, setLoading] = useState(false); const [error, setError] = useState('')
   const submit = async () => {
@@ -2009,7 +2317,7 @@ function RegisterScreen({ onRegister, onLogin, appConfig }) {
         </div>
         {appConfig?.showWelcomeBonus !== false && (
           <div style={{ background:`linear-gradient(135deg,rgba(201,162,39,0.08),rgba(201,162,39,0.03))`, border:`1px solid rgba(201,162,39,0.2)`, borderRadius:14, padding:'14px 16px', marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
-            <span style={{ fontSize:24 }}>ð</span>
+            <span style={{ fontSize:24 }}>🎁</span>
             <div><div style={{ color:C.gold, fontSize:13, fontWeight:800 }}>Bono de bienvenida!</div><div style={{ color:C.muted, fontSize:11, marginTop:2 }}>$500 en saldo + 1.000 puntos de fidelidad</div></div>
           </div>
         )}
@@ -2026,7 +2334,7 @@ function RegisterScreen({ onRegister, onLogin, appConfig }) {
   )
 }
 
-// âââ TICKET TIMER â countdown basado en expiracion real ââââââââââââââââââââââ
+// ─── TICKET TIMER — countdown basado en expiracion real ──────────────────────
 function TicketTimer({ ticket }) {
   const [timeLeft, setTimeLeft] = useState('')
   const [urgent, setUrgent] = useState(false)
@@ -2076,7 +2384,7 @@ function TicketTimer({ ticket }) {
   )
 }
 
-// âââ SOCIETY PAGE â pagina completa del sistema de sociedad ââââââââââââââââââ
+// ─── SOCIETY PAGE — pagina completa del sistema de sociedad ──────────────────
 function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
   const [societyTicket, setSocietyTicket] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -2146,12 +2454,12 @@ function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
     <div style={{ minHeight: '100vh', background: C.bg }}>
       <style>{CSS}</style>
       <div style={{ background: 'linear-gradient(180deg,#0f0619 0%,#080808 100%)', padding: '16px 16px 0', borderBottom: '1px solid rgba(155,89,182,0.2)' }}>
-        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.purple, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: '0 0 14px', fontFamily: 'inherit' }}>â Volver</button>
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.purple, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: '0 0 14px', fontFamily: 'inherit' }}>← Volver</button>
         <div style={{ textAlign: 'center', paddingBottom: 20 }}>
           <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '2px solid #9B59B6', borderRadius: 20, padding: '16px 28px', marginBottom: 12 }} className="society-glow">
             <div style={{ color: '#7b5cad', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Numero en Sociedad</div>
             <div style={{ color: '#C9A0E8', fontSize: 52, fontWeight: 900, lineHeight: 1 }}>{pad(number)}</div>
-            <div style={{ color: '#9B59B6', fontSize: 11, fontWeight: 700, marginTop: 6 }}>ð¥ {raffle?.title}</div>
+            <div style={{ color: '#9B59B6', fontSize: 11, fontWeight: 700, marginTop: 6 }}>👥 {raffle?.title}</div>
           </div>
           {/* Estado del numero */}
           {loading ? (
@@ -2164,9 +2472,9 @@ function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
             )}}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} className="pulse"></div>
               <span style={{ fontSize: 10, fontWeight: 700 }}>
-                {!societyTicket ? 'Disponible â 0/2 socios' :
-                 status === 'waiting' ? '1 socio unido â falta 1 mas!' :
-                 status === 'complete' ? 'Completo â 2/2 socios' : 'No disponible'}
+                {!societyTicket ? 'Disponible — 0/2 socios' :
+                 status === 'waiting' ? '1 socio unido — falta 1 mas!' :
+                 status === 'complete' ? 'Completo — 2/2 socios' : 'No disponible'}
               </span>
             </div>
           )}
@@ -2186,7 +2494,7 @@ function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
             <span style={{ color: C.purple, fontSize: 24, fontWeight: 900 }}>{fmt(halfPrice)}</span>
           </div>
           <div style={{ background: 'rgba(39,174,96,0.08)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 18 }}>ð</span>
+            <span style={{ fontSize: 18 }}>🏆</span>
             <div>
               <div style={{ color: '#27AE60', fontSize: 11, fontWeight: 700 }}>Si el numero gana, AMBOS reciben el premio completo</div>
               <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{(Array.isArray(raffle?.prizes) ? raffle.prizes[0]?.amount : '') || 'Premio principal'}</div>
@@ -2199,10 +2507,10 @@ function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
           <GoldLine />
           <div style={{ color: '#fff', fontSize: 13, fontWeight: 800, marginBottom: 12 }}>Como funciona la sociedad</div>
           {[
-            ['ð¥', 'Dos personas compran el mismo numero', 'Cada una paga la mitad del precio del boleto'],
-            ['â', 'El boleto queda completo entre los dos', 'Ambos socios quedan registrados en el sorteo'],
-            ['ð', 'Si el numero gana, ambos ganan', 'El admin coordina la entrega del premio a cada socio'],
-            ['â°', 'Tienes 48 horas para confirmar el pago', 'Si no pagas, el cupo se libera automaticamente'],
+            ['👥', 'Dos personas compran el mismo numero', 'Cada una paga la mitad del precio del boleto'],
+            ['✅', 'El boleto queda completo entre los dos', 'Ambos socios quedan registrados en el sorteo'],
+            ['🏆', 'Si el numero gana, ambos ganan', 'El admin coordina la entrega del premio a cada socio'],
+            ['⏰', 'Tienes 48 horas para confirmar el pago', 'Si no pagas, el cupo se libera automaticamente'],
           ].map(([icon, title, desc], i) => (
             <div key={i} style={{ display: 'flex', gap: 12, marginBottom: i < 3 ? 12 : 0, paddingBottom: i < 3 ? 12 : 0, borderBottom: i < 3 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
               <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
@@ -2216,11 +2524,11 @@ function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
           <div style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: 14, marginBottom: 14 }}>
             <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 }}>Primer socio (ya pago su parte)</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>ð¤</div>
+              <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>👤</div>
               <div style={{ flex: 1 }}>
                 <div style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>
                   {societyTicket.reveal_names && societyTicket.socio1?.full_name
-                    ? societyTicket.socio1.full_name.split(' ')[0] + ' â ' + (societyTicket.socio1?.city || 'Colombia')
+                    ? societyTicket.socio1.full_name.split(' ')[0] + ' — ' + (societyTicket.socio1?.city || 'Colombia')
                     : 'Socio verificado'}
                 </div>
                 <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>El admin puede revelar su identidad si lo decides</div>
@@ -2233,7 +2541,7 @@ function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
         {/* Ya soy socio */}
         {alreadyIn && (
           <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.25)', borderRadius: 14, padding: 14, marginBottom: 14, textAlign: 'center' }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>ð¥</div>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>👥</div>
             <div style={{ color: '#C9A0E8', fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Ya eres socio de este numero!</div>
             <div style={{ color: C.muted, fontSize: 12 }}>Ve a tu panel para ver el estado y confirmar el pago</div>
           </div>
@@ -2242,8 +2550,8 @@ function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
         {/* Boton principal */}
         {!loading && canJoin && (
           <button onClick={joinSociety} disabled={joining} style={{ ...S.btnPurple, opacity: joining ? .7 : 1, marginBottom: 8 }}>
-            <span>ð¥</span>
-            {joining ? 'Procesando...' : !societyTicket ? `Ser primer socio â ${fmt(halfPrice)}` : `Unirme como socio â ${fmt(halfPrice)}`}
+            <span>👥</span>
+            {joining ? 'Procesando...' : !societyTicket ? `Ser primer socio — ${fmt(halfPrice)}` : `Unirme como socio — ${fmt(halfPrice)}`}
           </button>
         )}
         {!loading && !canJoin && !alreadyIn && (
@@ -2258,7 +2566,7 @@ function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
   )
 }
 
-// âââ PANEL DE SOCIEDAD EN ADMIN âââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── PANEL DE SOCIEDAD EN ADMIN ───────────────────────────────────────────────
 function AdminSocietyPanel({ raffles, onBack }) {
   const [societies, setSocieties] = useState([])
   const [filter, setFilter] = useState('all')
@@ -2306,7 +2614,7 @@ function AdminSocietyPanel({ raffles, onBack }) {
 
   return (
     <div style={S.content}>
-      <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, marginBottom: 16, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>â Volver</button>
+      <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, marginBottom: 16, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>← Volver</button>
       <div style={{ ...S.card, marginBottom: 14 }}>
         <GoldLine />
         <div style={{ color: '#fff', fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Gestion de Sociedades</div>
@@ -2401,7 +2709,7 @@ function AdminSocietyPanel({ raffles, onBack }) {
       })}
       {!loading && filtered.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px 0', color: C.muted }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>ð¥</div>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>👥</div>
           <div>No hay sociedades {filter !== 'all' ? 'con este filtro' : 'aun'}</div>
         </div>
       )}
@@ -2409,13 +2717,13 @@ function AdminSocietyPanel({ raffles, onBack }) {
   )
 }
 
-// âââ WA PAYMENT BUTTON â mensaje prellenado ââââââââââââââââââââââââââââââââââ
+// ─── WA PAYMENT BUTTON — mensaje prellenado ──────────────────────────────────
 function WAPayButton({ ticket, profile, appConfig, compact = false }) {
   const raffle = ticket.raffles || {}
   const nums = (ticket.numbers || []).map(n => `#${String(n).padStart(2,'0')}`).join(', ')
   const name = profile?.full_name || 'Cliente'
   const sorteoDate = raffle.raffle_date ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : ''
-  const msg = `Hola! Quiero pagar mi boleto:\n\nSorteo: ${raffle.title || ''}\nNumero(s): ${nums}\nValor: ${fmt(ticket.total_amount || 0)}\nFecha sorteo: ${sorteoDate} Â· ${raffle.lottery_name || ''}\nNombre: ${name}`
+  const msg = `Hola! Quiero pagar mi boleto:\n\nSorteo: ${raffle.title || ''}\nNumero(s): ${nums}\nValor: ${fmt(ticket.total_amount || 0)}\nFecha sorteo: ${sorteoDate} · ${raffle.lottery_name || ''}\nNombre: ${name}`
   const waNum = (appConfig?.paymentWhatsapp || appConfig?.payment_whatsapp || '').replace(/\D/g,'')
   const waUrl = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(msg)}` : null
   const smsUrl = `sms:${profile?.phone || ''}?body=${encodeURIComponent(msg)}`
@@ -2424,7 +2732,7 @@ function WAPayButton({ ticket, profile, appConfig, compact = false }) {
     <a href={waUrl} target="_blank" rel="noreferrer" style={{ textDecoration:'none', display:'block' }}>
       <div style={{ background:'#25D366', borderRadius:9, padding:'10px', display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer' }}>
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        <span style={{ color:'#fff', fontSize:9, fontWeight:800 }}>Pagar por WhatsApp â {fmt(ticket.total_amount || 0)}</span>
+        <span style={{ color:'#fff', fontSize:9, fontWeight:800 }}>Pagar por WhatsApp — {fmt(ticket.total_amount || 0)}</span>
       </div>
     </a>
   )
@@ -2463,13 +2771,13 @@ function WAPayButton({ ticket, profile, appConfig, compact = false }) {
   )
 }
 
-// âââ ADMIN SMS COBRO BUTTON âââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── ADMIN SMS COBRO BUTTON ───────────────────────────────────────────────────
 function AdminSMSButton({ ticket, compact = false }) {
   const raffle = ticket.raffles || {}
   const nums = (ticket.numbers || []).map(n => `#${String(n).padStart(2,'0')}`).join(', ')
   const phone = ticket.users_profile?.phone || ticket.user_phone || ''
   const hoursLeft = ticket.expires_at ? Math.max(0, Math.floor((new Date(ticket.expires_at) - Date.now()) / 3600000)) : 24
-  const msg = `La Casa De Las Dinamicas: Hola! Tu numero ${nums} del sorteo ${raffle.title || ''} por ${fmt(ticket.total_amount || 0)} esta pendiente de pago. Tienes ${hoursLeft} horas para confirmar. EscrÃ­benos ya!`
+  const msg = `La Casa De Las Dinamicas: Hola! Tu numero ${nums} del sorteo ${raffle.title || ''} por ${fmt(ticket.total_amount || 0)} esta pendiente de pago. Tienes ${hoursLeft} horas para confirmar. Escríbenos ya!`
   const smsUrl = `sms:${phone.replace(/\D/g,'')}?body=${encodeURIComponent(msg)}`
   if (compact) return (
     <a href={smsUrl} style={{ textDecoration:'none', display:'block' }}>
@@ -2491,7 +2799,7 @@ function AdminSMSButton({ ticket, compact = false }) {
 }
 
 
-// âââ BINGO PAGE â completo y didactico âââââââââââââââââââââââââââââââââââââââ
+// ─── BINGO PAGE — completo y didactico ───────────────────────────────────────
 function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   const [game, setGame] = useState(null)
   const [myCartones, setMyCartones] = useState([])
@@ -2564,10 +2872,10 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   if (!game) return (
     <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, gap:16 }}>
       <style>{CSS}</style>
-      <div style={{ fontSize:64, marginBottom:8 }}>ð±</div>
+      <div style={{ fontSize:64, marginBottom:8 }}>🎱</div>
       <div style={{ color:'#fff', fontSize:20, fontWeight:900, textAlign:'center' }}>No hay Bingo activo</div>
       <div style={{ color:C.muted, fontSize:13, textAlign:'center' }}>El admin iniciara una partida pronto</div>
-      <button onClick={onBack} style={{ ...S.btnOutline, marginTop:8, maxWidth:200 }}>â Volver</button>
+      <button onClick={onBack} style={{ ...S.btnOutline, marginTop:8, maxWidth:200 }}>← Volver</button>
     </div>
   )
 
@@ -2576,7 +2884,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       <style>{CSS}</style>
       {/* Header */}
       <div style={{ background:C.bg2, padding:'11px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid #1a1a1a`, position:'sticky', top:0, zIndex:40 }}>
-        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>â Volver</button>
+        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>← Volver</button>
         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
           <div style={{ width:8, height:8, background:'#27AE60', borderRadius:'50%' }} className="pulse"></div>
           <span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>Bingo La Casa</span>
@@ -2594,10 +2902,10 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
             <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
             <div style={{ color:C.gold, fontSize:13, fontWeight:900, marginBottom:12, textAlign:'center' }}>Como jugar Bingo</div>
             {[
-              ['ðï¸','Compra tu carton','Cada carton cuesta '+fmt(game.carton_price)+'. Puedes tener hasta 6 cartones en la misma partida.'],
-              ['ð¢','Escucha los numeros','El admin va cantando numeros. Cada numero cantado se muestra grande en pantalla.'],
-              ['â','Marca en tu carton','Cuando el numero cantado aparezca en tu carton, tocalo para marcarlo.'],
-              ['ð','Canta BINGO!','Completa una linea horizontal, vertical, diagonal, las 4 esquinas o el carton completo y presiona el boton BINGO!'],
+              ['🎟️','Compra tu carton','Cada carton cuesta '+fmt(game.carton_price)+'. Puedes tener hasta 6 cartones en la misma partida.'],
+              ['🔢','Escucha los numeros','El admin va cantando numeros. Cada numero cantado se muestra grande en pantalla.'],
+              ['✅','Marca en tu carton','Cuando el numero cantado aparezca en tu carton, tocalo para marcarlo.'],
+              ['🏆','Canta BINGO!','Completa una linea horizontal, vertical, diagonal, las 4 esquinas o el carton completo y presiona el boton BINGO!'],
             ].map(([ic,t,d]) => (
               <div key={t} style={{ display:'flex', gap:12, marginBottom:12, paddingBottom:12, borderBottom:'1px solid #1a1a1a' }}>
                 <span style={{ fontSize:22, flexShrink:0 }}>{ic}</span>
@@ -2607,7 +2915,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
             {/* Tipos de bingo */}
             <div style={{ color:C.gold, fontSize:11, fontWeight:700, marginBottom:8 }}>Formas de ganar:</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-              {[['â','Linea horizontal','Premio basico'],['â','Linea vertical','Premio basico'],['â','Diagonal','Premio medio'],['â¬','Carton lleno','Premio MAXIMO!'],['â»ï¸','4 Esquinas','Premio especial']].map(([ic,t,p]) => (
+              {[['→','Linea horizontal','Premio basico'],['↓','Linea vertical','Premio basico'],['↗','Diagonal','Premio medio'],['⬛','Carton lleno','Premio MAXIMO!'],['◻️','4 Esquinas','Premio especial']].map(([ic,t,p]) => (
                 <div key={t} style={{ background:'#1a1a1a', borderRadius:9, padding:'8px 10px', display:'flex', alignItems:'center', gap:8 }}>
                   <span style={{ fontSize:16, flexShrink:0 }}>{ic}</span>
                   <div><div style={{ color:'#fff', fontSize:9, fontWeight:700 }}>{t}</div><div style={{ color:C.gold, fontSize:8 }}>{p}</div></div>
@@ -2664,7 +2972,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 
             {myCartones.length === 0 && (
               <div style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:14, padding:24, textAlign:'center', marginBottom:14 }}>
-                <div style={{ fontSize:32, marginBottom:8 }}>ðï¸</div>
+                <div style={{ fontSize:32, marginBottom:8 }}>🎟️</div>
                 <div style={{ color:'#fff', fontSize:13, fontWeight:700, marginBottom:4 }}>No tienes cartones aun</div>
                 <div style={{ color:C.muted, fontSize:11, marginBottom:14 }}>Compra tu primer carton por {fmt(game.carton_price)}</div>
                 <button onClick={buyCarton} style={{ ...S.btnGold }}>Comprar carton</button>
@@ -2686,7 +2994,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>
                     {letters.map(l => <div key={l} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:6, padding:'5px', textAlign:'center', fontSize:11, fontWeight:900, color:'#000' }}>{l}</div>)}
                   </div>
-                  {/* Numeros 5x5 â transpuesto */}
+                  {/* Numeros 5x5 — transpuesto */}
                   {Array.from({length:5},(_,row) => (
                     <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>
                       {nums.map((col, colIdx) => {
@@ -2697,7 +3005,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
                         return (
                           <div key={colIdx} onClick={() => n && markNumber(carton.id, n)}
                             style={{ aspectRatio:1, borderRadius:6, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.25)':isCalled?'rgba(39,174,96,0.15)':'#1a1a1a', border:`1px solid ${isStar?'transparent':isMarked&&isCalled?'rgba(230,190,0,0.5)':isCalled?'rgba(39,174,96,0.4)':'#2a2a2a'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:isStar?14:10, fontWeight:900, color:isStar?'#000':isMarked&&isCalled?C.gold:isCalled?'#27AE60':'#555', cursor:isCalled&&!isStar?'pointer':'default' }}>
-                            {isStar ? 'â­' : n}
+                            {isStar ? '⭐' : n}
                           </div>
                         )
                       })}
@@ -2710,7 +3018,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
             {/* BOTON BINGO */}
             {myCartones.length > 0 && (
               <button onClick={() => setBingoClaim(true)} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, border:'none', borderRadius:14, padding:16, color:'#000', fontSize:18, fontWeight:900, cursor:'pointer', width:'100%', fontFamily:'inherit', letterSpacing:2, marginTop:8 }}>
-                ð BINGO!
+                🎉 BINGO!
               </button>
             )}
           </>
@@ -2723,12 +3031,12 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
               <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
               <div style={{ width:40, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
               <div style={{ textAlign:'center', marginBottom:16 }}>
-                <div style={{ fontSize:40, marginBottom:6 }}>ð</div>
+                <div style={{ fontSize:40, marginBottom:6 }}>🎉</div>
                 <div style={{ color:'#fff', fontSize:18, fontWeight:900 }}>Reclamar BINGO!</div>
                 <div style={{ color:C.muted, fontSize:12, marginTop:4 }}>Selecciona que tipo de bingo lograste</div>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
-                {[['linea','â Linea'],['vertical','â Vertical'],['diagonal','â Diagonal'],['esquinas','â»ï¸ Esquinas'],['full','â¬ Carton lleno']].map(([type,label]) => (
+                {[['linea','→ Linea'],['vertical','↓ Vertical'],['diagonal','↗ Diagonal'],['esquinas','◻️ Esquinas'],['full','⬛ Carton lleno']].map(([type,label]) => (
                   <button key={type} onClick={() => setWinType(type)} style={{ background:winType===type?`rgba(230,190,0,0.15)`:'#1a1a1a', border:`1px solid ${winType===type?C.gold:'#2a2a2a'}`, borderRadius:10, padding:'11px', color:winType===type?C.gold:'#888', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{label}</button>
                 ))}
               </div>
@@ -2742,7 +3050,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   )
 }
 
-// âââ ADMIN BINGO PANEL ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── ADMIN BINGO PANEL ────────────────────────────────────────────────────────
 function AdminBingoPanel({ onBack }) {
   const [game, setGame] = useState(null)
   const [form, setForm] = useState({ title:'Bingo La Casa', prize_description:'', prize_amount:120000, carton_price:2000, mode:'manual', auto_interval:15 })
@@ -2806,7 +3114,7 @@ function AdminBingoPanel({ onBack }) {
 
   return (
     <div style={S.content}>
-      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>â Volver</button>
+      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
       <div style={{ ...S.card, marginBottom:14, position:'relative', overflow:'hidden' }}>
         <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
         <div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>Panel de Bingo</div>
@@ -2858,12 +3166,12 @@ function AdminBingoPanel({ onBack }) {
             )}
             {game.status === 'active' && game.mode === 'manual' && (
               <button onClick={callNumber} disabled={calling} style={{ ...S.btnGold, marginBottom:8, opacity:calling?.7:1 }}>
-                {calling ? 'Cantando...' : 'ð± Cantar siguiente numero'}
+                {calling ? 'Cantando...' : '🎱 Cantar siguiente numero'}
               </button>
             )}
             {game.status === 'active' && game.mode === 'auto' && (
               <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:9, padding:'10px', textAlign:'center', marginBottom:8, color:'#27AE60', fontSize:11, fontWeight:700 }}>
-                Modo automatico activo â cantando cada {game.auto_interval}s
+                Modo automatico activo — cantando cada {game.auto_interval}s
               </div>
             )}
             <button onClick={finishGame} style={{ ...S.btnOutline, borderColor:'rgba(192,57,43,0.4)', color:'#E74C3C' }}>Finalizar partida</button>
