@@ -1078,14 +1078,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   // Build WA message with all numbers
   const numsStr = allNums.map(n => '#'+String(n).padStart(2,'0')).join(', ')
   const waNum = (appConfig?.paymentWhatsapp || appConfig?.payment_whatsapp || '').replace(/\D/g,'')
-  const waMsg = 'Hola! Quiero pagar mis boletos:
-
-Sorteo: '+(raffle?.title||'')+'
-Numeros: '+numsStr+'
-Total: '+fmt(totalAmount)+'
-Fecha sorteo: '+(raffle?.raffle_date ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : '')+'
-Loteria: '+(raffle?.lottery_name||'')+'
-Nombre: '+(profile?.full_name||'')
+  const waMsg = 'Hola! Quiero pagar mis boletos:%0A%0ASorteo: '+(raffle?.title||'')+'%0ANumeros: '+numsStr+'%0ATotal: '+fmt(totalAmount)+'%0AFecha: '+(raffle?.raffle_date?new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}):'')+'%0ALoteria: '+(raffle?.lottery_name||'')+'%0ANombre: '+(profile?.full_name||'')
   const waUrl = waNum ? 'https://wa.me/'+waNum+'?text='+encodeURIComponent(waMsg) : null
 
   return (
