@@ -3,60 +3,101 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- SEO Principal -->
+    <title>La Casa De Las Dinamicas — Sorteos y Rifas Online en Colombia</title>
+    <meta name="description" content="La plataforma #1 de dinamicas y sorteos online en Colombia. Aparta tu numero, paga facil por WhatsApp y gana premios en efectivo. Sorteos transparentes basados en la loteria oficial." />
+    <meta name="keywords" content="dinamicas colombia, sorteos online colombia, rifas colombia, ganar dinero colombia, sorteos whatsapp, loteria colombia, premios en efectivo" />
+    <meta name="author" content="La Casa De Las Dinamicas" />
+    <meta name="robots" content="index, follow" />
+    <meta name="language" content="Spanish" />
+    <meta name="geo.region" content="CO" />
+    <meta name="geo.placename" content="Colombia" />
+
+    <!-- PWA -->
     <meta name="application-name" content="La Casa De Las Dinamicas" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="La Casa" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#E6BE00" />
-    <meta name="description" content="La mejor plataforma de dinamicas y sorteos de Colombia." />
-    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <meta name="msapplication-TileColor" content="#000000" />
+    <meta name="msapplication-navbutton-color" content="#E6BE00" />
+
+    <!-- Open Graph WhatsApp Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.lacasadelasdinamicas.com/" />
+    <meta property="og:site_name" content="La Casa De Las Dinamicas" />
+    <meta property="og:title" content="La Casa De Las Dinamicas — Gana Premios en Efectivo" />
+    <meta property="og:description" content="La plataforma #1 de sorteos online en Colombia. Aparta tu numero desde $1.000, paga por WhatsApp y gana premios en efectivo basados en la loteria oficial. Transparente y seguro." />
+    <meta property="og:image" content="https://www.lacasadelasdinamicas.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="La Casa De Las Dinamicas - Sorteos Online Colombia" />
+    <meta property="og:locale" content="es_CO" />
+
+    <!-- Twitter X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="La Casa De Las Dinamicas — Sorteos Online Colombia" />
+    <meta name="twitter:description" content="Aparta tu numero y gana premios en efectivo. Sorteos transparentes basados en la loteria oficial colombiana." />
+    <meta name="twitter:image" content="https://www.lacasadelasdinamicas.com/og-image.png" />
+
+    <!-- Favicon SVG inline -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23000'/%3E%3Cpolygon points='50,6 88,20 88,58 50,94 12,58 12,20' fill='%231a1000' stroke='%23E6BE00' stroke-width='3'/%3E%3Cpolygon points='50,22 70,34 30,34' fill='%23E6BE00'/%3E%3Crect x='30' y='34' width='40' height='26' fill='%232a1e00'/%3E%3Crect x='44' y='48' width='12' height='12' rx='2' fill='%23000'/%3E%3Crect x='32' y='38' width='6' height='6' rx='1' fill='%23E6BE00'/%3E%3Crect x='62' y='38' width='6' height='6' rx='1' fill='%23E6BE00'/%3E%3C/svg%3E" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png" />
+
+    <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://www.lacasadelasdinamicas.com/" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
-    <title>La Casa De Las Dinamicas</title>
+
+    <!-- Schema.org para Google -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "La Casa De Las Dinamicas",
+      "url": "https://www.lacasadelasdinamicas.com",
+      "description": "Plataforma de sorteos y dinamicas online en Colombia. Aparta numeros, paga por WhatsApp y gana premios en efectivo basados en la loteria oficial.",
+      "applicationCategory": "EntertainmentApplication",
+      "operatingSystem": "Any",
+      "inLanguage": "es-CO",
+      "areaServed": { "@type": "Country", "name": "Colombia" }
+    }
+    </script>
+
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { height: 100%; background: #000; }
-      body { font-family: 'DM Sans', system-ui, sans-serif; }
+      body { font-family: 'DM Sans', system-ui, -apple-system, sans-serif; }
       #root { min-height: 100%; }
       @supports (padding: env(safe-area-inset-bottom)) {
         body { padding-bottom: env(safe-area-inset-bottom); }
       }
-      #loader {
-        position: fixed; inset: 0; background: #000;
-        display: flex; align-items: center; justify-content: center;
-        z-index: 9999; transition: opacity 0.4s ease;
-      }
-      #loader.hide { opacity: 0; pointer-events: none; }
-      @keyframes spin { to { transform: rotate(360deg); } }
-      .spinner {
-        width: 36px; height: 36px; border-radius: 50%;
-        border: 3px solid #1a1a1a;
-        border-top-color: #E6BE00;
-        animation: spin 0.8s linear infinite;
-      }
     </style>
   </head>
   <body>
-    <div id="loader"><div class="spinner"></div></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      function hideLoader() {
-        var l = document.getElementById('loader')
-        if (!l) return
-        l.classList.add('hide')
-        setTimeout(function() { if (l.parentNode) l.parentNode.removeChild(l) }, 450)
-      }
-      window.addEventListener('load', function() { setTimeout(hideLoader, 400) })
-      setTimeout(hideLoader, 3000)
-
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js').catch(function(e) { console.log('SW:', e) })
+          navigator.serviceWorker.register('/sw.js')
+            .then(function(reg) {
+              navigator.serviceWorker.addEventListener('message', function(e) {
+                if (e.data && e.data.type === 'NAVIGATE') window.location.href = e.data.url
+              })
+            })
+            .catch(function(err) { console.log('SW error:', err) })
         })
       }
       window.deferredInstallPrompt = null
