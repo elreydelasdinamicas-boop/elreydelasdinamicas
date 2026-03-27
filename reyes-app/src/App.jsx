@@ -199,12 +199,9 @@ export default function App() {
     if (data) setProfile(data)
   }
   async function fetchRaffles() {
-    const { data } = await supabase.from('raffles').select('*').eq('status', 'active').order('created_at', { ascending: false })
-    if (data && data.length > 0) setRaffles(data)
-    else setRaffles([
-      { id: 1, title: 'DINAMICA #1 â GRAN PREMIO', is_featured: true, ticket_price: 5000, raffle_date: '2025-04-15', lottery_name: 'Bogota', number_range: 100, prizes: [{ amount: '$2.000.000 en efectivo' }, { amount: '$800.000 en efectivo' }, { amount: '$400.000 en efectivo' }, { amount: '$200.000 en efectivo' }], society_numbers: [11, 12, 13, 33, 44, 55, 77], presale_active: true, presale_price: 3000, presale_quota: 20, packages_active: true, packages: [{ qty: 3, price: 12000 }, { qty: 5, price: 18000 }, { qty: 10, price: 30000 }], promotions_active: true, promotions: [{ buy: 3, get: 1, label: 'Compra 3, lleva 4!' }], card_color: '#E67E22', is_featured: true },
-      { id: 2, title: 'DINAMICA #2 â PREMIO ESPECIAL', is_featured: false, ticket_price: 10000, raffle_date: '2025-05-01', lottery_name: 'Medellin', number_range: 100, prizes: [{ amount: '$5.000.000 en efectivo' }, { amount: '$1.500.000 en efectivo' }, { amount: '$700.000 en efectivo' }, { amount: '$300.000 en efectivo' }], society_numbers: [], card_color: '#2980B9' },
-    ])
+    const { data, error } = await supabase.from('raffles').select('*').eq('status', 'active').order('created_at', { ascending: false })
+    if (error) { console.error('Error fetching raffles:', error); return }
+    setRaffles(data || [])
   }
   async function fetchMyTickets() {
     const { data } = await supabase.from('tickets').select('*, raffles(title,raffle_date,lottery_name,ticket_price)').eq('user_id', user.id).order('created_at', { ascending: false })
@@ -1609,11 +1606,24 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
   const [editingRaffle, setEditingRaffle] = useState(null)
 
   useEffect(() => { setLocalConfig(appConfig) }, [appConfig])
+  const [adminRaffles, setAdminRaffles] = useState([])
+
   useEffect(() => {
     if (!isAdmin) return
-    supabase.from('tickets').select('*, users_profile(full_name,phone), raffles(title)').order('created_at',{ascending:false}).limit(50).then(({data})=>{ if(data) setTickets(data) })
-    supabase.from('support_messages').select('id',{count:'exact'}).eq('from_admin',false).then(({count})=>setUnreadCount(count||0))
+    loadAdminData()
   }, [isAdmin])
+
+  async function loadAdminData() {
+    // Cargar TODOS los sorteos (activos + borradores)
+    const { data: rd } = await supabase.from('raffles').select('*').order('created_at', { ascending: false })
+    if (rd) setAdminRaffles(rd)
+    // Cargar boletos
+    const { data: td } = await supabase.from('tickets').select('*, users_profile(full_name,phone), raffles(title)').order('created_at',{ascending:false}).limit(50)
+    if (td) setTickets(td)
+    // Mensajes sin leer
+    const { count } = await supabase.from('support_messages').select('id',{count:'exact'}).eq('from_admin',false)
+    setUnreadCount(count||0)
+  }
 
   async function saveConfig() {
     await supabase.from('app_config').upsert({ id:1, ...localConfig })
@@ -1622,7 +1632,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
   }
 
   if (!isAdmin) return <div style={{ ...S.content, textAlign:'center', paddingTop:60 }}><div style={{ fontSize:48 }}>ð</div><p style={{ color:C.muted, marginTop:16 }}>Acceso restringido</p></div>
-  if (showCreateRaffle || editingRaffle) return <RaffleForm raffle={editingRaffle} onBack={() => { setShowCreateRaffle(false); setEditingRaffle(null) }} onSave={() => { setShowCreateRaffle(false); setEditingRaffle(null); onRefreshRaffles() }} />
+  if (showCreateRaffle || editingRaffle) return <RaffleForm raffle={editingRaffle} onBack={() => { setShowCreateRaffle(false); setEditingRaffle(null) }} onSave={() => { setShowCreateRaffle(false); setEditingRaffle(null); onRefreshRaffles(); loadAdminData() }} />
 
   const pending = tickets.filter(t => t.status === 'reserved')
   const totalRecaudo = tickets.filter(t => t.status === 'paid').reduce((a,t) => a + (t.total_amount||0), 0)
@@ -1638,7 +1648,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
         </div>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-        {[['ð°',raffles.length,'Dinamicas'],['ðï¸',tickets.length,'Boletos'],['â³',pending.length,'Por confirmar'],['ð¬',unreadCount,'Mensajes']].map(([icon,val,label]) => (
+        {[['ð°',adminRaffles.length,'Dinamicas'],['ðï¸',tickets.length,'Boletos'],['â³',pending.length,'Por confirmar'],['ð¬',unreadCount,'Mensajes']].map(([icon,val,label]) => (
           <div key={label} style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:14, padding:14, textAlign:'center' }}>
             <div style={{ fontSize:20, marginBottom:4 }}>{icon}</div>
             <div style={{ fontSize:22, fontWeight:900, color:C.gold }}>{val}</div>
@@ -1670,11 +1680,12 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
       {tab === 0 && (
         <>
           <button onClick={() => setShowCreateRaffle(true)} style={{ ...S.btnGold, marginBottom:14 }}>+ Crear nueva dinamica</button>
-          {raffles.map(r => (
-            <div key={r.id} style={{ ...S.card, marginBottom:10, position:'relative', overflow:'hidden' }}>
+          {adminRaffles.length === 0 && <div style={{ textAlign:'center', padding:'30px 0', color:C.muted }}><div style={{ fontSize:32, marginBottom:8 }}>ð°</div><div>No hay dinamicas aun</div></div>}
+          {adminRaffles.map(r => (
+            <div key={r.id} style={{ ...S.card, marginBottom:10, position:'relative', overflow:'hidden', opacity: r.status==='draft'?0.7:1 }}>
               <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
               <div style={{ fontWeight:700, color:'#fff', fontSize:13, marginBottom:6 }}>{r.title}</div>
-              <div style={{ color:C.muted, fontSize:11, marginBottom:10 }}>{fmt(r.ticket_price)} Â· {r.lottery_name} Â· {r.number_range<=100?'00-99':'000-999'}</div>
+              <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:6 }}><span style={{ background:r.status==='active'?'rgba(39,174,96,0.15)':'rgba(255,255,255,0.05)', border:`1px solid ${r.status==='active'?'rgba(39,174,96,0.3)':'rgba(255,255,255,0.1)'}`, borderRadius:999, padding:'2px 8px', color:r.status==='active'?'#27AE60':'#888', fontSize:9, fontWeight:700 }}>{r.status==='active'?'ACTIVO':r.status==='draft'?'BORRADOR':'FINALIZADO'}</span><span style={{ color:C.muted, fontSize:10 }}>{fmt(r.ticket_price)} Â· {r.lottery_name}</span></div>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={() => setEditingRaffle(r)} style={{ flex:1, background:'rgba(201,162,39,0.08)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:8, color:C.gold, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Editar</button>
                 <button onClick={async () => { const n=window.prompt('Numero ganador (0-'+(r.number_range-1)+'):'); if(n!==null) alert('Ganador: #'+String(parseInt(n)).padStart(r.number_range<=100?2:3,'0')) }} style={{ flex:1, background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Realizar sorteo</button>
@@ -1792,9 +1803,18 @@ function RaffleForm({ raffle, onBack, onSave }) {
     const prizes = form.prizes.split('\n').filter(p=>p.trim()).map(p=>({ amount:p.trim() }))
     const society_numbers = form.society_numbers ? form.society_numbers.split(',').map(n=>parseInt(n.trim())).filter(n=>!isNaN(n)) : []
     const data = { title:form.title, ticket_price:parseInt(form.ticket_price)||5000, number_range:parseInt(form.number_range)||100, max_per_person:parseInt(form.max_per_person)||5, raffle_date:form.raffle_date, lottery_name:form.lottery_name, card_color:form.card_color, is_free:form.is_free, accepts_points:form.accepts_points, prizes, society_numbers, status:form.status, description:form.description, is_featured:form.is_featured||false, release_hours:parseInt(form.release_hours)||24 }
-    if (isEdit) await supabase.from('raffles').update(data).eq('id', raffle.id)
-    else await supabase.from('raffles').insert(data)
-    setSaving(false); onSave()
+    let saveError = null
+    if (isEdit) {
+      const { error } = await supabase.from('raffles').update(data).eq('id', raffle.id)
+      saveError = error
+    } else {
+      const { error } = await supabase.from('raffles').insert(data)
+      saveError = error
+    }
+    setSaving(false)
+    if (saveError) { alert('Error al guardar: ' + saveError.message); return }
+    alert(isEdit ? 'Dinamica actualizada!' : 'Dinamica creada exitosamente!')
+    onSave()
   }
 
   return (
