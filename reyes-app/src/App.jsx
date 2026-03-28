@@ -2340,13 +2340,13 @@ function RaffleForm({ raffle, onBack, onSave }) {
     const society_numbers = form.society_numbers
       ? form.society_numbers.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n))
       : []
+    // Only include close_time if column exists — send as text HH:MM
     const data = {
       title:          form.title,
       ticket_price:   parseInt(form.ticket_price) || 5000,
       number_range:   parseInt(form.number_range) || 100,
       max_per_person: parseInt(form.max_per_person) || 5,
       raffle_date:    form.raffle_date,
-      close_time:     form.close_time || null,
       lottery_name:   form.lottery_name,
       card_color:     form.card_color,
       is_free:        form.is_free,
@@ -2357,6 +2357,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
       description:    form.description,
       is_featured:    form.is_featured || false,
       release_hours:  parseInt(form.release_hours) || 24,
+      ...(form.close_time ? { close_time: form.close_time + ':00' } : { close_time: null }),
     }
     try {
       let err = null
