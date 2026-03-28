@@ -81,8 +81,8 @@ const Icons = {
 const DEFAULT_CONFIG = {
   showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
   whatsapp: '', canal: '', instagram: '', facebook: '', telegram: '',
-  supportWhatsapp: '', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
-  paymentWhatsapp: '', imgDeleteDays: 3,
+  supportWhatsapp: '3013986016', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
+  paymentWhatsapp: '3013986016', imgDeleteDays: 3,
   winnersInstagram: '',
   paymentNequi: '', paymentDaviplata: '', paymentBancolombia: '', paymentOtro: '', paymentNota: '',
   notifAutoNewRaffle: true, notifAuto24h: true, notifAuto2h: true,
@@ -923,8 +923,6 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
   const [tab, setTab] = useState(0)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState({ full_name:'', phone:'' })
-  const [showInfoDinero, setShowInfoDinero] = useState(false)
-  const [showInfoPuntos, setShowInfoPuntos] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -935,14 +933,11 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
     if (!editForm.full_name.trim()) { alert('Ingresa tu nombre'); return }
     setSaving(true)
     await supabase.from('users_profile').update({ full_name: editForm.full_name, phone: editForm.phone }).eq('id', user.id)
-    setSaving(false)
-    setShowEditModal(false)
-    onRefresh && onRefresh()
+    setSaving(false); setShowEditModal(false); onRefresh && onRefresh()
   }
 
   if (!user) return (
     <div style={{ ...S.content, display:'flex', flexDirection:'column', alignItems:'center', paddingTop:60, textAlign:'center' }}>
-      <div style={{ width:72, height:72, borderRadius:16, overflow:'hidden', marginBottom:16 }} className="house-float"><LogoSVG size={72} /></div>
       <h2 style={{ color:'#fff', fontWeight:900, marginBottom:8 }}>Mi Cuenta</h2>
       <p style={{ color:C.muted, marginBottom:28, fontSize:14 }}>Inicia sesion para ver tus boletos</p>
       <button onClick={onLogin} style={{ ...S.btnGold, maxWidth:280 }}>Ingresar a La Casa</button>
@@ -950,7 +945,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
     </div>
   )
 
-  const name = profile?.full_name || user.email || ''
+  const name  = profile?.full_name || user.email || ''
   const phone = profile?.phone || ''
 
   const groupTickets = (tickets) => {
@@ -963,131 +958,115 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
     return Object.values(groups)
   }
 
-  const reserved = myTickets.filter(t => t.status === 'reserved')
-  const paid = myTickets.filter(t => t.status === 'paid')
-  const history = myTickets.filter(t => !['reserved','paid'].includes(t.status))
+  const reserved      = myTickets.filter(t => t.status === 'reserved')
+  const paid          = myTickets.filter(t => t.status === 'paid')
   const reservedGroups = groupTickets(reserved)
-  const paidGroups = groupTickets(paid)
-  const historyGroups = groupTickets(history)
+  const paidGroups     = groupTickets(paid)
+
+  // Android PWA detection
+  const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)
 
   return (
     <div style={{ background:C.bg, minHeight:'100vh' }}>
       <style>{CSS}</style>
 
-      {/* HEADER con fondo dorado oscuro */}
-      <div style={{ background:'linear-gradient(160deg,#1a1200,#0d0900)', padding:'16px 16px 14px', position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#E6BE00,transparent)' }}></div>
-        <div style={{ position:'absolute', top:-20, right:-20, width:80, height:80, background:'radial-gradient(circle,rgba(230,190,0,0.06),transparent)', borderRadius:'50%' }}></div>
+      {/* ── HEADER NEGRO ── */}
+      <div style={{ background:'#000', padding:'16px 16px 14px', borderBottom:'1px solid #111' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            {/* Avatar con borde dorado */}
-            <div style={{ width:50, height:50, background:'#1a1200', borderRadius:'50%', border:'2.5px solid #E6BE00', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, fontWeight:900, color:C.gold, flexShrink:0, position:'relative' }}>
+            <div style={{ width:52, height:52, background:'#111', borderRadius:'50%', border:'2px solid #E6BE00', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:900, color:C.gold, position:'relative', flexShrink:0 }}>
               {name[0]?.toUpperCase() || 'U'}
-              <div style={{ position:'absolute', bottom:1, right:1, width:12, height:12, background:C.green, borderRadius:'50%', border:'2px solid #0d0900' }}></div>
+              <div style={{ position:'absolute', bottom:2, right:2, width:12, height:12, background:C.green, borderRadius:'50%', border:'2px solid #000' }} className="pulse"></div>
             </div>
             <div>
-              <div style={{ color:'#fff', fontSize:16, fontWeight:900, lineHeight:1.2 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
-              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
-                <div style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'1px 8px' }}>
-                  <span style={{ color:C.gold, fontSize:8, fontWeight:700 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
+              <div style={{ color:'#fff', fontSize:17, fontWeight:900, lineHeight:1.2 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
+                <div style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'2px 9px' }}>
+                  <span style={{ color:C.gold, fontSize:9 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
                 </div>
-                {phone && <span style={{ color:'#444', fontSize:9 }}>{phone}</span>}
+                {phone && <span style={{ color:'#555', fontSize:10 }}>{phone}</span>}
               </div>
             </div>
           </div>
           <div style={{ display:'flex', gap:7 }}>
-            {/* Boton editar */}
-            <button onClick={() => setShowEditModal(true)} style={{ width:34, height:34, background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            <button onClick={() => setShowEditModal(true)} style={{ width:36, height:36, background:'#111', border:'1px solid #2a2a2a', borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.gold} strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            {isAdmin && <button onClick={onAdmin} style={{ height:34, background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:9, color:C.gold, fontSize:9, fontWeight:700, cursor:'pointer', padding:'0 10px', fontFamily:'inherit' }}>Admin</button>}
-            {/* Boton salir */}
-            <button onClick={onLogout} style={{ width:34, height:34, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.25)', borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#E74C3C" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            {isAdmin && <button onClick={onAdmin} style={{ height:36, background:'#111', border:'1px solid #2a2a2a', borderRadius:9, color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', padding:'0 12px', fontFamily:'inherit' }}>Admin</button>}
+            <button onClick={onLogout} style={{ height:36, background:'#C0392B', border:'none', borderRadius:9, display:'flex', alignItems:'center', gap:6, cursor:'pointer', padding:'0 13px', fontFamily:'inherit' }}>
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              <span style={{ color:'#fff', fontSize:11, fontWeight:700 }}>Salir</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div style={{ padding:'12px 16px 90px' }}>
-        {/* MI DINERO — tarjeta sola */}
+      <div style={{ padding:'13px 16px 90px' }}>
+
+        {/* MI DINERO */}
         <div style={{ background:'linear-gradient(135deg,#0d1628,#0a1220)', border:'1px solid rgba(41,128,185,0.3)', borderRadius:14, padding:'14px 16px', marginBottom:10 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:9 }}>
             <div style={{ display:'flex', alignItems:'center', gap:7 }}>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#5DADE2" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-              <span style={{ color:'#5DADE2', fontSize:10, fontWeight:700, textTransform:'uppercase' }}>MI DINERO</span>
-              <button onClick={() => setShowInfoDinero(!showInfoDinero)} style={{ width:18, height:18, background:'rgba(93,173,226,0.15)', border:'1px solid rgba(93,173,226,0.3)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#5DADE2" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              </button>
+              <span style={{ color:'#5DADE2', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 }}>Mi Dinero</span>
             </div>
-            <button onClick={() => onSupport && onSupport({ recargar: true })} style={{ background:'#E67E22', border:'none', borderRadius:8, padding:'7px 12px', color:'#fff', fontSize:9, fontWeight:900, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:4 }}>
-              <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="white" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Recargar
+            <button onClick={() => onSupport && onSupport({ recargar:true })} style={{ background:'#E67E22', border:'none', borderRadius:9, padding:'9px 16px', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:6 }}>
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="white" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Recargar saldo
             </button>
           </div>
-          <div style={{ color:'#fff', fontSize:26, fontWeight:900, lineHeight:1, marginBottom:2 }}>{fmt(profile?.credits || 0)}</div>
-          <div style={{ color:'#4a7a9b', fontSize:8, textTransform:'uppercase', letterSpacing:.5 }}>DISPONIBLE</div>
-          {showInfoDinero && (
-            <div style={{ background:'rgba(93,173,226,0.08)', border:'1px solid rgba(93,173,226,0.2)', borderRadius:9, padding:'9px 11px', marginTop:10 }}>
-              <div style={{ color:'#5DADE2', fontSize:9, fontWeight:700, marginBottom:3 }}>Para que sirve el saldo?</div>
-              <div style={{ color:'#4a7a9b', fontSize:9, lineHeight:1.6 }}>Puedes usarlo para pagar boletos de sorteos directamente desde la app sin necesidad de hacer transferencias.</div>
-            </div>
-          )}
+          <div style={{ color:'#fff', fontSize:28, fontWeight:900, lineHeight:1, marginBottom:3 }}>{fmt(profile?.credits || 0)}</div>
+          <div style={{ color:'#4a7a9b', fontSize:9, textTransform:'uppercase', letterSpacing:.5 }}>Disponible</div>
         </div>
 
-        {/* MIS PUNTOS — tarjeta sola */}
-        <div style={{ background:'#0d0d0d', border:'1px solid rgba(230,190,0,0.25)', borderRadius:14, padding:'14px 16px', marginBottom:14 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        {/* MIS PUNTOS */}
+        <div style={{ background:'#0d0d0d', border:'1px solid rgba(230,190,0,0.22)', borderRadius:14, padding:'14px 16px', marginBottom:14 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:9 }}>
             <div style={{ display:'flex', alignItems:'center', gap:7 }}>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
-              <span style={{ color:C.gold, fontSize:10, fontWeight:700, textTransform:'uppercase' }}>MIS PUNTOS</span>
-              <button onClick={() => setShowInfoPuntos(!showInfoPuntos)} style={{ width:18, height:18, background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.25)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-                <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              </button>
+              <span style={{ color:C.gold, fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 }}>Mis Puntos</span>
             </div>
-            <button style={{ background:'transparent', border:'1px solid rgba(230,190,0,0.2)', borderRadius:8, padding:'6px 11px', color:C.gold, fontSize:8, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:5 }}>
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              HISTORIAL
+            <button onClick={() => alert('Historial de puntos — proximamente!')} style={{ background:C.gold, border:'none', borderRadius:9, padding:'9px 16px', display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontFamily:'inherit' }}>
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#000" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span style={{ color:'#000', fontSize:12, fontWeight:700 }}>Ver historial</span>
             </button>
           </div>
-          <div style={{ color:C.gold, fontSize:26, fontWeight:900, display:'flex', alignItems:'baseline', gap:6, marginBottom:0 }}>
-            {(profile?.points || 0).toLocaleString()} <span style={{ color:'#444', fontSize:12, fontWeight:400 }}>pts</span>
+          <div style={{ color:C.gold, fontSize:28, fontWeight:900, display:'flex', alignItems:'baseline', gap:6 }}>
+            {(profile?.points || 0).toLocaleString()} <span style={{ color:'#333', fontSize:13, fontWeight:400 }}>pts</span>
           </div>
-          {showInfoPuntos && (
-            <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:9, padding:'9px 11px', marginTop:10 }}>
-              <div style={{ color:C.gold, fontSize:9, fontWeight:700, marginBottom:3 }}>Para que sirven los puntos?</div>
-              <div style={{ color:'#666', fontSize:9, lineHeight:1.6 }}>Acumulas puntos al participar en dinamicas. Puedes usarlos para descuentos en futuros boletos.</div>
-            </div>
-          )}
         </div>
 
-        {/* PWA BANNER compacto */}
-        {pwa && !pwa.isInstalled && (
-          <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:11, padding:'9px 12px', marginBottom:12, display:'flex', alignItems:'center', gap:9, position:'relative', overflow:'hidden' }}>
+        {/* BANNER ANDROID */}
+        {isAndroid && pwa && !pwa.isInstalled && (
+          <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'11px 14px', marginBottom:14, display:'flex', alignItems:'center', gap:10, position:'relative', overflow:'hidden' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-            <div style={{ width:28, height:28, borderRadius:7, overflow:'hidden', flexShrink:0, border:'1px solid rgba(230,190,0,0.25)' }}><LogoSVG size={28} /></div>
-            <div style={{ flex:1 }}><div style={{ color:'#fff', fontSize:10, fontWeight:800 }}>Instala La Casa</div><div style={{ color:C.muted, fontSize:8 }}>Offline + notificaciones</div></div>
+            <div style={{ width:34, height:34, borderRadius:9, overflow:'hidden', flexShrink:0, border:'1px solid rgba(230,190,0,0.25)' }}><LogoSVG size={34} /></div>
+            <div style={{ flex:1 }}>
+              <div style={{ color:'#fff', fontSize:12, fontWeight:800 }}>Instala La Casa</div>
+              <div style={{ color:C.muted, fontSize:9, marginTop:1 }}>Acceso rapido + funciona sin internet</div>
+            </div>
             {pwa.canInstall
-              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:7, padding:'6px 10px', color:'#000', fontSize:8, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
-              : <div style={{ color:C.muted, fontSize:8, flexShrink:0, maxWidth:70, textAlign:'right', lineHeight:1.4 }}>Menu → Agregar pantalla</div>
+              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
+              : <span style={{ color:C.muted, fontSize:9, flexShrink:0, textAlign:'right', maxWidth:70, lineHeight:1.4 }}>Menu → Agregar a pantalla</span>
             }
           </div>
         )}
 
-        {/* TABS */}
-        <div style={{ background:'#111', borderRadius:11, padding:3, display:'flex', gap:2, marginBottom:14 }}>
-          {[['Todo', myTickets.length], ['Reservas', reserved.length], ['Pagados', paid.length], ['Historial', history.length]].map(([lb, count], i) => (
-            <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'7px 2px', borderRadius:8, border:'none', textAlign:'center', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
-              <span style={{ color:tab===i?'#000':C.muted, fontSize:8, fontWeight:tab===i?800:400 }}>{lb}</span>
-              {count > 0 && <span style={{ position:'absolute', top:2, right:2, background:tab===i?'rgba(0,0,0,0.2)':'rgba(230,190,0,0.2)', borderRadius:999, width:12, height:12, display:'flex', alignItems:'center', justifyContent:'center', fontSize:6, fontWeight:700, color:tab===i?'#000':C.gold }}>{count}</span>}
+        {/* TABS — solo Reservas y Pagados */}
+        <div style={{ background:'#111', borderRadius:12, padding:3, display:'flex', gap:2, marginBottom:16 }}>
+          {[['Reservas', reserved.length, 0],['Pagados', paid.length, 1]].map(([lb,cnt,i]) => (
+            <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'10px 4px', borderRadius:9, border:'none', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
+              <span style={{ color:tab===i?'#000':'#555', fontSize:12, fontWeight:tab===i?800:500 }}>{lb}{cnt>0?' ('+cnt+')':''}</span>
             </button>
           ))}
         </div>
 
-        {/* MIS BOLETOS titulo */}
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+        {/* TITULO BOLETOS */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
           <div style={{ width:3, height:18, background:C.gold, borderRadius:2 }}></div>
-          <span style={{ color:'#fff', fontSize:14, fontWeight:900, textTransform:'uppercase', letterSpacing:.5 }}>MIS BOLETOS</span>
+          <span style={{ color:'#fff', fontSize:13, fontWeight:900, textTransform:'uppercase', letterSpacing:.5 }}>
+            {tab === 0 ? 'Boletos reservados' : 'Boletos pagados'}
+          </span>
         </div>
 
         {myTickets.length === 0 ? (
@@ -1098,60 +1077,60 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
           </div>
         ) : (
           <>
-            {(tab === 0 || tab === 1) && reservedGroups.length > 0 && (
-              <>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
-                  <div style={{ width:7, height:7, background:C.gold, borderRadius:'50%' }} className="pulse"></div>
-                  <span style={{ color:C.gold, fontSize:11, fontWeight:800, textTransform:'uppercase' }}>RESERVADOS ({reserved.length})</span>
-                </div>
-                {reservedGroups.map((g, i) => <RaffleTicketGroup key={i} group={g} status="reserved" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)}
-              </>
+            {tab === 0 && (
+              reservedGroups.length > 0
+                ? reservedGroups.map((g,i) => <RaffleTicketGroup key={i} group={g} status="reserved" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)
+                : <div style={{ textAlign:'center', padding:'30px 0', color:C.muted }}>
+                    <div style={{ fontSize:36, marginBottom:8 }}>🎟️</div>
+                    <div style={{ color:'#fff', fontSize:13 }}>Sin boletos reservados</div>
+                  </div>
             )}
-            {(tab === 0 || tab === 2) && paidGroups.length > 0 && (
-              <>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10, marginTop: tab===0 && reservedGroups.length>0 ? 14 : 0 }}>
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#27AE60" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
-                  <span style={{ color:'#27AE60', fontSize:11, fontWeight:800, textTransform:'uppercase' }}>PAGADOS ({paid.length})</span>
-                </div>
-                {paidGroups.map((g, i) => <RaffleTicketGroup key={i} group={g} status="paid" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)}
-              </>
-            )}
-            {(tab === 0 || tab === 3) && historyGroups.length > 0 && (
-              <>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10, marginTop: tab===0 ? 14 : 0 }}>
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#555" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  <span style={{ color:'#555', fontSize:11, fontWeight:800, textTransform:'uppercase' }}>HISTORIAL ({history.length})</span>
-                </div>
-                {historyGroups.map((g, i) => <RaffleTicketGroup key={i} group={g} status="finished" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)}
-              </>
+            {tab === 1 && (
+              paidGroups.length > 0
+                ? paidGroups.map((g,i) => <RaffleTicketGroup key={i} group={g} status="paid" profile={profile} appConfig={appConfig} onRefresh={onRefresh} onSupport={onSupport} />)
+                : <div style={{ textAlign:'center', padding:'30px 0', color:C.muted }}>
+                    <div style={{ fontSize:36, marginBottom:8 }}>✅</div>
+                    <div style={{ color:'#fff', fontSize:13 }}>Sin boletos pagados aun</div>
+                  </div>
             )}
           </>
         )}
+
+        {/* HISTORIAL al fondo */}
+        <div style={{ borderTop:'1px solid #111', paddingTop:14, marginTop:8 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#333" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span style={{ color:'#333', fontSize:11, fontWeight:700, textTransform:'uppercase' }}>Historial de boletos</span>
+            </div>
+            <div onClick={() => alert('Ver historial completo')} style={{ background:'#111', borderRadius:8, padding:'6px 11px', color:'#444', fontSize:10, cursor:'pointer' }}>Ver todo →</div>
+          </div>
+          <div style={{ color:'#222', fontSize:11, textAlign:'center', padding:'12px 0' }}>Sin boletos anteriores aun</div>
+        </div>
       </div>
 
-      {/* MODAL EDITAR DATOS */}
+      {/* MODAL EDITAR */}
       {showEditModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowEditModal(false)}>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.88)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowEditModal(false)}>
           <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:24, width:'100%', maxWidth:500, border:'1px solid rgba(230,190,0,0.2)', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e => e.stopPropagation()}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#E6BE00,transparent)' }}></div>
             <div style={{ width:40, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
             <div style={{ color:'#fff', fontSize:15, fontWeight:900, marginBottom:16 }}>Editar mis datos</div>
             <div style={{ marginBottom:12 }}>
               <label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Nombre completo</label>
-              <input value={editForm.full_name} onChange={e => setEditForm(p=>({...p, full_name:e.target.value}))} placeholder="Tu nombre completo" />
+              <input value={editForm.full_name} onChange={e => setEditForm(p=>({...p,full_name:e.target.value}))} placeholder="Tu nombre completo" />
             </div>
-            <div style={{ marginBottom:12 }}>
+            <div style={{ marginBottom:16 }}>
               <label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Numero de WhatsApp</label>
               <div style={{ position:'relative' }}>
                 <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)' }}>
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="#25D366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </div>
-                <input value={editForm.phone} onChange={e => setEditForm(p=>({...p, phone:e.target.value}))} placeholder="+57 300 000 0000" style={{ paddingLeft:36 }} />
+                <input value={editForm.phone} onChange={e => setEditForm(p=>({...p,phone:e.target.value}))} placeholder="+57 300 000 0000" style={{ paddingLeft:36 }} />
               </div>
-              <div style={{ color:'#444', fontSize:9, marginTop:4 }}>Este numero recibe los mensajes de pago</div>
             </div>
-            <button onClick={saveProfile} disabled={saving} style={{ ...S.btnGold, marginBottom:10, opacity:saving?.7:1 }}>{saving?'Guardando...':'Guardar cambios'}</button>
-            <button onClick={() => setShowEditModal(false)} style={{ width:'100%', background:'transparent', border:'none', color:'#444', fontSize:12, cursor:'pointer', padding:8, fontFamily:'inherit' }}>Cancelar</button>
+            <button onClick={saveProfile} disabled={saving} style={{ ...S.btnGold, marginBottom:10 }}>{saving?'Guardando...':'Guardar cambios'}</button>
+            <button onClick={() => setShowEditModal(false)} style={{ width:'100%', background:'transparent', border:'none', color:'#444', fontSize:13, cursor:'pointer', padding:8, fontFamily:'inherit' }}>Cancelar</button>
           </div>
         </div>
       )}
@@ -1182,7 +1161,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   const labelColor  = numColor
 
   // WA pago
-  const waNum = (appConfig?.paymentWhatsapp || appConfig?.supportWhatsapp || '').replace(/\D/g,'')
+  const waNum = (appConfig?.paymentWhatsapp || appConfig?.payment_whatsapp || appConfig?.whatsapp || appConfig?.supportWhatsapp || '').replace(/\D/g,'')
   const numsStr = allNums.map(n => '#'+String(n).padStart(2,'0')).join(', ')
   const waMsg = 'Hola! Quiero pagar mis boletos:%0A%0ASorteo: '+(raffle?.title||'')+'%0ANumeros: '+numsStr+'%0ATotal: $'+totalAmt
   const waUrl = waNum ? 'https://wa.me/'+waNum+'?text='+waMsg : null
@@ -1195,7 +1174,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   const puntosOk = puntos >= ptsNeed
 
   // Soporte recargar
-  const waSupNum = (appConfig?.supportWhatsapp || '').replace(/\D/g,'')
+  const waSupNum = (appConfig?.supportWhatsapp || appConfig?.whatsapp || appConfig?.paymentWhatsapp || '').replace(/\D/g,'')
   const recargaMsg = encodeURIComponent('Hola! Quisiera recargar saldo a mi cuenta en La Casa de las Dinamicas. Por favor indicarme como hacerlo.')
   const recargaUrl = waSupNum ? 'https://wa.me/'+waSupNum+'?text='+recargaMsg : null
 
@@ -1339,7 +1318,9 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
 
       {/* PREMIO + TOTAL */}
       <div style={{ background:'#111', borderRadius:8, padding:'8px 11px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <span style={{ color:'#555', fontSize:9 }}>Premio: <span style={{ color:'#fff', fontWeight:600 }}>{fmt(raffle?.prizes?.[0]?.amount || 0)}</span></span>
+        <span style={{ color:'#555', fontSize:9 }}>Premio: <span style={{ color:'#fff', fontWeight:600 }}>
+          {raffle?.prizes?.[0]?.amount ? fmt(raffle.prizes[0].amount) : raffle?.prizes?.[0] ? (typeof raffle.prizes[0]==='string' ? raffle.prizes[0] : fmt(raffle.prizes[0])) : raffle?.prize_amount ? fmt(raffle.prize_amount) : 'Ver sorteo'}
+        </span></span>
         <div style={{ textAlign:'right' }}>
           <div style={{ color:'#444', fontSize:8 }}>{isPaid ? 'Total pagado' : 'Total a pagar'}</div>
           <div style={{ color:numColor, fontSize:16, fontWeight:900, lineHeight:1 }}>{fmt(totalAmt)}</div>
