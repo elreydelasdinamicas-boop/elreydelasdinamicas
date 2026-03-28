@@ -2282,40 +2282,125 @@ function FormField({ label, children }) {
 
 function RaffleForm({ raffle, onBack, onSave }) {
   const isEdit = !!raffle
-  const [form, setForm] = useState({ title:raffle?.title||'', ticket_price:raffle?.ticket_price||5000, number_range:raffle?.number_range||100, max_per_person:raffle?.max_per_person||5, raffle_date:raffle?.raffle_date?raffle.raffle_date.split('T')[0]:'', lottery_name:raffle?.lottery_name||'', card_color:raffle?.card_color||'#E67E22', is_free:raffle?.is_free||false, accepts_points:raffle?.accepts_points!==false, prizes:raffle?.prizes?raffle.prizes.map(p=>p.amount||p).join('\n'):'', society_numbers:raffle?.society_numbers?raffle.society_numbers.join(', '):'', status:raffle?.status||'active', description:raffle?.description||'', is_featured:raffle?.is_featured||false, release_hours:raffle?.release_hours||24 })
-  const [saving, setSaving] = useState(false)
-  const colors = ['#C9A227','#E74C3C','#3498DB','#27AE60','#9B59B6','#E67E22','#1ABC9C']
 
-  // F defined outside to prevent focus loss - see FormField component below
+  // Parse prizes — each prize has amount + how_to_win
+  const parsePrizes = (raw) => {
+    if (!raw || !Array.isArray(raw)) return [{ amount:'', how_to_win:'' }]
+    return raw.map(p => ({
+      amount: p.amount || (typeof p === 'string' ? p : ''),
+      how_to_win: p.how_to_win || ''
+    }))
+  }
+
+  const [form, setForm] = useState({
+    title:             raffle?.title || '',
+    ticket_price:      raffle?.ticket_price || 5000,
+    number_range:      raffle?.number_range || 100,
+    max_per_person:    raffle?.max_per_person || 5,
+    raffle_date:       raffle?.raffle_date ? raffle.raffle_date.split('T')[0] : '',
+    close_time:        raffle?.close_time || '',
+    lottery_name:      raffle?.lottery_name || '',
+    card_color:        raffle?.card_color || '#E67E22',
+    is_free:           raffle?.is_free || false,
+    accepts_points:    raffle?.accepts_points !== false,
+    prizes:            parsePrizes(raffle?.prizes),
+    society_numbers:   raffle?.society_numbers ? raffle.society_numbers.join(', ') : '',
+    status:            raffle?.status || 'active',
+    description:       raffle?.description || '',
+    is_featured:       raffle?.is_featured || false,
+    release_hours:     raffle?.release_hours || 24,
+  })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+
+  function setPrize(idx, key, val) {
+    setForm(p => {
+      const prizes = [...p.prizes]
+      prizes[idx] = { ...prizes[idx], [key]: val }
+      return { ...p, prizes }
+    })
+  }
+  function addPrize() {
+    setForm(p => ({ ...p, prizes: [...p.prizes, { amount:'', how_to_win:'' }] }))
+  }
+  function removePrize(idx) {
+    setForm(p => ({ ...p, prizes: p.prizes.filter((_,i) => i !== idx) }))
+  }
 
   async function save() {
-    if (!form.title || !form.raffle_date || !form.lottery_name) { alert('Completa el titulo, fecha y loteria'); return }
-    setSaving(true)
-    const prizes = form.prizes.split('\n').filter(p=>p.trim()).map(p=>({ amount:p.trim() }))
-    const society_numbers = form.society_numbers ? form.society_numbers.split(',').map(n=>parseInt(n.trim())).filter(n=>!isNaN(n)) : []
-    const data = { title:form.title, ticket_price:parseInt(form.ticket_price)||5000, number_range:parseInt(form.number_range)||100, max_per_person:parseInt(form.max_per_person)||5, raffle_date:form.raffle_date, lottery_name:form.lottery_name, card_color:form.card_color, is_free:form.is_free, accepts_points:form.accepts_points, prizes, society_numbers, status:form.status, description:form.description, is_featured:form.is_featured||false, release_hours:parseInt(form.release_hours)||24 }
-    let saveError = null
-    if (isEdit) {
-      const { error } = await supabase.from('raffles').update(data).eq('id', raffle.id)
-      saveError = error
-    } else {
-      const { error } = await supabase.from('raffles').insert(data)
-      saveError = error
+    if (!form.title || !form.raffle_date || !form.lottery_name) {
+      alert('Completa el titulo, fecha y loteria'); return
     }
-    setSaving(false)
-    if (saveError) { alert('Error al guardar: ' + saveError.message); return }
-    alert(isEdit ? 'Dinamica actualizada!' : 'Dinamica creada exitosamente!')
-    onSave()
+    setSaving(true)
+    setSaveError(null)
+    const prizes = form.prizes.filter(p => p.amount.trim()).map(p => ({
+      amount: p.amount.trim(),
+      how_to_win: p.how_to_win.trim()
+    }))
+    const society_numbers = form.society_numbers
+      ? form.society_numbers.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n))
+      : []
+    const data = {
+      title:          form.title,
+      ticket_price:   parseInt(form.ticket_price) || 5000,
+      number_range:   parseInt(form.number_range) || 100,
+      max_per_person: parseInt(form.max_per_person) || 5,
+      raffle_date:    form.raffle_date,
+      close_time:     form.close_time || null,
+      lottery_name:   form.lottery_name,
+      card_color:     form.card_color,
+      is_free:        form.is_free,
+      accepts_points: form.accepts_points,
+      prizes,
+      society_numbers,
+      status:         form.status,
+      description:    form.description,
+      is_featured:    form.is_featured || false,
+      release_hours:  parseInt(form.release_hours) || 24,
+    }
+    try {
+      let err = null
+      if (isEdit) {
+        const res = await supabase.from('raffles').update(data).eq('id', raffle.id)
+        err = res.error
+      } else {
+        const res = await supabase.from('raffles').insert(data)
+        err = res.error
+      }
+      if (err) {
+        setSaveError(err.message)
+        setSaving(false)
+        return
+      }
+      setSaving(false)
+      alert(isEdit ? 'Dinamica actualizada!' : 'Dinamica creada exitosamente!')
+      onSave()
+    } catch(e) {
+      setSaveError(e.message || 'Error desconocido')
+      setSaving(false)
+    }
   }
+
+  const prizeLabels = ['🥇 Premio 1','🥈 Premio 2','🥉 Premio 3','🎯 Premio 4','🎁 Premio 5']
 
   return (
     <div style={S.content}>
       <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
       <div style={{ ...S.card, marginBottom:14, position:'relative', overflow:'hidden' }}>
         <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-        <div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>{isEdit?'Editar dinamica':'Crear nueva dinamica'}</div>
+        <div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>{isEdit ? 'Editar dinamica' : 'Crear nueva dinamica'}</div>
       </div>
-      <FormField label="Nombre del sorteo"><input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="Ej: MOTO YAMAHA MT-03 + $500.000" /></FormField>
+
+      {saveError && (
+        <div style={{ background:'rgba(192,57,43,0.12)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:10, padding:'10px 14px', marginBottom:14, color:'#E74C3C', fontSize:12 }}>
+          ⚠️ {saveError}
+        </div>
+      )}
+
+      <FormField label="Nombre del sorteo">
+        <input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} placeholder="Ej: MOTO YAMAHA MT-03 + $500.000" />
+      </FormField>
+
       <FormField label="Rango de numeros">
         <div style={{ display:'flex', gap:8 }}>
           {[[100,'00 al 99'],[1000,'000 al 999']].map(([v,l]) => (
@@ -2323,7 +2408,11 @@ function RaffleForm({ raffle, onBack, onSave }) {
           ))}
         </div>
       </FormField>
-      <FormField label="Valor del boleto (COP)"><input type="number" value={form.ticket_price} onChange={e=>setForm(p=>({...p,ticket_price:e.target.value}))} placeholder="5000" /></FormField>
+
+      <FormField label="Valor del boleto (COP)">
+        <input type="number" value={form.ticket_price} onChange={e=>setForm(p=>({...p,ticket_price:e.target.value}))} placeholder="5000" />
+      </FormField>
+
       <FormField label="Maximo boletos por persona">
         <div style={{ display:'flex', gap:6 }}>
           {[['1',1],['2',2],['5',5],['10',10],['Sin limite',999]].map(([l,v]) => (
@@ -2331,17 +2420,25 @@ function RaffleForm({ raffle, onBack, onSave }) {
           ))}
         </div>
       </FormField>
-      <FormField label="Fecha del sorteo"><input type="date" value={form.raffle_date} onChange={e=>setForm(p=>({...p,raffle_date:e.target.value}))} /></FormField>
-      <FormField label="Loteria que juega"><input value={form.lottery_name} onChange={e=>setForm(p=>({...p,lottery_name:e.target.value}))} placeholder="Ej: Loteria de Bogota" /></FormField>
+
+      <FormField label="Fecha del sorteo">
+        <input type="date" value={form.raffle_date} onChange={e=>setForm(p=>({...p,raffle_date:e.target.value}))} />
+      </FormField>
+
+      <FormField label="Hora de cierre (opcional)">
+        <input type="time" value={form.close_time} onChange={e=>setForm(p=>({...p,close_time:e.target.value}))} />
+        <div style={{ color:C.muted, fontSize:10, marginTop:4 }}>Hora en que se cierra la venta de boletos ese dia</div>
+      </FormField>
+
+      <FormField label="Loteria que juega">
+        <input value={form.lottery_name} onChange={e=>setForm(p=>({...p,lottery_name:e.target.value}))} placeholder="Ej: Loteria de Bogota" />
+      </FormField>
+
       <FormField label="Color de la tarjeta">
         <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
-          {[
-            ['#E67E22','Naranja'],['#C9A227','Dorado'],['#C0392B','Rojo'],
-            ['#2980B9','Azul'],['#27AE60','Verde'],['#9B59B6','Purpura'],
-            ['#1ABC9C','Teal'],['#E91E63','Rosa'],['#607D8B','Gris azul'],
-          ].map(([color,name]) => (
+          {[['#E67E22','Naranja'],['#C9A227','Dorado'],['#C0392B','Rojo'],['#2980B9','Azul'],['#27AE60','Verde'],['#9B59B6','Purpura'],['#1ABC9C','Teal'],['#E91E63','Rosa'],['#607D8B','Gris azul']].map(([color,name]) => (
             <div key={color} onClick={()=>setForm(p=>({...p,card_color:color}))} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor:'pointer' }}>
-              <div style={{ width:38, height:38, background:`linear-gradient(135deg,${color}cc,${color}88)`, borderRadius:10, border:form.card_color===color?`3px solid #fff`:`1px solid ${color}60`, transition:'all .2s', position:'relative', overflow:'hidden' }}>
+              <div style={{ width:38, height:38, background:`linear-gradient(135deg,${color}cc,${color}88)`, borderRadius:10, border:form.card_color===color?`3px solid #fff`:`1px solid ${color}60`, position:'relative', overflow:'hidden' }}>
                 <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:color }}></div>
                 {form.card_color===color && <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:16, fontWeight:900 }}>✓</div>}
               </div>
@@ -2349,11 +2446,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
             </div>
           ))}
         </div>
-        <div style={{ background:`linear-gradient(160deg,${form.card_color}22,${form.card_color}11)`, border:`1px solid ${form.card_color}44`, borderRadius:11, padding:'8px 12px', fontSize:10, color:'#fff', fontWeight:600, position:'relative', overflow:'hidden' }}>
-          <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${form.card_color},transparent)` }}></div>
-          Vista previa — asi se vera la tarjeta en el home
-        </div>
       </FormField>
+
       <FormField label="Marcar como destacado">
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:9, padding:'11px 14px' }}>
           <div>
@@ -2363,6 +2457,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
           <Toggle on={form.is_featured||false} onToggle={()=>setForm(p=>({...p,is_featured:!p.is_featured}))} />
         </div>
       </FormField>
+
       <FormField label="Opciones">
         {[['accepts_points','Acepta pago con puntos'],['is_free','Sorteo gratis (sin costo)']].map(([key,label]) => (
           <div key={key} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:9, padding:'11px 14px', marginBottom:8 }}>
@@ -2371,14 +2466,12 @@ function RaffleForm({ raffle, onBack, onSave }) {
           </div>
         ))}
       </FormField>
-      <FormField label="Tiempo para pagar (horas antes de liberar el numero)">
+
+      <FormField label="Tiempo para pagar">
         <div style={{ display:'flex', gap:8, marginBottom:8 }}>
           {[[6,'6h'],[12,'12h'],[24,'24h'],[48,'48h'],[72,'72h']].map(([v,l]) => (
             <button key={v} onClick={()=>setForm(p=>({...p,release_hours:v}))} style={{ flex:1, border:`1px solid ${form.release_hours===v?C.gold:'rgba(201,162,39,0.2)'}`, background:form.release_hours===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:form.release_hours===v?C.gold:C.muted, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
           ))}
-        </div>
-        <div style={{ background:'rgba(201,162,39,0.06)', border:`1px solid rgba(201,162,39,0.15)`, borderRadius:9, padding:'9px 12px', color:C.muted, fontSize:11 }}>
-          Si el usuario no paga en <span style={{ color:C.gold, fontWeight:700 }}>{form.release_hours} horas</span>, el numero se libera automaticamente para otra persona
         </div>
       </FormField>
 
@@ -2389,21 +2482,67 @@ function RaffleForm({ raffle, onBack, onSave }) {
           ))}
         </div>
       </FormField>
-      <FormField label="Premios (uno por linea)">
-        <textarea rows={5} value={form.prizes} onChange={e=>setForm(p=>({...p,prizes:e.target.value}))} placeholder={"Moto Yamaha MT-03 0km\n$500.000 en efectivo\n$200.000 en efectivo"} style={{ background:'#1a1a1a', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:12, padding:'13px 16px', color:'#fff', fontSize:14, outline:'none', width:'100%', fontFamily:'inherit', resize:'none', boxSizing:'border-box' }} />
+
+      {/* PREMIOS — con monto + como ganarlo */}
+      <FormField label="Premios">
+        {form.prizes.map((prize, idx) => (
+          <div key={idx} style={{ background:'#111', border:'1px solid rgba(201,162,39,0.15)', borderRadius:12, padding:14, marginBottom:10, position:'relative' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <span style={{ color:C.gold, fontSize:12, fontWeight:700 }}>{prizeLabels[idx] || '🎁 Premio '+(idx+1)}</span>
+              {form.prizes.length > 1 && (
+                <button onClick={() => removePrize(idx)} style={{ background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.2)', borderRadius:6, padding:'4px 9px', color:'#E74C3C', fontSize:10, cursor:'pointer', fontFamily:'inherit' }}>Eliminar</button>
+              )}
+            </div>
+            <div style={{ marginBottom:8 }}>
+              <label style={{ color:C.muted, fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:.8, display:'block', marginBottom:5 }}>Monto del premio</label>
+              <input
+                value={prize.amount}
+                onChange={e => setPrize(idx,'amount',e.target.value)}
+                placeholder="Ej: $1.000.000 en efectivo"
+              />
+            </div>
+            <div>
+              <label style={{ color:C.muted, fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:.8, display:'block', marginBottom:5 }}>Como se gana este premio</label>
+              <input
+                value={prize.how_to_win}
+                onChange={e => setPrize(idx,'how_to_win',e.target.value)}
+                placeholder="Ej: Con las 2 ultimas cifras de la loteria"
+              />
+              <div style={{ color:'#444', fontSize:9, marginTop:4 }}>Ej: 2 ultimas · 3 ultimas · Numero exacto · 2 primeras...</div>
+            </div>
+          </div>
+        ))}
+        {form.prizes.length < 5 && (
+          <button onClick={addPrize} style={{ width:'100%', background:'rgba(201,162,39,0.06)', border:'1px dashed rgba(201,162,39,0.25)', borderRadius:10, padding:11, color:C.gold, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={C.gold} strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Agregar premio
+          </button>
+        )}
       </FormField>
+
       <FormField label="Numeros en sociedad (separados por coma)">
         <input value={form.society_numbers} onChange={e=>setForm(p=>({...p,society_numbers:e.target.value}))} placeholder="Ej: 07, 13, 42, 77, 88" />
         <div style={{ color:C.muted, fontSize:10, marginTop:4 }}>Estos numeros se pueden comprar en sociedad entre dos personas</div>
       </FormField>
+
       <FormField label="Descripcion opcional">
         <textarea rows={3} value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Informacion adicional..." style={{ background:'#1a1a1a', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:12, padding:'13px 16px', color:'#fff', fontSize:14, outline:'none', width:'100%', fontFamily:'inherit', resize:'none', boxSizing:'border-box' }} />
       </FormField>
-      <button onClick={save} disabled={saving} style={{ ...S.btnGold, marginBottom:10, opacity:saving?.7:1 }}>{saving?'Guardando...':isEdit?'Guardar cambios':'Crear dinamica'}</button>
+
+      <button onClick={save} disabled={saving} style={{ ...S.btnGold, marginBottom:10 }}>
+        {saving
+          ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#000" strokeWidth="2.5" style={{ animation:'spin 1s linear infinite' }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              Guardando...
+            </span>
+          : isEdit ? 'Guardar cambios' : 'Crear dinamica'
+        }
+      </button>
       <button onClick={onBack} style={S.btnOutline}>Cancelar</button>
     </div>
   )
 }
+
 
 // ─── MANUAL SALE ──────────────────────────────────────────────────────────────
 function ManualSaleForm({ raffles, onSaved }) {
