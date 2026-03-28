@@ -407,9 +407,12 @@ function RaffleCard({ r, onRaffle, featured }) {
       <div style={{ marginBottom: 10 }}>
         <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Premios</div>
         {prizes.slice(0, 4).map((p, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
-            <span style={{ fontSize: 11 }}>{medals[i]}</span>
-            <span style={{ color: i === 0 ? '#fff' : C.muted, fontSize: i === 0 ? 12 : 11, fontWeight: i === 0 ? 700 : 400 }}>{p.amount || p}</span>
+          <div key={i} style={{ marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontSize: 11 }}>{medals[i]}</span>
+              <span style={{ color: i === 0 ? '#fff' : C.muted, fontSize: i === 0 ? 12 : 11, fontWeight: i === 0 ? 700 : 400 }}>{p.amount || (typeof p==='string'?p:'')}</span>
+            </div>
+            {p.how_to_win && <div style={{ color:'#555', fontSize:9, marginLeft:18, marginTop:1 }}>↳ {p.how_to_win}</div>}
           </div>
         ))}
       </div>
@@ -573,10 +576,28 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
           <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>← Volver</button>
           <button onClick={shareWA} style={{ background: 'rgba(39,174,96,0.15)', border: '1px solid rgba(39,174,96,0.3)', borderRadius: 8, color: C.green, cursor: 'pointer', padding: '6px 12px', fontSize: 11, fontWeight: 700, fontFamily: 'inherit' }}>Compartir</button>
         </div>
-        <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, overflow: 'hidden', margin: '0 auto 10px', border: `1px solid rgba(201,162,39,0.3)` }}><LogoSVG size={52} /></div>
-          <h1 style={{ color: '#fff', fontSize: 16, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 8px', lineHeight: 1.3 }}>{r.title}</h1>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        {/* HEADER COMPACTO — sin logo doble */}
+        <div style={{ padding: '4px 0 14px' }}>
+          <h1 style={{ color: '#fff', fontSize: 17, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 8px', lineHeight: 1.3, textAlign:'center' }}>{r.title}</h1>
+          {/* Info row: fecha, loteria */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:4, background:'rgba(255,255,255,0.04)', border:'1px solid #1a1a1a', borderRadius:999, padding:'4px 10px' }}>
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={C.gold} strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span style={{ color:'#ccc', fontSize:10 }}>{r.raffle_date ? new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : ''}</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:4, background:'rgba(255,255,255,0.04)', border:'1px solid #1a1a1a', borderRadius:999, padding:'4px 10px' }}>
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span style={{ color:'#ccc', fontSize:10 }}>{r.lottery_name}</span>
+            </div>
+            {r.close_time && (
+              <div style={{ display:'flex', alignItems:'center', gap:4, background:'rgba(230,120,0,0.08)', border:'1px solid rgba(230,120,0,0.2)', borderRadius:999, padding:'4px 10px' }}>
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#E67E22" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span style={{ color:'#E67E22', fontSize:10 }}>Cierra: {String(r.close_time).slice(0,5)}</span>
+              </div>
+            )}
+          </div>
+          {/* Precio */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {r.presale_active && r.presale_price > 0 ? (
               <div style={{ background: 'rgba(155,89,182,0.1)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 999, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ color: C.muted, fontSize: 11, textDecoration: 'line-through' }}>{fmt(r.ticket_price)}</span>
@@ -596,11 +617,17 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
       {/* Premios scroll */}
       <div style={{ overflowX: 'auto', padding: '12px 16px', display: 'flex', gap: 10, scrollbarWidth: 'none' }}>
         {prizes.map((p, i) => (
-          <div key={i} style={{ flexShrink: 0, background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 14, padding: '10px 16px', minWidth: 140, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+          <div key={i} style={{ flexShrink: 0, background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 14, padding: '12px 16px', minWidth: 160, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
             <GoldLine />
-            <div style={{ fontSize: 24, marginBottom: 4 }}>{medals[i]}</div>
+            <div style={{ fontSize: 22, marginBottom: 4 }}>{medals[i]}</div>
             <div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 4 }}>Premio {i+1}</div>
-            <div style={{ color: C.gold, fontSize: 12, fontWeight: 800 }}>{p.amount || p.title || p}</div>
+            <div style={{ color: C.gold, fontSize: 13, fontWeight: 800, marginBottom: p.how_to_win ? 6 : 0 }}>{p.amount || p.title || p}</div>
+            {p.how_to_win && (
+              <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:7, padding:'4px 8px' }}>
+                <div style={{ color:'#888', fontSize:8, textTransform:'uppercase', letterSpacing:.5, marginBottom:2 }}>Como ganar</div>
+                <div style={{ color:'#ccc', fontSize:10, fontWeight:600 }}>{p.how_to_win}</div>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -2126,9 +2153,15 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
               <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
               <div style={{ fontWeight:700, color:'#fff', fontSize:13, marginBottom:6 }}>{r.title}</div>
               <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:6 }}><span style={{ background:r.status==='active'?'rgba(39,174,96,0.15)':'rgba(255,255,255,0.05)', border:`1px solid ${r.status==='active'?'rgba(39,174,96,0.3)':'rgba(255,255,255,0.1)'}`, borderRadius:999, padding:'2px 8px', color:r.status==='active'?'#27AE60':'#888', fontSize:9, fontWeight:700 }}>{r.status==='active'?'ACTIVO':r.status==='draft'?'BORRADOR':'FINALIZADO'}</span><span style={{ color:C.muted, fontSize:10 }}>{fmt(r.ticket_price)} · {r.lottery_name}</span></div>
-              <div style={{ display:'flex', gap:8 }}>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                 <button onClick={() => setEditingRaffle(r)} style={{ flex:1, background:'rgba(201,162,39,0.08)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:8, color:C.gold, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Editar</button>
                 <button onClick={async () => { const n=window.prompt('Numero ganador (0-'+(r.number_range-1)+'):'); if(n!==null) alert('Ganador: #'+String(parseInt(n)).padStart(r.number_range<=100?2:3,'0')) }} style={{ flex:1, background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Realizar sorteo</button>
+                <button onClick={async () => {
+                  if (!window.confirm('Eliminar "'+r.title+'"? Esta accion no se puede deshacer.')) return
+                  const { error } = await supabase.from('raffles').delete().eq('id', r.id)
+                  if (error) { alert('Error al eliminar: ' + error.message); return }
+                  loadAdminData(); onRefreshRaffles()
+                }} style={{ background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.25)', borderRadius:8, color:'#E74C3C', fontSize:11, fontWeight:700, padding:'9px 14px', cursor:'pointer', fontFamily:'inherit' }}>Eliminar</button>
               </div>
             </div>
           ))}
