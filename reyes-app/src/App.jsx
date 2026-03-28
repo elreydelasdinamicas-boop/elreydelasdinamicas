@@ -2334,53 +2334,59 @@ function RaffleForm({ raffle, onBack, onSave }) {
     }
     setSaving(true)
     setSaveError(null)
-    const prizes = form.prizes.filter(p => p.amount.trim()).map(p => ({
-      amount: p.amount.trim(),
-      how_to_win: p.how_to_win.trim()
-    }))
-    const society_numbers_raw = form.society_numbers
-      ? form.society_numbers.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n))
-      : []
-    const society_numbers = society_numbers_raw.length > 0 ? society_numbers_raw : null
-    // Only include close_time if column exists — send as text HH:MM
-    const data = {
-      title:          form.title,
-      ticket_price:   parseInt(form.ticket_price) || 5000,
-      number_range:   parseInt(form.number_range) || 100,
-      max_per_person: parseInt(form.max_per_person) || 5,
-      raffle_date:    form.raffle_date,
-      lottery_name:   form.lottery_name,
-      card_color:     form.card_color,
-      is_free:        form.is_free,
-      accepts_points: form.accepts_points,
-      prizes,
-      ...(society_numbers ? { society_numbers } : {}),
-      status:         form.status,
-      description:    form.description,
-      is_featured:    form.is_featured || false,
-      release_hours:  24,
-      ...(form.payment_deadline ? { payment_deadline: form.payment_deadline } : {}),
-      ...(form.close_time ? { close_time: form.close_time + ':00' } : { close_time: null }),
-    }
     try {
-      let err = null
+      // Safe prizes parse
+      const prizes = (Array.isArray(form.prizes) ? form.prizes : [])
+        .filter(p => p && typeof p.amount === 'string' && p.amount.trim())
+        .map(p => ({ amount: p.amount.trim(), how_to_win: (p.how_to_win||'').trim() }))
+
+      // Safe society_numbers parse  
+      const snRaw = form.society_numbers
+        ? String(form.society_numbers).split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n))
+        : []
+
+      const data = {
+        title:          String(form.title).trim(),
+        ticket_price:   parseInt(form.ticket_price) || 5000,
+        number_range:   parseInt(form.number_range) || 100,
+        max_per_person: parseInt(form.max_per_person) || 5,
+        raffle_date:    form.raffle_date,
+        lottery_name:   String(form.lottery_name).trim(),
+        card_color:     form.card_color || '#E67E22',
+        is_free:        !!form.is_free,
+        accepts_points: form.accepts_points !== false,
+        prizes:         prizes,
+        status:         form.status || 'active',
+        description:    form.description || '',
+        is_featured:    !!form.is_featured,
+        release_hours:  24,
+      }
+
+      // Optional fields — only add if have value
+      if (snRaw.length > 0) data.society_numbers = snRaw
+      if (form.close_time) data.close_time = form.close_time + ':00'
+
+      let saveErr = null
       if (isEdit) {
         const res = await supabase.from('raffles').update(data).eq('id', raffle.id)
-        err = res.error
+        saveErr = res.error
       } else {
         const res = await supabase.from('raffles').insert(data)
-        err = res.error
+        saveErr = res.error
       }
-      if (err) {
-        setSaveError(err.message)
+
+      if (saveErr) {
+        setSaveError('Error: ' + saveErr.message)
         setSaving(false)
         return
       }
+
       setSaving(false)
       alert(isEdit ? 'Dinamica actualizada!' : 'Dinamica creada exitosamente!')
       onSave()
     } catch(e) {
-      setSaveError(e.message || 'Error desconocido')
+      console.error('Save error:', e)
+      setSaveError('Error inesperado: ' + (e.message || String(e)))
       setSaving(false)
     }
   }
