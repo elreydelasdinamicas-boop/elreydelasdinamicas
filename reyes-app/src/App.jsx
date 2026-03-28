@@ -529,131 +529,149 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWi
 // ─── RAFFLE PAGE con SOCIEDAD visual ─────────────────────────────────────────
 function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelectedNums, onShowPopup, onBack, onSociety }) {
   const range = r.number_range || 100
-  const cols = range <= 100 ? 10 : 20
+  const cols  = range <= 100 ? 10 : 20
   const prizes = Array.isArray(r.prizes) ? r.prizes : []
   const societyNums = Array.isArray(r.society_numbers) ? r.society_numbers : []
   const packages = Array.isArray(r.packages) ? r.packages : []
   const promotions = Array.isArray(r.promotions) ? r.promotions : []
-  const [verifyName, setVerifyName] = useState('')
+
+  const [verifyName, setVerifyName]   = useState('')
   const [verifyPhone, setVerifyPhone] = useState('')
   const [verifyResult, setVerifyResult] = useState(null)
-  const [societyModal, setSocietyModal] = useState(null)
-  const [selectedPkg, setSelectedPkg] = useState(null)
+  const [societyModal, setSocietyModal] = useState(null)  // num seleccionado
+  const [societyMode, setSocietyMode]   = useState('society') // 'society' | 'full'
+  const [selectedPkg, setSelectedPkg]   = useState(null)
 
-  const pad = n => range <= 100 ? String(n).padStart(2, '0') : String(n).padStart(3, '0')
+  const pad = n => range <= 100 ? String(n).padStart(2,'0') : String(n).padStart(3,'0')
+
   const toggleNum = n => {
-    if (societyNums.includes(n)) { setSocietyModal(n); return }
+    if (societyNums.includes(n)) { setSocietyModal(n); setSocietyMode('society'); return }
     setSelectedNums(prev => prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n])
   }
   const luckyNum = () => {
-    const avail = Array.from({ length: range }, (_, i) => i).filter(n => !allReservedNums.includes(n) && !selectedNums.includes(n) && !societyNums.includes(n))
-    if (avail.length) setSelectedNums(prev => [...prev, avail[Math.floor(Math.random() * avail.length)]])
+    const avail = Array.from({ length:range },(_,i)=>i).filter(n => !allReservedNums.includes(n) && !selectedNums.includes(n) && !societyNums.includes(n))
+    if (avail.length) setSelectedNums(prev => [...prev, avail[Math.floor(Math.random()*avail.length)]])
   }
-  const getStatus = n => allReservedNums.includes(n) ? 'reserved' : societyNums.includes(n) ? 'society' : 'available'
-
-  const activePromo = promotions.find(p => selectedNums.length >= p.buy)
-  const freeNums = activePromo ? activePromo.get : 0
 
   const pricePerNum = r.presale_active && r.presale_price > 0 ? r.presale_price : r.ticket_price
-  const totalPrice = selectedPkg ? selectedPkg.price : selectedNums.length * pricePerNum
+  const totalPrice  = selectedPkg ? selectedPkg.price : selectedNums.length * pricePerNum
+  const activePromo = promotions.find(p => selectedNums.length >= p.buy)
+
+  const shareWA = () => window.open(`https://wa.me/?text=${encodeURIComponent(`La Casa De Las Dinamicas
+
+${r.title}
+Boleto: ${fmt(r.ticket_price)}
+Sorteo: ${fmtDate(r.raffle_date)}
+
+Aparta tu numero:
+www.lacasadelasdinamicas.com`)}`)
 
   async function verifyTicket() {
     if (!verifyName && !verifyPhone) return
     let ids = []
-    if (verifyPhone) { const { data } = await supabase.from('users_profile').select('id').ilike('phone', `%${verifyPhone}%`); ids = (data||[]).map(u => u.id) }
-    else { const { data } = await supabase.from('users_profile').select('id').ilike('full_name', `%${verifyName}%`); ids = (data||[]).map(u => u.id) }
+    if (verifyPhone) { const { data } = await supabase.from('users_profile').select('id').ilike('phone',`%${verifyPhone}%`); ids=(data||[]).map(u=>u.id) }
+    else { const { data } = await supabase.from('users_profile').select('id').ilike('full_name',`%${verifyName}%`); ids=(data||[]).map(u=>u.id) }
     if (!ids.length) { setVerifyResult([]); return }
-    const { data } = await supabase.from('tickets').select('*').eq('raffle_id', r.id).in('user_id', ids)
-    setVerifyResult(data || [])
+    const { data } = await supabase.from('tickets').select('*').eq('raffle_id',r.id).in('user_id',ids)
+    setVerifyResult(data||[])
   }
 
-  const shareWA = () => window.open(`https://wa.me/?text=${encodeURIComponent(`La Casa De Las Dinamicas\n\n${r.title}\nBoleto: ${fmt(r.ticket_price)}\nSorteo: ${fmtDate(r.raffle_date)}\n\nAparta tu numero:\nwww.lacasadelasdinamicas.com`)}`)
+  const closeTimeStr = r.close_time ? String(r.close_time).slice(0,5) : null
 
   return (
-    <div style={{ paddingBottom: 88 }}>
-      <div style={{ background: `linear-gradient(180deg,#1a1200 0%,${C.bg} 100%)`, padding: '16px 16px 0', borderBottom: `1px solid ${C.cardBorder}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>← Volver</button>
-          <button onClick={shareWA} style={{ background: 'rgba(39,174,96,0.15)', border: '1px solid rgba(39,174,96,0.3)', borderRadius: 8, color: C.green, cursor: 'pointer', padding: '6px 12px', fontSize: 11, fontWeight: 700, fontFamily: 'inherit' }}>Compartir</button>
+    <div style={{ paddingBottom:88 }}>
+      <style>{CSS}</style>
+
+      {/* ── HEADER compacto ── */}
+      <div style={{ background:'#0d0d0d', padding:'12px 16px 14px', borderBottom:`1px solid ${C.cardBorder}` }}>
+        {/* Fila 1: Volver | Titulo | Compartir */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:10 }}>
+          <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit', flexShrink:0 }}>← Volver</button>
+          <h1 style={{ color:'#fff', fontSize:14, fontWeight:900, textTransform:'uppercase', textAlign:'center', flex:1, lineHeight:1.2, margin:0 }}>{r.title}</h1>
+          <button onClick={shareWA} style={{ background:'rgba(39,174,96,0.15)', border:'1px solid rgba(39,174,96,0.3)', borderRadius:8, color:C.green, cursor:'pointer', padding:'6px 11px', fontSize:11, fontWeight:700, fontFamily:'inherit', flexShrink:0 }}>Compartir</button>
         </div>
-        {/* HEADER COMPACTO — sin logo doble */}
-        <div style={{ padding: '4px 0 14px' }}>
-          <h1 style={{ color: '#fff', fontSize: 17, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 8px', lineHeight: 1.3, textAlign:'center' }}>{r.title}</h1>
-          {/* Info row: fecha, loteria */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, flexWrap:'wrap', marginBottom:10 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:4, background:'rgba(255,255,255,0.04)', border:'1px solid #1a1a1a', borderRadius:999, padding:'4px 10px' }}>
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={C.gold} strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+
+        {/* Fila 2: Fecha · Loteria · Cierra — todos juntos en una pastilla */}
+        <div style={{ display:'flex', justifyContent:'center', marginBottom:10 }}>
+          <div style={{ display:'inline-flex', alignItems:'center', background:'#111', border:'1px solid #1a1a1a', borderRadius:999, overflow:'hidden' }}>
+            {/* Fecha */}
+            <div style={{ display:'flex', alignItems:'center', gap:4, padding:'6px 11px' }}>
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={C.gold} strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               <span style={{ color:'#ccc', fontSize:10 }}>{r.raffle_date ? new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : ''}</span>
             </div>
-            <div style={{ display:'flex', alignItems:'center', gap:4, background:'rgba(255,255,255,0.04)', border:'1px solid #1a1a1a', borderRadius:999, padding:'4px 10px' }}>
+            <div style={{ width:1, height:16, background:'#2a2a2a', flexShrink:0 }}></div>
+            {/* Loteria */}
+            <div style={{ display:'flex', alignItems:'center', gap:4, padding:'6px 11px' }}>
               <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span style={{ color:'#ccc', fontSize:10 }}>{r.lottery_name}</span>
             </div>
-            {r.close_time && (
-              <div style={{ display:'flex', alignItems:'center', gap:4, background:'rgba(230,120,0,0.08)', border:'1px solid rgba(230,120,0,0.2)', borderRadius:999, padding:'4px 10px' }}>
+            {/* Cierra — solo si hay close_time */}
+            {closeTimeStr && <>
+              <div style={{ width:1, height:16, background:'#2a2a2a', flexShrink:0 }}></div>
+              <div style={{ display:'flex', alignItems:'center', gap:4, padding:'6px 11px' }}>
                 <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#E67E22" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                <span style={{ color:'#E67E22', fontSize:10 }}>Cierra: {String(r.close_time).slice(0,5)}</span>
+                <span style={{ color:'#E67E22', fontSize:10, fontWeight:600 }}>Cierra {closeTimeStr}</span>
               </div>
-            )}
+            </>}
           </div>
-          {/* Precio */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {r.presale_active && r.presale_price > 0 ? (
-              <div style={{ background: 'rgba(155,89,182,0.1)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 999, padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: C.muted, fontSize: 11, textDecoration: 'line-through' }}>{fmt(r.ticket_price)}</span>
-                <span style={{ color: '#C9A0E8', fontSize: 16, fontWeight: 900 }}>{fmt(r.presale_price)}</span>
-                <span style={{ background: C.purple, borderRadius: 999, padding: '1px 7px', color: '#fff', fontSize: 8, fontWeight: 700 }}>PREVENTA</span>
-              </div>
-            ) : (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(201,162,39,0.08)', border: `1px solid rgba(201,162,39,0.2)`, borderRadius: 999, padding: '6px 18px' }}>
-                <span style={{ color: C.muted, fontSize: 11 }}>Valor del boleto</span>
-                <span style={{ color: C.gold, fontSize: 16, fontWeight: 900 }}>{fmt(r.ticket_price)}</span>
-              </div>
-            )}
-          </div>
+        </div>
+
+        {/* Precio */}
+        <div style={{ display:'flex', justifyContent:'center' }}>
+          {r.presale_active && r.presale_price > 0 ? (
+            <div style={{ background:'rgba(155,89,182,0.1)', border:'1px solid rgba(155,89,182,0.3)', borderRadius:999, padding:'6px 16px', display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ color:C.muted, fontSize:11, textDecoration:'line-through' }}>{fmt(r.ticket_price)}</span>
+              <span style={{ color:'#C9A0E8', fontSize:16, fontWeight:900 }}>{fmt(r.presale_price)}</span>
+              <span style={{ background:C.purple, borderRadius:999, padding:'1px 7px', color:'#fff', fontSize:8, fontWeight:700 }}>PREVENTA</span>
+            </div>
+          ) : (
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'rgba(201,162,39,0.08)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:999, padding:'6px 18px' }}>
+              <span style={{ color:C.muted, fontSize:11 }}>Valor del boleto</span>
+              <span style={{ color:C.gold, fontSize:16, fontWeight:900 }}>{fmt(r.ticket_price)}</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Premios scroll */}
-      <div style={{ overflowX: 'auto', padding: '12px 16px', display: 'flex', gap: 10, scrollbarWidth: 'none' }}>
-        {prizes.map((p, i) => (
-          <div key={i} style={{ flexShrink: 0, background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 14, padding: '12px 16px', minWidth: 160, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+      {/* ── PREMIOS ── */}
+      <div style={{ overflowX:'auto', padding:'12px 16px', display:'flex', gap:10, scrollbarWidth:'none' }}>
+        {prizes.map((p,i) => (
+          <div key={i} style={{ flexShrink:0, background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:14, padding:'12px 16px', minWidth:160, textAlign:'center', position:'relative', overflow:'hidden' }}>
             <GoldLine />
-            <div style={{ fontSize: 22, marginBottom: 4 }}>{medals[i]}</div>
-            <div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 4 }}>Premio {i+1}</div>
-            <div style={{ color: C.gold, fontSize: 13, fontWeight: 800, marginBottom: p.how_to_win ? 6 : 0 }}>{p.amount || p.title || p}</div>
+            <div style={{ fontSize:22, marginBottom:4 }}>{medals[i]}</div>
+            <div style={{ color:C.muted, fontSize:9, textTransform:'uppercase', marginBottom:4 }}>Premio {i+1}</div>
+            <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom: p.how_to_win ? 7 : 0 }}>{p.amount || p.title || p}</div>
             {p.how_to_win && (
-              <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:7, padding:'4px 8px' }}>
-                <div style={{ color:'#888', fontSize:8, textTransform:'uppercase', letterSpacing:.5, marginBottom:2 }}>Como ganar</div>
-                <div style={{ color:'#ccc', fontSize:10, fontWeight:600 }}>{p.how_to_win}</div>
+              <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.12)', borderRadius:7, padding:'5px 8px' }}>
+                <div style={{ color:'#555', fontSize:7, textTransform:'uppercase', marginBottom:2 }}>Como ganar</div>
+                <div style={{ color:'#aaa', fontSize:10, fontWeight:600 }}>{p.how_to_win}</div>
               </div>
             )}
           </div>
         ))}
       </div>
 
-      <div style={{ padding: '0 16px' }}>
+      <div style={{ padding:'0 16px' }}>
 
         {/* PAQUETES */}
         {r.packages_active && packages.length > 0 && (
-          <div style={{ ...S.card, marginBottom: 14 }}>
+          <div style={{ ...S.card, marginBottom:14 }}>
             <GoldLine />
-            <div style={{ color: '#fff', fontWeight: 800, fontSize: 13, marginBottom: 10 }}>Paquetes con descuento</div>
-            <div style={{ display: 'flex', gap: 8, overflow: 'auto', scrollbarWidth: 'none', paddingBottom: 4 }}>
-              <div onClick={() => setSelectedPkg(null)} style={{ flexShrink: 0, background: !selectedPkg ? 'rgba(201,162,39,0.15)' : '#1a1a1a', border: `1px solid ${!selectedPkg ? C.gold : 'rgba(255,255,255,0.07)'}`, borderRadius: 11, padding: '10px 14px', cursor: 'pointer', minWidth: 68, textAlign: 'center' }}>
-                <div style={{ color: '#fff', fontSize: 9, fontWeight: 700, marginBottom: 3 }}>Individual</div>
-                <div style={{ color: C.gold, fontSize: 13, fontWeight: 900 }}>{fmt(pricePerNum)}</div>
+            <div style={{ color:'#fff', fontWeight:800, fontSize:13, marginBottom:10 }}>Paquetes con descuento</div>
+            <div style={{ display:'flex', gap:8, overflow:'auto', scrollbarWidth:'none', paddingBottom:4 }}>
+              <div onClick={() => setSelectedPkg(null)} style={{ flexShrink:0, background:!selectedPkg?'rgba(201,162,39,0.15)':'#1a1a1a', border:`1px solid ${!selectedPkg?C.gold:'rgba(255,255,255,0.07)'}`, borderRadius:11, padding:'10px 14px', cursor:'pointer', minWidth:68, textAlign:'center' }}>
+                <div style={{ color:'#fff', fontSize:9, fontWeight:700, marginBottom:3 }}>Individual</div>
+                <div style={{ color:C.gold, fontSize:13, fontWeight:900 }}>{fmt(pricePerNum)}</div>
               </div>
-              {packages.map((pkg, i) => {
+              {packages.map((pkg,i) => {
                 const isSelected = selectedPkg?.qty === pkg.qty
                 const savings = (pkg.qty * pricePerNum) - pkg.price
                 return (
-                  <div key={i} onClick={() => { setSelectedPkg(pkg); setSelectedNums(prev => prev.slice(0, pkg.qty)) }} style={{ flexShrink: 0, background: isSelected ? 'rgba(201,162,39,0.15)' : '#1a1a1a', border: `${isSelected ? '2px' : '1px'} solid ${isSelected ? C.gold : 'rgba(255,255,255,0.07)'}`, borderRadius: 11, padding: '10px 14px', cursor: 'pointer', minWidth: 80, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                  <div key={i} onClick={() => { setSelectedPkg(pkg); setSelectedNums(prev=>prev.slice(0,pkg.qty)) }} style={{ flexShrink:0, background:isSelected?'rgba(201,162,39,0.15)':'#1a1a1a', border:`${isSelected?'2px':'1px'} solid ${isSelected?C.gold:'rgba(255,255,255,0.07)'}`, borderRadius:11, padding:'10px 14px', cursor:'pointer', minWidth:80, textAlign:'center', position:'relative', overflow:'hidden' }}>
                     {isSelected && <GoldLine />}
-                    <div style={{ background: C.green, borderRadius: 999, padding: '1px 5px', color: '#fff', fontSize: 6, fontWeight: 700, marginBottom: 3, display: 'inline-block' }}>-{Math.round(savings/pkg.qty*100/pricePerNum)}%</div>
-                    <div style={{ color: '#fff', fontSize: 9, fontWeight: 700, marginBottom: 3 }}>{pkg.qty} boletos</div>
-                    <div style={{ color: C.gold, fontSize: 13, fontWeight: 900 }}>{fmt(pkg.price)}</div>
-                    <div style={{ color: C.muted, fontSize: 7, textDecoration: 'line-through' }}>{fmt(pkg.qty * pricePerNum)}</div>
+                    <div style={{ background:C.green, borderRadius:999, padding:'1px 5px', color:'#fff', fontSize:6, fontWeight:700, marginBottom:3, display:'inline-block' }}>-{Math.round(savings/pkg.qty*100/pricePerNum)}%</div>
+                    <div style={{ color:'#fff', fontSize:9, fontWeight:700, marginBottom:3 }}>{pkg.qty} boletos</div>
+                    <div style={{ color:C.gold, fontSize:13, fontWeight:900 }}>{fmt(pkg.price)}</div>
                   </div>
                 )
               })}
@@ -663,70 +681,71 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
 
         {/* PROMO ACTIVA */}
         {activePromo && (
-          <div style={{ background: 'rgba(39,174,96,0.08)', border: '1px solid rgba(39,174,96,0.25)', borderRadius: 11, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>🎁</span>
-            <div><div style={{ color: C.green, fontSize: 11, fontWeight: 800 }}>{activePromo.label}</div><div style={{ color: C.muted, fontSize: 9, marginTop: 2 }}>{activePromo.get} numero(s) gratis seran asignados automaticamente</div></div>
+          <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:11, padding:'10px 14px', marginBottom:14, display:'flex', alignItems:'center', gap:10 }}>
+            <span style={{ fontSize:20 }}>🎁</span>
+            <div><div style={{ color:C.green, fontSize:11, fontWeight:800 }}>{activePromo.label}</div><div style={{ color:C.muted, fontSize:9, marginTop:2 }}>{activePromo.get} numero(s) gratis</div></div>
           </div>
         )}
 
-        {/* GRILLA NUMEROS */}
-        <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 18, padding: 16, marginBottom: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <div>
-              <h3 style={{ color: '#fff', fontWeight: 800, fontSize: 14, margin: 0 }}>Selecciona tu numero</h3>
-              <div style={{ color: C.green, fontSize: 10, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ width: 6, height: 6, background: C.green, borderRadius: '50%', display: 'inline-block' }} className="pulse"></span>
-                En vivo
-              </div>
+        {/* ── LEYENDA — fuera de la tabla ── */}
+        <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:10 }}>
+          {[['#111','1px solid #333','#fff','Disponible'],['rgba(201,162,39,0.2)',`2px solid ${C.gold}`,C.gold,'Seleccionado'],['#050505','1px solid #0d0d0d','#555','Apartado']].map(([bg,border,color,label]) => (
+            <div key={label} style={{ display:'flex', alignItems:'center', gap:5 }}>
+              <div style={{ width:22, height:22, background:bg, border, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center' }}>{label==='Apartado'&&<span style={{fontSize:9}}>🔒</span>}</div>
+              <span style={{ fontSize:11, color:C.muted }}>{label}</span>
             </div>
-            <button onClick={luckyNum} style={{ background: 'rgba(201,162,39,0.1)', border: `1px solid rgba(201,162,39,0.25)`, borderRadius: 8, color: C.gold, fontSize: 11, fontWeight: 700, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>Al azar</button>
+          ))}
+          {societyNums.length > 0 && (
+            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+              <div style={{ width:22, height:22, background:'#1a0d2a', border:'1.5px solid #9B59B6', borderRadius:6 }}></div>
+              <span style={{ fontSize:11, color:C.purple, fontWeight:700 }}>Sociedad</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── TABLA NUMEROS — limpia, solo numeros ── */}
+        <div style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:18, padding:14, marginBottom:14 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+              <span style={{ width:7, height:7, background:C.green, borderRadius:'50%', display:'inline-block' }} className="pulse"></span>
+              <span style={{ color:C.green, fontSize:11, fontWeight:600 }}>En vivo</span>
+            </div>
+            <button onClick={luckyNum} style={{ background:`rgba(201,162,39,0.1)`, border:`1px solid rgba(201,162,39,0.25)`, borderRadius:8, color:C.gold, fontSize:11, fontWeight:700, padding:'7px 14px', cursor:'pointer', fontFamily:'inherit' }}>Al azar</button>
           </div>
 
-          {/* LEYENDA */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            {[['#0d0d0d','#1a1a1a','#333','Disponible'],['rgba(201,162,39,0.2)',C.gold,C.gold,'Seleccionado'],['#050505','#111','#1a1a1a','Apartado']].map(([bg,border,color,label]) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 13, height: 13, background: bg, border: `1px solid ${border}`, borderRadius: 3 }}></div><span style={{ fontSize: 10, color: C.muted }}>{label}</span></div>
-            ))}
-            {societyNums.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 13, height: 13, background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1px solid #9B59B6', borderRadius: 3 }}></div>
-                <span style={{ fontSize: 10, color: C.purple, fontWeight: 700 }}>👥 Sociedad — mitad precio!</span>
-              </div>
-            )}
-          </div>
-
-          {/* GRID */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 4 }}>
-            {Array.from({ length: range }, (_, n) => {
+          {/* GRID — numeros blancos grandes */}
+          <div style={{ display:'grid', gridTemplateColumns:`repeat(${cols},1fr)`, gap:5 }}>
+            {Array.from({ length:range },(_,n) => {
               const isSoc = societyNums.includes(n)
               const isRes = allReservedNums.includes(n)
               const isSel = selectedNums.includes(n)
-
+              const pStr  = pad(n)
               if (isSoc) return (
-                <div key={n} onClick={() => setSocietyModal(n)} className="society-glow society-float"
-                  style={{ aspectRatio: 1, borderRadius: 6, background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1.5px solid #9B59B6', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg,transparent,rgba(201,160,232,0.8),transparent)' }}></div>
-                  <div style={{ fontSize: range <= 100 ? 8 : 7, fontWeight: 900, color: '#C9A0E8', lineHeight: 1 }}>{pad(n)}</div>
-                  <div style={{ fontSize: 7, lineHeight: 1, marginTop: 1 }}>👥</div>
+                <div key={n} onClick={() => { setSocietyModal(n); setSocietyMode('society') }} className="society-glow"
+                  style={{ aspectRatio:1, borderRadius:8, background:'#1a0d2a', border:'1.5px solid #9B59B6', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor:'pointer', position:'relative', overflow:'hidden' }}>
+                  <div style={{ position:'absolute', top:0, left:0, right:0, height:1, background:'rgba(201,160,232,0.4)' }}></div>
+                  <div style={{ fontSize: range<=100?11:9, fontWeight:900, color:'#C9A0E8', lineHeight:1 }}>{pStr}</div>
+                  <div style={{ fontSize:8, lineHeight:1, marginTop:1 }}>👥</div>
                 </div>
               )
-              if (isRes) return <div key={n} style={{ aspectRatio: 1, border: '1px solid #111', borderRadius: 6, background: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, cursor: 'not-allowed' }}>🔒</div>
-              if (isSel) return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio: 1, border: `2px solid ${C.gold}`, borderRadius: 6, background: 'rgba(201,162,39,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, color: C.gold, cursor: 'pointer' }}>{pad(n)}</div>
-              return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio: 1, border: '1px solid #1a1a1a', borderRadius: 6, background: '#0d0d0d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#333', cursor: 'pointer' }}>{pad(n)}</div>
+              if (isRes) return <div key={n} style={{ aspectRatio:1, border:'1px solid #111', borderRadius:8, background:'#050505', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, cursor:'not-allowed' }}>🔒</div>
+              if (isSel) return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio:1, border:`2px solid ${C.gold}`, borderRadius:8, background:'rgba(201,162,39,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:range<=100?13:11, fontWeight:900, color:C.gold, cursor:'pointer' }}>{pStr}</div>
+              return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio:1, border:'1px solid #1a1a1a', borderRadius:8, background:'#111', display:'flex', alignItems:'center', justifyContent:'center', fontSize:range<=100?13:11, fontWeight:700, color:'#fff', cursor:'pointer' }}>{pStr}</div>
             })}
           </div>
 
+          {/* Seleccionados */}
           {selectedNums.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ background: 'rgba(201,162,39,0.06)', border: `1px solid rgba(201,162,39,0.15)`, borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: C.muted, fontSize: 12 }}>Seleccionados</span>
-                  <span style={{ color: C.gold, fontSize: 12, fontWeight: 700 }}>{selectedNums.map(n => pad(n)).join(' · ')}</span>
+            <div style={{ marginTop:12 }}>
+              <div style={{ background:'rgba(201,162,39,0.06)', border:`1px solid rgba(201,162,39,0.15)`, borderRadius:12, padding:'11px 14px', marginBottom:10 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+                  <span style={{ color:C.muted, fontSize:12 }}>Seleccionados</span>
+                  <span style={{ color:C.gold, fontSize:12, fontWeight:700 }}>{selectedNums.map(n=>pad(n)).join(' · ')}</span>
                 </div>
-                {freeNums > 0 && <div style={{ color: C.green, fontSize: 11, marginBottom: 6 }}>+ {freeNums} numero(s) GRATIS por la promo!</div>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: C.muted, fontSize: 12 }}>Total</span>
-                  <span style={{ color: C.gold, fontSize: 22, fontWeight: 900 }}>{fmt(totalPrice)}</span>
+                {activePromo && <div style={{ color:C.green, fontSize:11, marginBottom:5 }}>+ {activePromo.get} numero(s) GRATIS!</div>}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ color:C.muted, fontSize:12 }}>Total</span>
+                  <span style={{ color:C.gold, fontSize:22, fontWeight:900 }}>{fmt(totalPrice)}</span>
                 </div>
               </div>
               <button onClick={onShowPopup} style={S.btnGold}>Apartar mis numeros</button>
@@ -734,60 +753,65 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
           )}
         </div>
 
-        {/* SECCION SOCIEDAD */}
+        {/* ── SECCION SOCIEDAD ── */}
         {societyNums.length > 0 && (
-          <div style={{ background: 'linear-gradient(135deg,#0f0619,#1a0d2a)', border: '1px solid rgba(155,89,182,0.35)', borderRadius: 18, padding: 18, marginBottom: 14, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,transparent,#9B59B6,#C9A0E8,#9B59B6,transparent)' }}></div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>👥</div>
-              <div><div style={{ color: '#C9A0E8', fontSize: 13, fontWeight: 900 }}>Numeros en Sociedad</div><div style={{ color: '#7b5cad', fontSize: 9, marginTop: 1 }}>Compra la mitad — gana todo el premio</div></div>
-            </div>
-            <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.18)', borderRadius: 10, padding: 12, marginBottom: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {[['Tu pagas','Solo el 50% del valor','#C9A0E8'],['Buscamos','Otra persona para completar el boleto','#9B59B6'],['Si gana','AMBOS reciben el premio completo!','#27AE60']].map(([t,d,c]) => (
-                  <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 16, height: 16, background: `${c}20`, border: `1px solid ${c}40`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><div style={{ width: 5, height: 5, background: c, borderRadius: '50%' }}></div></div>
-                    <div><span style={{ color: c, fontSize: 9, fontWeight: 700 }}>{t}: </span><span style={{ color: '#888', fontSize: 9 }}>{d}</span></div>
-                  </div>
-                ))}
+          <div style={{ background:'linear-gradient(135deg,#0f0619,#1a0d2a)', border:'1px solid rgba(155,89,182,0.35)', borderRadius:18, padding:18, marginBottom:14, position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+              <div style={{ width:40, height:40, background:'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#C9A0E8" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div>
+                <div style={{ color:'#C9A0E8', fontSize:13, fontWeight:900 }}>Numeros en Sociedad</div>
+                <div style={{ color:'#7b5cad', fontSize:9, marginTop:1 }}>Compra la mitad — gana todo el premio</div>
               </div>
             </div>
-            <div style={{ color: '#7b5cad', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Numeros disponibles ({societyNums.length})</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-              {societyNums.map(n => (
-                <div key={n} onClick={() => setSocietyModal(n)} className="society-glow society-float"
-                  style={{ background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1.5px solid #9B59B6', borderRadius: 10, padding: '8px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                  <div style={{ color: '#C9A0E8', fontSize: 16, fontWeight: 900 }}>{pad(n)}</div>
-                  <div style={{ color: '#9B59B6', fontSize: 8, fontWeight: 700 }}>{fmt(r.ticket_price / 2)}</div>
+            <div style={{ background:'rgba(155,89,182,0.08)', border:'1px solid rgba(155,89,182,0.18)', borderRadius:10, padding:12, marginBottom:12 }}>
+              {[['Tu pagas','Solo el 50% del valor','#C9A0E8'],['Buscamos','Otra persona para completar','#9B59B6'],['Si gana','AMBOS reciben el premio completo!','#27AE60']].map(([t,d,col]) => (
+                <div key={t} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
+                  <div style={{ width:16, height:16, background:`${col}20`, border:`1px solid ${col}40`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><div style={{ width:5, height:5, background:col, borderRadius:'50%' }}></div></div>
+                  <div><span style={{ color:col, fontSize:9, fontWeight:700 }}>{t}: </span><span style={{ color:'#888', fontSize:9 }}>{d}</span></div>
                 </div>
               ))}
             </div>
-            <button onClick={() => setSocietyModal(societyNums[0])} style={S.btnPurple}>
-              <span>👥</span> Unirme a un numero en sociedad
+            <div style={{ color:'#7b5cad', fontSize:9, fontWeight:700, textTransform:'uppercase', marginBottom:8 }}>Numeros disponibles ({societyNums.length})</div>
+            <div style={{ display:'flex', gap:7, flexWrap:'wrap', marginBottom:14 }}>
+              {societyNums.map(n => (
+                <div key={n} onClick={() => { setSocietyModal(n); setSocietyMode('society') }} className="society-glow"
+                  style={{ background:'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border:'1.5px solid #9B59B6', borderRadius:10, padding:'8px 13px', display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor:'pointer' }}>
+                  <div style={{ color:'#C9A0E8', fontSize:18, fontWeight:900 }}>{pad(n)}</div>
+                  <div style={{ color:'#9B59B6', fontSize:9, fontWeight:700 }}>{fmt(r.ticket_price/2)}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => { setSocietyModal(societyNums[0]); setSocietyMode('society') }} style={S.btnPurple}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+              Unirme a un numero en sociedad
             </button>
           </div>
         )}
 
         {/* VERIFICAR BOLETO */}
-        <div style={{ ...S.card, marginBottom: 14 }}>
+        <div style={{ ...S.card, marginBottom:14 }}>
           <GoldLine />
-          <h3 style={{ color: C.gold, fontWeight: 900, fontSize: 14, margin: '0 0 4px', textAlign: 'center' }}>Verificar mi boleto</h3>
-          <p style={{ color: C.muted, fontSize: 12, margin: '0 0 14px', textAlign: 'center' }}>Consulta si tu numero esta correctamente apartado</p>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Nombre del participante</label>
-          <input value={verifyName} onChange={e => setVerifyName(e.target.value)} placeholder="Ej: Carlos Rodriguez" style={{ marginBottom: 8 }} />
-          <div style={{ textAlign: 'center', color: '#333', fontSize: 11, margin: '6px 0' }}>— o —</div>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>Celular / WhatsApp</label>
-          <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="3001234567" style={{ marginBottom: 14 }} />
+          <h3 style={{ color:C.gold, fontWeight:900, fontSize:14, margin:'0 0 4px', textAlign:'center' }}>Verificar mi boleto</h3>
+          <p style={{ color:C.muted, fontSize:12, margin:'0 0 14px', textAlign:'center' }}>Consulta si tu numero esta correctamente apartado</p>
+          <label style={{ fontSize:10, fontWeight:700, color:C.gold, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Nombre del participante</label>
+          <input value={verifyName} onChange={e=>setVerifyName(e.target.value)} placeholder="Ej: Carlos Rodriguez" style={{ marginBottom:8 }} />
+          <div style={{ textAlign:'center', color:'#333', fontSize:11, margin:'6px 0' }}>— o —</div>
+          <label style={{ fontSize:10, fontWeight:700, color:C.gold, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Celular / WhatsApp</label>
+          <input value={verifyPhone} onChange={e=>setVerifyPhone(e.target.value)} placeholder="3001234567" style={{ marginBottom:14 }} />
           <button onClick={verifyTicket} style={S.btnGold}>Verificar boleto</button>
           {verifyResult !== null && (
-            <div style={{ marginTop: 14 }}>
-              {verifyResult.length === 0 ? <div style={{ textAlign: 'center', color: C.muted, fontSize: 13, padding: '16px 0' }}>No se encontraron boletos con esos datos</div>
-                : verifyResult.map((t, i) => (
-                  <div key={i} style={{ background: C.bg3, border: `1px solid ${C.cardBorder}`, borderRadius: 12, padding: 14, marginBottom: 8 }}>
-                    <div style={{ color: C.gold, fontSize: 18, fontWeight: 900, marginBottom: 4 }}>#{(t.numbers||[]).map(n => pad(n)).join(' · ')}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={S.badge(t.status === 'paid' ? 'green' : 'dim')}>{t.status === 'paid' ? 'Pago confirmado' : 'Pendiente'}</span>
-                      <span style={{ color: '#fff', fontWeight: 700 }}>{fmt(t.total_amount)}</span>
+            <div style={{ marginTop:14 }}>
+              {verifyResult.length === 0
+                ? <div style={{ textAlign:'center', color:C.muted, fontSize:13, padding:'16px 0' }}>No se encontraron boletos</div>
+                : verifyResult.map((t,i) => (
+                  <div key={i} style={{ background:C.bg3, border:`1px solid ${C.cardBorder}`, borderRadius:12, padding:14, marginBottom:8 }}>
+                    <div style={{ color:C.gold, fontSize:18, fontWeight:900, marginBottom:4 }}>#{(t.numbers||[]).map(n=>pad(n)).join(' · ')}</div>
+                    <div style={{ display:'flex', justifyContent:'space-between' }}>
+                      <span style={S.badge(t.status==='paid'?'green':'dim')}>{t.status==='paid'?'Pago confirmado':'Pendiente'}</span>
+                      <span style={{ color:'#fff', fontWeight:700 }}>{fmt(t.total_amount)}</span>
                     </div>
                   </div>
                 ))
@@ -797,46 +821,56 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
         </div>
       </div>
 
-      {/* MODAL SOCIEDAD */}
+      {/* ── MODAL SOCIEDAD — todos los numeros + opcion completo/sociedad ── */}
       {societyModal !== null && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setSocietyModal(null)}>
-          <div className="slide-up" style={{ background: '#111', borderRadius: '22px 22px 0 0', padding: 24, width: '100%', maxWidth: 500, border: '1px solid rgba(155,89,182,0.35)', borderBottom: 'none', position: 'relative', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,transparent,#9B59B6,#C9A0E8,#9B59B6,transparent)' }}></div>
-            <div style={{ width: 40, height: 4, background: '#2a2a2a', borderRadius: 2, margin: '0 auto 18px' }}></div>
-            <div style={{ textAlign: 'center', marginBottom: 18 }}>
-              <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '2px solid #9B59B6', borderRadius: 20, padding: '16px 28px', marginBottom: 10 }} className="society-glow">
-                <div style={{ color: '#7b5cad', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Numero en Sociedad</div>
-                <div style={{ color: '#C9A0E8', fontSize: 52, fontWeight: 900, lineHeight: 1 }}>{pad(societyModal)}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                  <span style={{ fontSize: 14 }}>👥</span>
-                  <span style={{ color: '#9B59B6', fontSize: 10, fontWeight: 700 }}>{r.title}</span>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.88)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setSocietyModal(null)}>
+          <div style={{ background:'#111', borderRadius:'22px 22px 0 0', padding:24, width:'100%', maxWidth:500, border:'1px solid rgba(155,89,182,0.35)', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
+            <div style={{ width:40, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 18px' }}></div>
+            <div style={{ color:'#C9A0E8', fontSize:15, fontWeight:900, textAlign:'center', marginBottom:14 }}>Elige tu numero en sociedad</div>
+
+            {/* Todos los numeros de sociedad */}
+            <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap', justifyContent:'center' }}>
+              {societyNums.map(n => (
+                <div key={n} onClick={() => setSocietyModal(n)} style={{ background: societyModal===n ? 'linear-gradient(135deg,#2a0d4a,#3d1a6e)' : '#1a1a1a', border: societyModal===n ? '2.5px solid #9B59B6' : '1px solid #2a2a2a', borderRadius:14, padding:'14px 20px', textAlign:'center', cursor:'pointer', transition:'all .2s' }}>
+                  <div style={{ color: societyModal===n?'#C9A0E8':'#888', fontSize:32, fontWeight:900, lineHeight:1 }}>{pad(n)}</div>
+                  <div style={{ color: societyModal===n?'#9B59B6':'#555', fontSize:11, fontWeight:700, marginTop:4 }}>{fmt(r.ticket_price/2)}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Opcion: sociedad o completo */}
+            <div style={{ background:'#0d0d0d', borderRadius:12, padding:14, marginBottom:16 }}>
+              <div style={{ color:'#888', fontSize:11, textAlign:'center', marginBottom:10 }}>Como quieres comprar el #{pad(societyModal)}</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <div onClick={() => setSocietyMode('society')} style={{ background: societyMode==='society'?'rgba(155,89,182,0.15)':'#111', border: societyMode==='society'?'2px solid #9B59B6':'1px solid #2a2a2a', borderRadius:10, padding:12, textAlign:'center', cursor:'pointer' }}>
+                  <div style={{ color:'#C9A0E8', fontSize:12, fontWeight:700, marginBottom:4 }}>En Sociedad</div>
+                  <div style={{ color:'#9B59B6', fontSize:22, fontWeight:900, lineHeight:1, marginBottom:3 }}>{fmt(r.ticket_price/2)}</div>
+                  <div style={{ color:'#555', fontSize:9 }}>Pagas el 50%</div>
+                  <div style={{ color:'#27AE60', fontSize:9, marginTop:3 }}>Ganas el 100% del premio</div>
+                </div>
+                <div onClick={() => setSocietyMode('full')} style={{ background: societyMode==='full'?'rgba(230,190,0,0.1)':'#111', border: societyMode==='full'?`2px solid ${C.gold}`:'1px solid #2a2a2a', borderRadius:10, padding:12, textAlign:'center', cursor:'pointer' }}>
+                  <div style={{ color:C.gold, fontSize:12, fontWeight:700, marginBottom:4 }}>Completo</div>
+                  <div style={{ color:C.gold, fontSize:22, fontWeight:900, lineHeight:1, marginBottom:3 }}>{fmt(r.ticket_price)}</div>
+                  <div style={{ color:'#555', fontSize:9 }}>Pagas el 100%</div>
+                  <div style={{ color:C.gold, fontSize:9, marginTop:3 }}>Todo el premio para ti</div>
                 </div>
               </div>
             </div>
-            <div style={{ background: 'linear-gradient(135deg,rgba(155,89,182,0.08),rgba(155,89,182,0.03))', border: '1px solid rgba(155,89,182,0.2)', borderRadius: 12, padding: 14, marginBottom: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 6, height: 6, background: '#555', borderRadius: '50%' }}></div><span style={{ color: '#888', fontSize: 11 }}>Valor real del boleto</span></div>
-                <span style={{ color: '#555', fontSize: 12, fontWeight: 700, textDecoration: 'line-through' }}>{fmt(r.ticket_price)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 6, height: 6, background: C.purple, borderRadius: '50%' }}></div><span style={{ color: '#C9A0E8', fontSize: 11, fontWeight: 700 }}>Tu pagas (50%)</span></div>
-                <span style={{ color: C.purple, fontSize: 20, fontWeight: 900 }}>{fmt(r.ticket_price / 2)}</span>
-              </div>
-              <div style={{ background: 'rgba(39,174,96,0.08)', borderRadius: 8, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ fontSize: 14 }}>🏆</span>
-                <div><div style={{ color: C.green, fontSize: 9, fontWeight: 700 }}>Si el numero gana, AMBOS reciben el premio completo</div><div style={{ color: C.muted, fontSize: 8, marginTop: 1 }}>{prizes[0]?.amount || 'Premio principal'}</div></div>
-              </div>
-            </div>
-            <button onClick={() => { setSocietyModal(null); if(onSociety) onSociety(societyModal) }} style={{ ...S.btnPurple, marginBottom: 10 }}>
-              <span>👥</span> Unirme como socio — {fmt(r.ticket_price / 2)}
+
+            <button onClick={() => { setSocietyModal(null); if(onSociety) onSociety(societyModal) }} style={{ ...S.btnPurple, marginBottom:10 }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+              {societyMode==='society' ? `Unirme como socio — ${fmt(r.ticket_price/2)}` : `Comprar completo — ${fmt(r.ticket_price)}`}
             </button>
-            <button onClick={() => setSocietyModal(null)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#444', fontSize: 13, cursor: 'pointer', padding: 8, fontFamily: 'inherit' }}>Cancelar</button>
+            <button onClick={() => setSocietyModal(null)} style={{ width:'100%', background:'transparent', border:'none', color:'#444', fontSize:13, cursor:'pointer', padding:8, fontFamily:'inherit' }}>Cancelar</button>
           </div>
         </div>
       )}
     </div>
   )
 }
+
+
 // ─── COMO FUNCIONA ────────────────────────────────────────────────────────────
 function HowItWorksPage({ onBack, onRegister }) {
   const steps = [
