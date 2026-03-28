@@ -273,7 +273,7 @@ export default function App() {
       <main>
         {page === 'home' && <HomePage raffles={raffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
         {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={num => { setSocietyData({ raffle: selectedRaffle, number: num }); setPage('society') }} />}
-        {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { if(ctx) setSupportTicketContext(ctx); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
+        {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { setSupportTicketContext(ctx||null); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
         {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
         {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={isAdmin} onBack={() => setPage('home')} appConfig={appConfig} ticketContext={supportTicketContext} />}
@@ -1020,7 +1020,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
                 <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#5DADE2" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               </button>
             </div>
-            <button style={{ background:'#E67E22', border:'none', borderRadius:8, padding:'7px 12px', color:'#fff', fontSize:9, fontWeight:900, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:4 }}>
+            <button onClick={() => onSupport && onSupport({ recargar: true })} style={{ background:'#E67E22', border:'none', borderRadius:8, padding:'7px 12px', color:'#fff', fontSize:9, fontWeight:900, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:4 }}>
               <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="white" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Recargar
             </button>
@@ -1163,104 +1163,310 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
 // ─── RAFFLE TICKET GROUP — todos los numeros del mismo sorteo en una tarjeta ──
 function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSupport }) {
   const { raffle, tickets } = group
-  const allNums = tickets.flatMap(t => t.numbers || [])
-  const totalAmount = tickets.reduce((s, t) => s + (t.total_amount || 0), 0)
+  const allNums   = tickets.flatMap(t => t.numbers || [])
+  const totalAmt  = tickets.reduce((s,t) => s + (t.total_amount||0), 0)
   const firstTicket = tickets[0] || {}
-  const expires = firstTicket.expires_at ? new Date(firstTicket.expires_at) : null
-  const hoursLeft = expires ? Math.max(0, Math.floor((expires - Date.now()) / 3600000)) : null
+  const isSociety = tickets.some(t => t.is_society || t.society_id)
   const isReserved = status === 'reserved'
-  const isPaid = status === 'paid'
+  const isPaid     = status === 'paid'
   const isFinished = status === 'finished'
 
-  const borderColor = isPaid ? 'rgba(39,174,96,0.35)' : isFinished ? '#1a1a1a' : 'rgba(230,190,0,0.35)'
-  const lineColor = isPaid ? '#27AE60' : isFinished ? '#333' : C.gold
-  const numColor = isPaid ? '#27AE60' : isFinished ? '#444' : C.gold
-  const labelColor = isPaid ? '#27AE60' : isFinished ? '#555' : C.gold
+  const [showLiberar, setShowLiberar]   = useState(false)
+  const [showInfoDinero, setShowInfoDinero] = useState(false)
+  const [showInfoPuntos, setShowInfoPuntos] = useState(false)
 
-  // Build WA message with all numbers
+  // Colors by status
+  const borderColor = isPaid ? 'rgba(39,174,96,0.35)' : isFinished ? '#1a1a1a' : isSociety ? 'rgba(155,89,182,0.35)' : 'rgba(230,190,0,0.35)'
+  const lineColor   = isPaid ? '#27AE60' : isFinished ? '#333' : isSociety ? '#9B59B6' : C.gold
+  const numColor    = isPaid ? '#27AE60' : isFinished ? '#444' : isSociety ? '#9B59B6' : C.gold
+  const labelColor  = numColor
+
+  // WA pago
+  const waNum = (appConfig?.paymentWhatsapp || appConfig?.supportWhatsapp || '').replace(/\D/g,'')
   const numsStr = allNums.map(n => '#'+String(n).padStart(2,'0')).join(', ')
-  const waNum = (appConfig?.paymentWhatsapp || appConfig?.payment_whatsapp || '').replace(/\D/g,'')
-  const waMsg = 'Hola! Quiero pagar mis boletos:%0A%0ASorteo: '+(raffle?.title||'')+'%0ANumeros: '+numsStr+'%0ATotal: '+fmt(totalAmount)+'%0AFecha: '+(raffle?.raffle_date?new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}):'')+'%0ALoteria: '+(raffle?.lottery_name||'')+'%0ANombre: '+(profile?.full_name||'')
-  const waUrl = waNum ? 'https://wa.me/'+waNum+'?text='+encodeURIComponent(waMsg) : null
+  const waMsg = 'Hola! Quiero pagar mis boletos:%0A%0ASorteo: '+(raffle?.title||'')+'%0ANumeros: '+numsStr+'%0ATotal: $'+totalAmt
+  const waUrl = waNum ? 'https://wa.me/'+waNum+'?text='+waMsg : null
+
+  // Pago con Mi Dinero — activo solo si alcanza
+  const saldo  = profile?.credits || 0
+  const puntos = profile?.points  || 0
+  const ptsNeed = totalAmt        // 1 pto = $1 COP (ajustar según regla real)
+  const dineroOk = saldo >= totalAmt
+  const puntosOk = puntos >= ptsNeed
+
+  // Soporte recargar
+  const waSupNum = (appConfig?.supportWhatsapp || '').replace(/\D/g,'')
+  const recargaMsg = encodeURIComponent('Hola! Quisiera recargar saldo a mi cuenta en La Casa de las Dinamicas. Por favor indicarme como hacerlo.')
+  const recargaUrl = waSupNum ? 'https://wa.me/'+waSupNum+'?text='+recargaMsg : null
+
+  // Raffle close time
+  const closeTime = raffle?.close_time || raffle?.raffle_date
+  const closeFmt  = closeTime
+    ? new Date(closeTime).toLocaleDateString('es-CO',{day:'numeric',month:'short'}) + ' · ' +
+      new Date(closeTime).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})
+    : ''
+
+  // Download confirmation image (paid)
+  function downloadConfirmation() {
+    const canvas = document.createElement('canvas')
+    canvas.width = 800; canvas.height = 500
+    const ctx = canvas.getContext('2d')
+    // Background
+    ctx.fillStyle = '#000'
+    ctx.fillRect(0,0,800,500)
+    // Gold border
+    ctx.strokeStyle = '#E6BE00'
+    ctx.lineWidth = 3
+    ctx.strokeRect(12,12,776,476)
+    // Header band
+    ctx.fillStyle = '#0d0d0d'
+    ctx.fillRect(12,12,776,90)
+    // Title
+    ctx.fillStyle = '#E6BE00'
+    ctx.font = 'bold 32px system-ui'
+    ctx.textAlign = 'center'
+    ctx.fillText('LA CASA DE LAS DINÁMICAS', 400, 55)
+    ctx.fillStyle = '#27AE60'
+    ctx.font = '18px system-ui'
+    ctx.fillText('CONFIRMACIÓN DE BOLETO PAGADO', 400, 82)
+    // Raffle name
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 22px system-ui'
+    ctx.fillText(raffle?.title || 'Sorteo', 400, 145)
+    // Numbers
+    ctx.fillStyle = '#E6BE00'
+    ctx.font = 'bold 48px system-ui'
+    ctx.fillText(allNums.map(n=>'#'+String(n).padStart(2,'0')).join('  '), 400, 230)
+    // Divider
+    ctx.strokeStyle = '#222'
+    ctx.lineWidth = 1
+    ctx.beginPath(); ctx.moveTo(60,260); ctx.lineTo(740,260); ctx.stroke()
+    // Details
+    ctx.fillStyle = '#888'
+    ctx.font = '16px system-ui'
+    ctx.textAlign = 'left'
+    ctx.fillText('Titular:', 80, 300)
+    ctx.fillText('Total pagado:', 80, 335)
+    ctx.fillText('Fecha sorteo:', 80, 370)
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 16px system-ui'
+    ctx.fillText(profile?.full_name || 'Jugador', 240, 300)
+    ctx.fillText('$'+totalAmt.toLocaleString('es-CO'), 240, 335)
+    ctx.fillText(raffle?.raffle_date ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'}) : '', 240, 370)
+    // Paid badge
+    ctx.fillStyle = '#27AE60'
+    ctx.font = 'bold 18px system-ui'
+    ctx.textAlign = 'center'
+    ctx.fillText('✓ PAGO CONFIRMADO', 400, 440)
+    // Download
+    const a = document.createElement('a')
+    a.href = canvas.toDataURL('image/png')
+    a.download = 'boleto-'+(raffle?.title||'dinamica').replace(/\s+/g,'-')+'-'+allNums.join('-')+'.png'
+    a.click()
+  }
+
+  const cardBg = isPaid ? '#0a180a' : isFinished ? '#0a0a0a' : isSociety ? '#0d0820' : '#0d0d0d'
 
   return (
-    <div style={{ background:'#0d0d0d', border:`1px solid ${borderColor}`, borderRadius:14, padding:14, marginBottom:10, position:'relative', overflow:'hidden' }}>
+    <div style={{ background:cardBg, border:`1px solid ${borderColor}`, borderRadius:14, padding:14, marginBottom:12, position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${lineColor},transparent)` }}></div>
 
-      {/* HEADER tarjeta */}
+      {/* HEADER */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
         <div>
-          <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:4 }}>
-            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke={labelColor} strokeWidth="2"><rect x="1" y="6" width="22" height="14" rx="2"/><path d="M16 2H8v4h8z"/></svg>
-            <span style={{ color:labelColor, fontSize:8, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 }}>Sorteo</span>
-          </div>
-          <div style={{ color:'#fff', fontSize:13, fontWeight:900, textTransform:'uppercase', lineHeight:1.25 }}>{raffle?.title || 'Sorteo'}</div>
-          <div style={{ color:'#555', fontSize:9, marginTop:3 }}>
-            📅 {raffle?.raffle_date ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : ''} · 🎱 {raffle?.lottery_name || ''}
+          <div style={{ color:'#fff', fontSize:13, fontWeight:900, lineHeight:1.2 }}>{raffle?.title || 'Sorteo'}</div>
+          <div style={{ color:'#444', fontSize:9, marginTop:3 }}>
+            {closeFmt ? 'Cierra: '+closeFmt : raffle?.raffle_date ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) : ''}
           </div>
         </div>
-        <div style={{ textAlign:'right' }}>
-          {isReserved && hoursLeft !== null && (
-            <div style={{ background:hoursLeft<3?'rgba(231,76,60,0.15)':'rgba(230,190,0,0.1)', border:`1px solid ${hoursLeft<3?'rgba(231,76,60,0.3)':'rgba(230,190,0,0.25)'}`, borderRadius:999, padding:'3px 8px', marginBottom:3 }}>
-              <span style={{ color:hoursLeft<3?'#E74C3C':C.gold, fontSize:8, fontWeight:700 }}>{hoursLeft < 1 ? 'Vence pronto!' : 'Vence en '+hoursLeft+'h'}</span>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
+          {isReserved && (
+            <div style={{ background:'#1a1500', border:'1px solid rgba(230,190,0,0.22)', borderRadius:999, padding:'2px 9px', display:'flex', alignItems:'center', gap:4 }}>
+              <div style={{ width:5, height:5, background:C.gold, borderRadius:'50%' }} className="pulse"></div>
+              <span style={{ color:C.gold, fontSize:8, fontWeight:700 }}>Reservado</span>
             </div>
           )}
           {isPaid && (
-            <div style={{ background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.3)', borderRadius:999, padding:'3px 8px', display:'flex', alignItems:'center', gap:4 }}>
+            <div style={{ background:'rgba(39,174,96,0.12)', border:'1px solid rgba(39,174,96,0.3)', borderRadius:999, padding:'2px 9px', display:'flex', alignItems:'center', gap:4 }}>
               <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#27AE60" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              <span style={{ color:'#27AE60', fontSize:8, fontWeight:700 }}>Confirmado</span>
+              <span style={{ color:'#27AE60', fontSize:8, fontWeight:700 }}>Pagado</span>
             </div>
           )}
-          {isReserved && <div style={{ display:'flex', alignItems:'center', gap:4 }}><div style={{ width:5, height:5, background:C.gold, borderRadius:'50%' }} className="pulse"></div><span style={{ color:C.gold, fontSize:8, fontWeight:700 }}>Reservado</span></div>}
+          {isSociety && (
+            <div style={{ background:'#1a0d2a', border:'1px solid rgba(155,89,182,0.28)', borderRadius:999, padding:'2px 9px', display:'flex', alignItems:'center', gap:4 }}>
+              <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#9B59B6" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+              <span style={{ color:'#9B59B6', fontSize:8, fontWeight:700 }}>Sociedad</span>
+            </div>
+          )}
+          {isReserved && closeTime && (
+            <div style={{ background:'#111', borderRadius:6, padding:'3px 8px', textAlign:'center' }}>
+              <div style={{ color:'#555', fontSize:7 }}>Cierra en</div>
+              <div style={{ color:'#E67E22', fontSize:10, fontWeight:700 }}>
+                {(() => {
+                  const diff = new Date(closeTime) - Date.now()
+                  if (diff <= 0) return 'Cerrado'
+                  const d = Math.floor(diff/86400000)
+                  const h = Math.floor((diff%86400000)/3600000)
+                  return d > 0 ? d+'d · '+h+'h' : h+'h'
+                })()}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* NUMEROS — todos juntos */}
-      <div style={{ marginBottom:10 }}>
-        <div style={{ color:'#444', fontSize:8, textTransform:'uppercase', letterSpacing:.8, marginBottom:8 }}>Tus numeros ({allNums.length})</div>
-        <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
-          {allNums.map((n, i) => (
-            <div key={i} style={{ background:isPaid?'rgba(39,174,96,0.08)':isFinished?'rgba(255,255,255,0.03)':'rgba(230,190,0,0.08)', border:`1.5px solid ${isPaid?'rgba(39,174,96,0.35)':isFinished?'#2a2a2a':'rgba(230,190,0,0.4)'}`, borderRadius:10, padding:'7px 12px', textAlign:'center' }}>
-              <div style={{ color:numColor, fontSize:26, fontWeight:900, lineHeight:1 }}>{'#'+String(n).padStart(2,'0')}</div>
-            </div>
-          ))}
-        </div>
+      {/* NUMEROS */}
+      <div style={{ display:'flex', gap:7, flexWrap:'wrap', marginBottom:10 }}>
+        {allNums.map((n,i) => (
+          <div key={i} style={{ background:`rgba(${isPaid?'39,174,96':isSociety?'155,89,182':'230,190,0'},0.07)`, border:`1.5px solid rgba(${isPaid?'39,174,96':isSociety?'155,89,182':'230,190,0'},0.4)`, borderRadius:9, padding:'5px 11px' }}>
+            <div style={{ color:numColor, fontSize:26, fontWeight:900, lineHeight:1 }}>{'#'+String(n).padStart(2,'0')}</div>
+          </div>
+        ))}
       </div>
+
+      {/* SOCIEDAD barra */}
+      {isSociety && firstTicket.society_pct && (
+        <div style={{ background:'#1a0d2a', borderRadius:8, padding:'8px 10px', marginBottom:10 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+            <span style={{ color:'#888', fontSize:9 }}>Tu parte: <span style={{ color:'#9B59B6', fontWeight:700 }}>{firstTicket.society_pct}%</span></span>
+            <span style={{ color:'#fff', fontSize:9, fontWeight:600 }}>Premio si ganas: {fmt(Math.round((raffle?.prizes?.[0]?.amount||0)*firstTicket.society_pct/100))}</span>
+          </div>
+          <div style={{ background:'#2a1040', borderRadius:999, height:5 }}>
+            <div style={{ background:'#9B59B6', borderRadius:999, height:5, width:(firstTicket.society_pct||33)+'%' }}></div>
+          </div>
+        </div>
+      )}
 
       {/* PREMIO + TOTAL */}
-      <div style={{ background:'#111', borderRadius:9, padding:'9px 11px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-          <span style={{ fontSize:12 }}>💰</span>
-          <span style={{ color:'#666', fontSize:9 }}>Premio:</span>
-          <span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>{raffle?.prizes?.[0]?.amount || raffle?.prizes?.[0] || ''}</span>
-        </div>
+      <div style={{ background:'#111', borderRadius:8, padding:'8px 11px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <span style={{ color:'#555', fontSize:9 }}>Premio: <span style={{ color:'#fff', fontWeight:600 }}>{fmt(raffle?.prizes?.[0]?.amount || 0)}</span></span>
         <div style={{ textAlign:'right' }}>
-          <div style={{ color:'#444', fontSize:8 }}>{isPaid?'Total pagado':'Total a pagar'}</div>
-          <div style={{ color:numColor, fontSize:17, fontWeight:900, lineHeight:1 }}>{fmt(totalAmount)}</div>
+          <div style={{ color:'#444', fontSize:8 }}>{isPaid ? 'Total pagado' : 'Total a pagar'}</div>
+          <div style={{ color:numColor, fontSize:16, fontWeight:900, lineHeight:1 }}>{fmt(totalAmt)}</div>
         </div>
       </div>
 
-      {/* BOTON WA o estado */}
-      {isReserved && waUrl && (
-        <a href={waUrl} target="_blank" rel="noreferrer" style={{ textDecoration:'none', display:'block' }}>
-          <div style={{ background:'#25D366', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:1, background:'rgba(255,255,255,0.2)' }}></div>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>Pagar {fmt(totalAmount)} por WhatsApp</span>
-          </div>
-        </a>
-      )}
-      {isReserved && !waUrl && (
-        <div style={{ background:'#1a1a1a', borderRadius:10, padding:11, textAlign:'center', color:C.muted, fontSize:10 }}>Contacta al administrador para pagar</div>
-      )}
+      {/* ── BOLETO PAGADO ── */}
       {isPaid && (
-        <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:10, padding:10, display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#27AE60" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          <span style={{ color:'#27AE60', fontSize:11, fontWeight:700 }}>Pago confirmado</span>
-        </div>
+        <button onClick={downloadConfirmation} style={{ width:'100%', background:`rgba(${isSociety?'155,89,182':'39,174,96'},0.08)`, border:`1.5px solid rgba(${isSociety?'155,89,182':'39,174,96'},0.35)`, borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', fontFamily:'inherit' }}>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={isSociety?'#9B59B6':'#27AE60'} strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span style={{ color:isSociety?'#9B59B6':'#27AE60', fontSize:11, fontWeight:700 }}>Descargar confirmacion de boleto</span>
+        </button>
       )}
+
+      {/* ── BOLETO RESERVADO — opciones de pago ── */}
+      {isReserved && (
+        <>
+          {/* Titulo opciones de pago */}
+          <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:9 }}>
+            <div style={{ flex:1, height:1, background:`rgba(${isSociety?'155,89,182':'230,190,0'},0.18)` }}></div>
+            <span style={{ color:isSociety?'#9B59B6':C.gold, fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:.8 }}>Opciones de pago</span>
+            <div style={{ flex:1, height:1, background:`rgba(${isSociety?'155,89,182':'230,190,0'},0.18)` }}></div>
+          </div>
+
+          {/* WA */}
+          {waUrl ? (
+            <a href={waUrl} target="_blank" rel="noreferrer" style={{ textDecoration:'none', display:'block', marginBottom:6 }}>
+              <div style={{ background:'#25D366', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7 }}>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span style={{ color:'#fff', fontSize:11, fontWeight:700 }}>Pagar {fmt(totalAmt)} por WhatsApp</span>
+              </div>
+            </a>
+          ) : (
+            <div style={{ background:'#111', borderRadius:10, padding:11, textAlign:'center', color:'#444', fontSize:11, marginBottom:6 }}>Contacta al admin para pagar</div>
+          )}
+
+          {/* Chat soporte */}
+          <div onClick={() => onSupport && onSupport({ title:raffle?.title||'', number:allNums[0]||0, price:totalAmt })} style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:6 }}>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.gold} strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span style={{ color:C.gold, fontSize:11, fontWeight:600 }}>Pagar y adjuntar comprobante en chat</span>
+          </div>
+
+          {/* Mi Dinero */}
+          {dineroOk ? (
+            <button onClick={() => { if(window.confirm('Pagar '+fmt(totalAmt)+' con tu saldo disponible?')) alert('Pago procesado con saldo!') }} style={{ width:'100%', background:'#1a3a5c', border:'1px solid rgba(41,128,185,0.4)', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:3, fontFamily:'inherit' }}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#5DADE2" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              <span style={{ color:'#5DADE2', fontSize:11, fontWeight:600 }}>Pagar con Mi Dinero · {fmt(saldo)}</span>
+            </button>
+          ) : (
+            <>
+              <div style={{ width:'100%', background:'#111', border:'1px solid #1a1a1a', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, opacity:.45, marginBottom:3, cursor:'not-allowed' }}>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#333" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <span style={{ color:'#333', fontSize:11 }}>Pagar con Mi Dinero</span>
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4, padding:'0 2px' }}>
+                <span style={{ color:'#444', fontSize:8 }}>Saldo: {fmt(saldo)}</span>
+                <span style={{ color:'#666', fontSize:8 }}>Faltan: {fmt(totalAmt - saldo)}</span>
+              </div>
+              {recargaUrl && (
+                <a href={recargaUrl} target="_blank" rel="noreferrer" style={{ textDecoration:'none', display:'block', marginBottom:6 }}>
+                  <div style={{ background:'rgba(230,120,0,0.08)', border:'1px solid rgba(230,120,0,0.2)', borderRadius:8, padding:'6px 10px', display:'flex', alignItems:'center', justifyContent:'center', gap:5 }}>
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#E67E22" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span style={{ color:'#E67E22', fontSize:9, fontWeight:600 }}>Recargar saldo via WhatsApp</span>
+                  </div>
+                </a>
+              )}
+            </>
+          )}
+
+          {/* Puntos */}
+          {puntosOk ? (
+            <button onClick={() => { if(window.confirm('Pagar con '+ptsNeed.toLocaleString()+' puntos?')) alert('Pago con puntos procesado!') }} style={{ width:'100%', background:'#1a1500', border:'1px solid rgba(230,190,0,0.35)', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:10, fontFamily:'inherit' }}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+              <span style={{ color:C.gold, fontSize:11, fontWeight:600 }}>Pagar con Puntos · {puntos.toLocaleString()} pts</span>
+            </button>
+          ) : (
+            <>
+              <div style={{ width:'100%', background:'#111', border:'1px solid #1a1200', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, opacity:.45, marginBottom:3, cursor:'not-allowed' }}>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#333" strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+                <span style={{ color:'#333', fontSize:11 }}>Pagar con Puntos</span>
+              </div>
+              <div style={{ background:'#1a1200', borderRadius:7, padding:'6px 10px', display:'flex', justifyContent:'space-between', marginBottom:10 }}>
+                <span style={{ color:'#555', fontSize:8 }}>Tienes: {puntos.toLocaleString()} pts</span>
+                <span style={{ color:C.gold, fontSize:8, fontWeight:600 }}>Faltan: {Math.max(0,ptsNeed-puntos).toLocaleString()} pts</span>
+              </div>
+            </>
+          )}
+
+          {/* Liberar — discreto, rojo */}
+          <div style={{ height:1, background:'#1a1a1a', marginBottom:8 }}></div>
+          <button onClick={() => setShowLiberar(true)} style={{ width:'100%', background:'transparent', border:'none', cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5, padding:'4px 0', opacity:.5 }}>
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#E74C3C" strokeWidth="1.8" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+            <span style={{ color:'#E74C3C', fontSize:9, fontWeight:500 }}>Liberar boleto</span>
+          </button>
+        </>
+      )}
+
       {isFinished && (
-        <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, padding:10, textAlign:'center', color:'#444', fontSize:10 }}>Sorteo finalizado</div>
+        <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:10, padding:10, textAlign:'center', color:'#333', fontSize:10 }}>Sorteo finalizado</div>
+      )}
+
+      {/* MODAL LIBERAR */}
+      {showLiberar && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowLiberar(false)}>
+          <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:'26px 20px 30px', width:'100%', maxWidth:500, border:'1px solid #1a1a1a', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
+            <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 20px' }}></div>
+            <div style={{ textAlign:'center', marginBottom:20 }}>
+              <div style={{ fontSize:38, marginBottom:10 }}>🍀</div>
+              <div style={{ color:'#fff', fontSize:15, fontWeight:900, marginBottom:8, lineHeight:1.4 }}>Este puede ser tu numero de la suerte...</div>
+              <div style={{ color:'#666', fontSize:12, lineHeight:1.7 }}>
+                {allNums.map(n=>'#'+String(n).padStart(2,'0')).join(' y ')} esta apartado solo para ti.{' '}
+                No lo dejes ir — el sorteo podria sorprenderte antes del cierre.
+              </div>
+            </div>
+            <button onClick={async () => {
+              await supabase.from('support_messages').insert({ user_id: firstTicket.user_id, message:'Solicito liberar mis boletos '+numsStr+' del sorteo '+(raffle?.title||'')+'. Por favor procesar la liberacion.', from_admin:false })
+              setShowLiberar(false)
+              alert('Solicitud enviada! El administrador procesara la liberacion de tu boleto.')
+            }} style={{ width:'100%', background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:11, padding:13, color:'#E74C3C', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginBottom:10 }}>
+              Si, quiero liberar el boleto
+            </button>
+            <button onClick={() => setShowLiberar(false)} style={{ width:'100%', background:C.gold, border:'none', borderRadius:11, padding:13, color:'#000', fontSize:13, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>
+              No, conservar mi numero 🍀
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -1510,7 +1716,10 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
     const { data: existing } = await supabase.from('support_messages').select('id').eq('user_id', user.id).limit(1)
     if (existing && existing.length > 0) return
     // Send welcome message from admin
-    const welcomeMsg = `Hola, ${profile?.full_name?.split(' ')[0] || 'bienvenido'}! 👋 Veo que quieres pagar el boleto #${String(ctx.number).padStart(2,'0')} de ${ctx.title} por ${fmt(ctx.price)}. Adjunta aqui el comprobante de pago y lo validamos de inmediato.`
+    const isRecargar = ctx.recargar
+    const welcomeMsg = isRecargar
+      ? `Hola, ${profile?.full_name?.split(' ')[0] || 'bienvenido'}! 👋 Quieres recargar saldo a tu cuenta. Dinos el monto que deseas recargar y te indicamos como hacerlo.`
+      : `Hola, ${profile?.full_name?.split(' ')[0] || 'bienvenido'}! 👋 Veo que quieres pagar el boleto #${String(ctx.number).padStart(2,'0')} de ${ctx.title} por ${fmt(ctx.price)}. Adjunta aqui el comprobante de pago y lo validamos de inmediato.`
     await supabase.from('support_messages').insert({ user_id:user.id, message:welcomeMsg, from_admin:true })
     // Send payment data
     const payData = buildPaymentMsg()
