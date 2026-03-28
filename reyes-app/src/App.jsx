@@ -2309,6 +2309,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
     description:       raffle?.description || '',
     is_featured:       raffle?.is_featured || false,
     release_hours:     raffle?.release_hours || 24,
+    payment_deadline:  raffle?.payment_deadline || '',
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
@@ -2337,9 +2338,10 @@ function RaffleForm({ raffle, onBack, onSave }) {
       amount: p.amount.trim(),
       how_to_win: p.how_to_win.trim()
     }))
-    const society_numbers = form.society_numbers
+    const society_numbers_raw = form.society_numbers
       ? form.society_numbers.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n))
       : []
+    const society_numbers = society_numbers_raw.length > 0 ? society_numbers_raw : null
     // Only include close_time if column exists — send as text HH:MM
     const data = {
       title:          form.title,
@@ -2352,11 +2354,12 @@ function RaffleForm({ raffle, onBack, onSave }) {
       is_free:        form.is_free,
       accepts_points: form.accepts_points,
       prizes,
-      society_numbers,
+      ...(society_numbers ? { society_numbers } : {}),
       status:         form.status,
       description:    form.description,
       is_featured:    form.is_featured || false,
-      release_hours:  parseInt(form.release_hours) || 24,
+      release_hours:  24,
+      ...(form.payment_deadline ? { payment_deadline: form.payment_deadline } : {}),
       ...(form.close_time ? { close_time: form.close_time + ':00' } : { close_time: null }),
     }
     try {
@@ -2468,12 +2471,12 @@ function RaffleForm({ raffle, onBack, onSave }) {
         ))}
       </FormField>
 
-      <FormField label="Tiempo para pagar">
-        <div style={{ display:'flex', gap:8, marginBottom:8 }}>
-          {[[6,'6h'],[12,'12h'],[24,'24h'],[48,'48h'],[72,'72h']].map(([v,l]) => (
-            <button key={v} onClick={()=>setForm(p=>({...p,release_hours:v}))} style={{ flex:1, border:`1px solid ${form.release_hours===v?C.gold:'rgba(201,162,39,0.2)'}`, background:form.release_hours===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:form.release_hours===v?C.gold:C.muted, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
-          ))}
+      <FormField label="Hora maxima de pago">
+        <div style={{ color:C.muted, fontSize:11, marginBottom:8, lineHeight:1.5 }}>
+          Hora limite para que los usuarios paguen. Pasada esta hora, el admin puede liberar manualmente los boletos no pagados. El usuario ve un aviso cuando se acerca la hora.
         </div>
+        <input type="time" value={form.payment_deadline || ''} onChange={e=>setForm(p=>({...p,payment_deadline:e.target.value}))} placeholder="Ej: 20:00" />
+        <div style={{ color:'#444', fontSize:10, marginTop:5 }}>Ej: si el sorteo cierra a las 8:00 PM puedes poner 19:30 como hora limite de pago</div>
       </FormField>
 
       <FormField label="Estado">
