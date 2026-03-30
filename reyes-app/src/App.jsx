@@ -996,8 +996,14 @@ www.lacasadelasdinamicas.com`)}`)
               <div style={{ color:'#555', fontSize:10, textAlign:'center' }}>El otro socio cubre el 50% restante del boleto</div>
             </div>
 
-            {/* Boton confirmar → va directo a society page */}
-            <button onClick={() => { setSocietyModal(null); if(onSociety) onSociety(societyModal) }} style={{ ...S.btnPurple, marginBottom:10 }}>
+            {/* Boton confirmar → directo, sin double-click */}
+            <button onClick={async (e) => {
+              e.currentTarget.disabled = true
+              e.currentTarget.textContent = 'Procesando...'
+              const num = societyModal
+              setSocietyModal(null)
+              if(onSociety) await onSociety(num)
+            }} style={{ ...S.btnPurple, marginBottom:10 }}>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
               Confirmar — Unirme como socio {fmt(r.ticket_price/2)}
             </button>
@@ -1151,15 +1157,17 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
   const groupTickets = (tickets) => {
     const groups = {}
     tickets.forEach(t => {
-      const key = t.raffle_id || t.raffles?.id || t.id
-      if (!groups[key]) groups[key] = { raffle: t.raffles, tickets: [], status: t.status }
+      // Clave única: sociedad y completo NUNCA se mezclan
+      const raffleKey = t.raffle_id || t.raffles?.id || t.id
+      const key = t.is_society ? 'soc_' + (t.society_id || raffleKey + '_' + t.id) : 'reg_' + raffleKey
+      if (!groups[key]) groups[key] = { raffle: t.raffles, tickets: [], status: t.status, isSociety: !!t.is_society }
       groups[key].tickets.push(t)
     })
     return Object.values(groups)
   }
 
-  const reserved      = myTickets.filter(t => t.status === 'reserved')
-  const paid          = myTickets.filter(t => t.status === 'paid')
+  const reserved       = myTickets.filter(t => t.status === 'reserved')
+  const paid           = myTickets.filter(t => t.status === 'paid')
   const reservedGroups = groupTickets(reserved)
   const paidGroups     = groupTickets(paid)
 
@@ -1345,9 +1353,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   const allNums   = tickets.flatMap(t => t.numbers || [])
   const totalAmt  = tickets.reduce((s,t) => s + (t.total_amount||0), 0)
   const firstTicket = tickets[0] || {}
-  const isSociety = tickets.some(t => t.is_society || t.society_id) ||
-    (Array.isArray(group.raffle?.society_numbers) && group.raffle.society_numbers.length > 0 &&
-     allNums.some(n => group.raffle.society_numbers.includes(n)))
+  const isSociety = group.isSociety || tickets.some(t => t.is_society || t.society_id)
   const isReserved = status === 'reserved'
   const isPaid     = status === 'paid'
   const isFinished = status === 'finished'
@@ -1381,10 +1387,10 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   const recargaUrl = waSupNum ? 'https://wa.me/'+waSupNum+'?text='+recargaMsg : null
 
   // Raffle close time
-  const closeTime = raffle?.close_time || raffle?.raffle_date
-  const closeFmt  = closeTime
-    ? new Date(closeTime).toLocaleDateString('es-CO',{day:'numeric',month:'short'}) + ' · ' +
-      new Date(closeTime).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})
+  // Mostrar fecha de cierre del sorteo (no close_time que es solo hora)
+  const closeTime = raffle?.raffle_date || null
+  const closeFmt = raffle?.raffle_date
+    ? new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'})
     : ''
 
   // Download confirmation image (paid)
