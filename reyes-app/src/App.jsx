@@ -355,57 +355,59 @@ export default function App() {
       </header>
       <main>
         {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
-        {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={async num => {
+        {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={async (num, mode) => {
           if (!user) { setAuthPage('login'); return }
           const halfPrice = Math.round(selectedRaffle.ticket_price / 2)
           try {
-            // Verificar estado actual del número — evitar race condition
             const { data: fresh } = await supabase.from('society_tickets')
-              .select('*').eq('raffle_id', selectedRaffle.id).eq('number', num)
-              .limit(1)
+              .select('*').eq('raffle_id', selectedRaffle.id).eq('number', num).limit(1)
             const st = fresh?.[0]
 
-            // Ya tiene 2 socios — no se puede unir
-            if (st && st.socio2_id) {
-              alert('Este número ya tiene dos socios. Elige otro número.')
-              return
-            }
-            // Ya es socio de este número
-            if (st && (st.socio1_id === user.id || st.socio2_id === user.id)) {
-              setPage('profile')
-              return
-            }
+            if (mode === 'full') {
+              // Comprar completo — insertar como socio1 y socio2 al mismo tiempo
+              if (st) { alert('Este número ya tiene un socio. Solo puedes unirte como socio 2.'); return }
+              const { error } = await supabase.from('society_tickets').insert({
+                raffle_id: selectedRaffle.id, number: num,
+                socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
+                socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
+                status: 'complete', expires_at: new Date(Date.now()+48*3600000).toISOString()
+              })
+              if (error) throw error
 
-            if (!st) {
-              // Crear como socio 1
+            } else if (mode === 'society') {
+              // Ser socio 1
+              if (st) { alert('Alguien más ya reservó este número.'); return }
               const { error } = await supabase.from('society_tickets').insert({
                 raffle_id: selectedRaffle.id, number: num,
                 socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
                 status: 'waiting', expires_at: new Date(Date.now()+48*3600000).toISOString()
               })
-              if (error) {
-                // Si falla por duplicado, alguien más llegó primero — intentar como socio 2
-                const { data: retry } = await supabase.from('society_tickets')
-                  .select('*').eq('raffle_id', selectedRaffle.id).eq('number', num).limit(1)
-                const r2 = retry?.[0]
-                if (r2 && !r2.socio2_id && r2.socio1_id !== user.id) {
-                  await supabase.from('society_tickets').update({
-                    socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
-                    status: 'complete', updated_at: new Date().toISOString()
-                  }).eq('id', r2.id)
-                } else { throw error }
-              }
-            } else if (st.status === 'waiting' && !st.socio2_id) {
+              if (error) throw error
+
+            } else if (mode === 'socio2') {
               // Unirse como socio 2
+              if (!st || st.socio2_id) { alert('Este número ya no está disponible.'); return }
+              if (st.socio1_id === user.id) { alert('Ya eres el socio 1 de este número.'); return }
+              const { error } = await supabase.from('society_tickets').update({
+                socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
+                status: 'complete', updated_at: new Date().toISOString()
+              }).eq('id', st.id)
+              if (error) throw error
+
+            } else if (mode === 'buy_other_half') {
+              // Yo soy socio1 y quiero comprar la otra mitad también
+              if (!st || st.socio1_id !== user.id) { alert('No puedes comprar esta mitad.'); return }
+              if (st.socio2_id) { alert('Alguien más ya compró esa mitad.'); return }
               const { error } = await supabase.from('society_tickets').update({
                 socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
                 status: 'complete', updated_at: new Date().toISOString()
               }).eq('id', st.id)
               if (error) throw error
             }
+
             await fetchMyTickets()
             setPage('profile')
-          } catch(e) { console.error('Society error:', e); alert('Error: ' + (e.message||'Intenta de nuevo')) }
+          } catch(e) { console.error('Society error:', e); throw e }
         }} />}
         {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { setSupportTicketContext(ctx||null); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
@@ -691,6 +693,243 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
   )
 }
 
+
+// ─── SOCIETY SECTION — numeros sociedad con estado real ──────────────────────
+function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSocietyInfo, setShowSocietyInfo }) {
+  const [societyStates, setSocietyStates] = useState({}) // {num: null | {status, socio1_id, socio2_id, id}}
+  const [showModal, setShowModal]         = useState(false)
+  const [selectedNum, setSelectedNum]     = useState(null)
+  const [selectedMode, setSelectedMode]   = useState(null) // 'society' | 'full' | 'socio2' | 'buy_other_half'
+  const [confirming, setConfirming]       = useState(false)
+
+  useEffect(() => {
+    loadStates()
+    const ch = supabase.channel('society-states-'+r.id)
+      .on('postgres_changes', { event:'*', schema:'public', table:'society_tickets', filter:`raffle_id=eq.${r.id}` }, loadStates)
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [r.id])
+
+  async function loadStates() {
+    if (!societyNums.length) return
+    const { data } = await supabase.from('society_tickets')
+      .select('id, number, status, socio1_id, socio2_id, socio1_amount, socio2_amount')
+      .eq('raffle_id', r.id)
+      .in('number', societyNums)
+      .not('status', 'eq', 'cancelled')
+    const map = {}
+    societyNums.forEach(n => { map[n] = null })
+    if (data) data.forEach(st => { map[st.number] = st })
+    setSocietyStates(map)
+  }
+
+  function getNumStatus(n) {
+    const st = societyStates[n]
+    if (!st) return 'free'                                           // nadie ha reservado
+    if (st.socio1_id && st.socio2_id) return 'full'                 // 2 socios completo
+    if (st.socio1_id === user?.id) return 'i_am_socio1'             // yo soy socio 1
+    if (st.socio2_id === user?.id) return 'i_am_socio2'             // yo soy socio 2
+    return 'waiting'                                                 // 1 socio, esperando otro
+  }
+
+  function openModal(n) {
+    const st = getNumStatus(n)
+    if (st === 'full') return  // no se puede seleccionar
+    setSelectedNum(n)
+    setSelectedMode(null)
+    setShowModal(true)
+  }
+
+  async function confirm() {
+    if (!selectedNum || !selectedMode) return
+    setConfirming(true)
+    try {
+      await onSociety(selectedNum, selectedMode)
+      setShowModal(false)
+    } catch(e) {
+      alert('Error: ' + (e.message || 'Intenta de nuevo'))
+    }
+    setConfirming(false)
+  }
+
+  const halfPrice = Math.round(r.ticket_price / 2)
+
+  return (
+    <>
+      <div style={{ background:'linear-gradient(135deg,#0f0619,#1a0d2a)', border:'1px solid rgba(155,89,182,0.35)', borderRadius:18, padding:18, marginBottom:14, position:'relative', overflow:'hidden' }}>
+        <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
+
+        {/* Header */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+          <div style={{ width:40, height:40, background:'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#C9A0E8" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ color:'#C9A0E8', fontSize:13, fontWeight:900 }}>Numeros en Sociedad</div>
+            <div style={{ color:'#7b5cad', fontSize:9, marginTop:1 }}>Compra la mitad — recibes el 50% del premio</div>
+          </div>
+          <button onClick={() => setShowSocietyInfo(true)} style={{ background:'rgba(155,89,182,0.12)', border:'1px solid rgba(155,89,182,0.3)', borderRadius:8, padding:'5px 9px', color:'#9B59B6', fontSize:10, fontWeight:600, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>
+            Como funciona?
+          </button>
+        </div>
+
+        {/* Numeros con estado */}
+        <div style={{ color:'#7b5cad', fontSize:9, fontWeight:700, textTransform:'uppercase', marginBottom:8 }}>
+          Numeros disponibles ({societyNums.filter(n => getNumStatus(n) !== 'full').length} de {societyNums.length})
+        </div>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
+          {societyNums.map(n => {
+            const st = getNumStatus(n)
+            const isFull = st === 'full'
+            const isWaiting = st === 'waiting'
+            const isMine = st === 'i_am_socio1' || st === 'i_am_socio2'
+            const isMine1 = st === 'i_am_socio1'
+            return (
+              <div key={n} onClick={() => !isFull && openModal(n)}
+                style={{ background: isFull?'#0d0d0d':isMine?'rgba(39,174,96,0.1)':'linear-gradient(135deg,#2a0d4a,#3d1a6e)',
+                  border: isFull?'1px solid #1a1a1a':isMine?'1.5px solid #27AE60':'1.5px solid #9B59B6',
+                  borderRadius:10, padding:'8px 12px', textAlign:'center',
+                  cursor:isFull?'not-allowed':'pointer', opacity:isFull?.5:1, position:'relative' }}>
+                {/* Badge de estado */}
+                <div style={{ position:'absolute', top:-7, right:-4, borderRadius:999, padding:'1px 6px', fontSize:7, fontWeight:700, color:'#fff',
+                  background: isFull?'#555':isMine?'#27AE60':isWaiting?'#E67E22':'#27AE60' }}>
+                  {isFull?'🔒 Lleno':isMine?(isMine1&&!societyStates[n]?.socio2_id?'Tú · falta socio':'Tú · completo'):'1 socio':isWaiting?'1 socio':'Libre'}
+                </div>
+                <div style={{ color: isFull?'#444':isMine?'#27AE60':'#C9A0E8', fontSize:20, fontWeight:900, lineHeight:1 }}>{pad(n)}</div>
+                <div style={{ color: isFull?'#333':isMine?'#27AE60':'#9B59B6', fontSize:9, fontWeight:600, marginTop:3 }}>
+                  {isFull?'Lleno':isMine&&isMine1&&!societyStates[n]?.socio2_id?'Pagaste 50% — falta otro socio':fmt(halfPrice)}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <button onClick={() => setShowModal(true)} style={{ ...S.btnPurple }}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+          Unirme a un numero en sociedad
+        </button>
+      </div>
+
+      {/* MODAL como funciona */}
+      {showSocietyInfo && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.88)', zIndex:400, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowSocietyInfo(false)}>
+          <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:24, width:'100%', maxWidth:500, border:'1px solid rgba(155,89,182,0.3)', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e=>e.stopPropagation()}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
+            <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 18px' }}></div>
+            <div style={{ color:'#C9A0E8', fontSize:15, fontWeight:900, textAlign:'center', marginBottom:16 }}>Como funcionan las sociedades?</div>
+            {[['#C9A0E8','Tu pagas','Solo el 50% del valor del boleto'],['#9B59B6','Buscamos','Otra persona que pague el otro 50%'],['#27AE60','Si gana','Cada socio recibe el 50% del premio'],['#E6BE00','Tambien puedes','Comprar las dos mitades y quedarte con el 100%']].map(([col,t,d]) => (
+              <div key={t} style={{ display:'flex', alignItems:'flex-start', gap:10, background:'rgba(255,255,255,0.03)', borderRadius:9, padding:10, marginBottom:8 }}>
+                <div style={{ width:8, height:8, background:col, borderRadius:'50%', marginTop:4, flexShrink:0 }}></div>
+                <div><div style={{ color:col, fontSize:11, fontWeight:700, marginBottom:2 }}>{t}</div><div style={{ color:'#888', fontSize:11, lineHeight:1.5 }}>{d}</div></div>
+              </div>
+            ))}
+            <button onClick={() => setShowSocietyInfo(false)} style={{ ...S.btnPurple, marginTop:8 }}>Entendido</button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL elegir numero */}
+      {showModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.92)', zIndex:400, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowModal(false)}>
+          <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:22, width:'100%', maxWidth:500, border:'1px solid rgba(155,89,182,0.3)', borderBottom:'none', position:'relative', overflow:'hidden', maxHeight:'88vh', overflowY:'auto' }} onClick={e=>e.stopPropagation()}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
+            <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
+            <div style={{ color:'#C9A0E8', fontSize:15, fontWeight:900, textAlign:'center', marginBottom:4 }}>Elige tu numero en sociedad</div>
+            <div style={{ color:'#7b5cad', fontSize:11, textAlign:'center', marginBottom:16 }}>Toca un numero y selecciona cómo comprarlo</div>
+
+            {societyNums.map(n => {
+              const st = getNumStatus(n)
+              const isFull = st === 'full'
+              const isWaiting = st === 'waiting'
+              const isMine1 = st === 'i_am_socio1'
+              const isMine2 = st === 'i_am_socio2'
+              const isSelected = selectedNum === n
+
+              return (
+                <div key={n} style={{ background: isFull?'#0d0d0d':isSelected?'#1a0d2a':'#111', border: isSelected?'2px solid #9B59B6':'1px solid #2a2a2a', borderRadius:12, padding:14, marginBottom:10, opacity:isFull?.4:1 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: (!isFull&&isSelected)?10:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <div style={{ color: isFull?'#444':'#C9A0E8', fontSize:26, fontWeight:900 }}>#{pad(n)}</div>
+                      <div>
+                        {isFull && <div style={{ color:'#555', fontSize:11 }}>Completo — 2/2 socios</div>}
+                        {isWaiting && <div style={{ color:'#E67E22', fontSize:11 }}>1 socio registrado — falta 1</div>}
+                        {isMine1 && !societyStates[n]?.socio2_id && <div style={{ color:'#27AE60', fontSize:11 }}>Tú eres socio 1 — falta otro socio</div>}
+                        {isMine1 && societyStates[n]?.socio2_id && <div style={{ color:'#27AE60', fontSize:11 }}>Ya tienes 2 socios</div>}
+                        {isMine2 && <div style={{ color:'#27AE60', fontSize:11 }}>Eres socio 2 de este número</div>}
+                        {st === 'free' && <div style={{ color:'#888', fontSize:11 }}>Libre — nadie lo ha reservado</div>}
+                      </div>
+                    </div>
+                    {!isFull && (
+                      <button onClick={() => { setSelectedNum(n); setSelectedMode(null) }}
+                        style={{ background: isSelected?'rgba(155,89,182,0.2)':'rgba(155,89,182,0.08)', border:'1px solid rgba(155,89,182,0.3)', borderRadius:8, padding:'5px 10px', color:'#9B59B6', fontSize:10, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                        {isSelected ? 'Seleccionado ✓' : 'Elegir'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Opciones según estado */}
+                  {isSelected && !isFull && (
+                    <div>
+                      {/* Libre: puede comprar como sociedad O completo */}
+                      {st === 'free' && (
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                          <div onClick={() => setSelectedMode('society')} style={{ background:selectedMode==='society'?'rgba(155,89,182,0.2)':'#111', border:selectedMode==='society'?'2px solid #9B59B6':'1px solid #2a2a2a', borderRadius:9, padding:10, textAlign:'center', cursor:'pointer' }}>
+                            <div style={{ color:'#C9A0E8', fontSize:11, fontWeight:700, marginBottom:3 }}>En Sociedad</div>
+                            <div style={{ color:'#9B59B6', fontSize:18, fontWeight:900 }}>{fmt(halfPrice)}</div>
+                            <div style={{ color:'#27AE60', fontSize:9, marginTop:2 }}>Recibes 50% si gana</div>
+                          </div>
+                          <div onClick={() => setSelectedMode('full')} style={{ background:selectedMode==='full'?'rgba(230,190,0,0.12)':'#111', border:selectedMode==='full'?`2px solid ${C.gold}`:'1px solid #2a2a2a', borderRadius:9, padding:10, textAlign:'center', cursor:'pointer' }}>
+                            <div style={{ color:C.gold, fontSize:11, fontWeight:700, marginBottom:3 }}>Completo</div>
+                            <div style={{ color:C.gold, fontSize:18, fontWeight:900 }}>{fmt(r.ticket_price)}</div>
+                            <div style={{ color:'#888', fontSize:9, marginTop:2 }}>Todo el premio</div>
+                          </div>
+                        </div>
+                      )}
+                      {/* Waiting (1 socio externo): solo puede ser socio 2 */}
+                      {isWaiting && (
+                        <div onClick={() => setSelectedMode('socio2')} style={{ background:selectedMode==='socio2'?'rgba(155,89,182,0.2)':'#111', border:selectedMode==='socio2'?'2px solid #9B59B6':'1px solid #2a2a2a', borderRadius:9, padding:10, display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }}>
+                          <div>
+                            <div style={{ color:'#C9A0E8', fontSize:12, fontWeight:700 }}>Unirme como socio 2</div>
+                            <div style={{ color:'#27AE60', fontSize:9, marginTop:2 }}>Recibes 50% si gana</div>
+                          </div>
+                          <div style={{ color:'#9B59B6', fontSize:20, fontWeight:900 }}>{fmt(halfPrice)}</div>
+                        </div>
+                      )}
+                      {/* Yo soy socio 1, falta socio 2 — puede comprar la otra mitad */}
+                      {isMine1 && !societyStates[n]?.socio2_id && (
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                          <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:9, padding:10, textAlign:'center', opacity:.6 }}>
+                            <div style={{ color:'#27AE60', fontSize:11, fontWeight:700, marginBottom:3 }}>Tu 50% ✓</div>
+                            <div style={{ color:'#27AE60', fontSize:16, fontWeight:900 }}>{fmt(halfPrice)}</div>
+                            <div style={{ color:'#888', fontSize:9, marginTop:2 }}>Ya pagado</div>
+                          </div>
+                          <div onClick={() => setSelectedMode('buy_other_half')} style={{ background:selectedMode==='buy_other_half'?'rgba(230,190,0,0.12)':'#111', border:selectedMode==='buy_other_half'?`2px solid ${C.gold}`:'1px solid #2a2a2a', borderRadius:9, padding:10, textAlign:'center', cursor:'pointer' }}>
+                            <div style={{ color:C.gold, fontSize:11, fontWeight:700, marginBottom:3 }}>Comprar el otro 50%</div>
+                            <div style={{ color:C.gold, fontSize:16, fontWeight:900 }}>{fmt(halfPrice)}</div>
+                            <div style={{ color:'#888', fontSize:9, marginTop:2 }}>Tendrás el 100%</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Boton confirmar */}
+            <button onClick={confirm} disabled={!selectedNum || !selectedMode || confirming}
+              style={{ width:'100%', background: (!selectedNum||!selectedMode||confirming)?'#2a2a2a':'linear-gradient(135deg,#5b2d8a,#7c3db8)', border:'none', borderRadius:11, padding:14, color: (!selectedNum||!selectedMode||confirming)?'#555':'#fff', fontSize:13, fontWeight:700, cursor:(!selectedNum||!selectedMode||confirming)?'not-allowed':'pointer', fontFamily:'inherit', marginTop:4, marginBottom:8, transition:'all .2s' }}>
+              {confirming ? 'Procesando...' : selectedMode==='society' ? `Confirmar — Unirme como socio ${fmt(halfPrice)}` : selectedMode==='full' ? `Confirmar — Comprar completo ${fmt(r.ticket_price)}` : selectedMode==='socio2' ? `Confirmar — Unirme como socio 2 ${fmt(halfPrice)}` : selectedMode==='buy_other_half' ? `Confirmar — Comprar el otro 50% ${fmt(halfPrice)}` : 'Elige un numero y una opcion'}
+            </button>
+            <button onClick={() => setShowModal(false)} style={{ width:'100%', background:'transparent', border:'none', color:'#444', fontSize:12, cursor:'pointer', padding:8, fontFamily:'inherit' }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+
 // ─── RAFFLE PAGE con SOCIEDAD visual ─────────────────────────────────────────
 function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelectedNums, onShowPopup, onBack, onSociety }) {
   const range = r.number_range || 100
@@ -705,7 +944,7 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
   const [verifyResult, setVerifyResult] = useState(null)
   const [societyModal, setSocietyModal] = useState(null)
   const [societyMode, setSocietyMode]   = useState('society')
-  const [showSocietyInfo, setShowSocietyInfo] = useState(false)
+  const [showSocietyInfo, setShowSocietyInfo] = useState(false)  // passed to SocietySection
   const [selectedPkg, setSelectedPkg]   = useState(null)
 
   const pad = n => range <= 100 ? String(n).padStart(2,'0') : String(n).padStart(3,'0')
@@ -923,60 +1162,15 @@ www.lacasadelasdinamicas.com`)}`)
 
         {/* ── SECCION SOCIEDAD ── */}
         {societyNums.length > 0 && (
-          <div style={{ background:'linear-gradient(135deg,#0f0619,#1a0d2a)', border:'1px solid rgba(155,89,182,0.35)', borderRadius:18, padding:18, marginBottom:14, position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
-            {/* Estado modal como funciona */}
-            {typeof showSocietyInfo !== 'undefined' && showSocietyInfo && (
-              <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.88)', zIndex:400, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowSocietyInfo(false)}>
-                <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:24, width:'100%', maxWidth:500, border:'1px solid rgba(155,89,182,0.3)', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e=>e.stopPropagation()}>
-                  <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
-                  <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 18px' }}></div>
-                  <div style={{ color:'#C9A0E8', fontSize:15, fontWeight:900, textAlign:'center', marginBottom:16 }}>Como funcionan las sociedades?</div>
-                  {[['#C9A0E8','Tu pagas','Solo el 50% del valor del boleto'],['#9B59B6','Buscamos','Otra persona que pague el otro 50%'],['#27AE60','Si gana','Cada socio recibe el 50% del premio'],['#E6BE00','Ejemplo',`Boleto ${fmt(r.ticket_price)} → pagas ${fmt(r.ticket_price/2)} → si hay premio de ${fmt(r.prizes?.[0]?.amount || 1000000)} recibes ${fmt(Math.round((r.prizes?.[0]?.amount || 1000000)/2))}`]].map(([col,t,d]) => (
-                    <div key={t} style={{ display:'flex', alignItems:'flex-start', gap:10, background:'rgba(255,255,255,0.03)', borderRadius:9, padding:10, marginBottom:8 }}>
-                      <div style={{ width:8, height:8, background:col, borderRadius:'50%', marginTop:4, flexShrink:0 }}></div>
-                      <div><div style={{ color:col, fontSize:11, fontWeight:700, marginBottom:2 }}>{t}</div><div style={{ color:'#888', fontSize:11, lineHeight:1.5 }}>{d}</div></div>
-                    </div>
-                  ))}
-                  <button onClick={() => setShowSocietyInfo(false)} style={{ ...S.btnPurple, marginTop:8 }}>Entendido</button>
-                </div>
-              </div>
-            )}
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-              <div style={{ width:40, height:40, background:'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#C9A0E8" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ color:'#C9A0E8', fontSize:13, fontWeight:900 }}>Numeros en Sociedad</div>
-                <div style={{ color:'#7b5cad', fontSize:9, marginTop:1 }}>Compra la mitad — recibes el 50% del premio</div>
-              </div>
-              <button onClick={() => setShowSocietyInfo(true)} style={{ background:'rgba(155,89,182,0.12)', border:'1px solid rgba(155,89,182,0.3)', borderRadius:8, padding:'5px 9px', color:'#9B59B6', fontSize:10, fontWeight:600, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>
-                Como funciona?
-              </button>
-            </div>
-            <div style={{ background:'rgba(155,89,182,0.08)', border:'1px solid rgba(155,89,182,0.18)', borderRadius:10, padding:12, marginBottom:12 }}>
-              {[['Tu pagas','Solo el 50% del valor','#C9A0E8'],['Buscamos','Otra persona para completar','#9B59B6'],['Si gana','AMBOS reciben el premio completo!','#27AE60']].map(([t,d,col]) => (
-                <div key={t} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
-                  <div style={{ width:16, height:16, background:`${col}20`, border:`1px solid ${col}40`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><div style={{ width:5, height:5, background:col, borderRadius:'50%' }}></div></div>
-                  <div><span style={{ color:col, fontSize:9, fontWeight:700 }}>{t}: </span><span style={{ color:'#888', fontSize:9 }}>{d}</span></div>
-                </div>
-              ))}
-            </div>
-            <div style={{ color:'#7b5cad', fontSize:9, fontWeight:700, textTransform:'uppercase', marginBottom:8 }}>Numeros disponibles ({societyNums.length})</div>
-            <div style={{ display:'flex', gap:7, flexWrap:'wrap', marginBottom:14 }}>
-              {societyNums.map(n => (
-                <div key={n} onClick={() => { setSocietyModal(n); setSocietyMode('society') }} className="society-glow"
-                  style={{ background:'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border:'1.5px solid #9B59B6', borderRadius:10, padding:'8px 13px', display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor:'pointer' }}>
-                  <div style={{ color:'#C9A0E8', fontSize:18, fontWeight:900 }}>{pad(n)}</div>
-                  <div style={{ color:'#9B59B6', fontSize:9, fontWeight:700 }}>{fmt(r.ticket_price/2)}</div>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => { setSocietyModal(societyNums[0]); setSocietyMode('society') }} style={S.btnPurple}>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
-              Unirme a un numero en sociedad
-            </button>
-          </div>
+          <SocietySection
+            societyNums={societyNums}
+            raffle={r}
+            user={user}
+            pad={pad}
+            onSociety={onSociety}
+            showSocietyInfo={showSocietyInfo}
+            setShowSocietyInfo={setShowSocietyInfo}
+          />
         )}
 
         {/* VERIFICAR BOLETO */}
