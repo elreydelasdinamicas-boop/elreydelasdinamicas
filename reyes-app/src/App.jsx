@@ -793,7 +793,7 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
                 {/* Badge de estado */}
                 <div style={{ position:'absolute', top:-7, right:-4, borderRadius:999, padding:'1px 6px', fontSize:7, fontWeight:700, color:'#fff',
                   background: isFull?'#555':isMine?'#27AE60':isWaiting?'#E67E22':'#27AE60' }}>
-                  {isFull?'🔒 Lleno':isMine?(isMine1&&!societyStates[n]?.socio2_id?'Tú · falta socio':'Tú · completo'):'1 socio':isWaiting?'1 socio':'Libre'}
+                  {isFull?'🔒 Lleno':isMine?(isMine1&&!societyStates[n]?.socio2_id?'Tú · falta socio':'Tú · completo'):isWaiting?'1 socio':'Libre'}
                 </div>
                 <div style={{ color: isFull?'#444':isMine?'#27AE60':'#C9A0E8', fontSize:20, fontWeight:900, lineHeight:1 }}>{pad(n)}</div>
                 <div style={{ color: isFull?'#333':isMine?'#27AE60':'#9B59B6', fontSize:9, fontWeight:600, marginTop:3 }}>
