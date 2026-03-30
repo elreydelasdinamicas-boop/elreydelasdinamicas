@@ -592,8 +592,9 @@ function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelecte
   const [verifyName, setVerifyName]   = useState('')
   const [verifyPhone, setVerifyPhone] = useState('')
   const [verifyResult, setVerifyResult] = useState(null)
-  const [societyModal, setSocietyModal] = useState(null)  // num seleccionado
-  const [societyMode, setSocietyMode]   = useState('society') // 'society' | 'full'
+  const [societyModal, setSocietyModal] = useState(null)
+  const [societyMode, setSocietyMode]   = useState('society')
+  const [showSocietyInfo, setShowSocietyInfo] = useState(false)
   const [selectedPkg, setSelectedPkg]   = useState(null)
 
   const pad = n => range <= 100 ? String(n).padStart(2,'0') : String(n).padStart(3,'0')
@@ -811,14 +812,34 @@ www.lacasadelasdinamicas.com`)}`)
         {societyNums.length > 0 && (
           <div style={{ background:'linear-gradient(135deg,#0f0619,#1a0d2a)', border:'1px solid rgba(155,89,182,0.35)', borderRadius:18, padding:18, marginBottom:14, position:'relative', overflow:'hidden' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
+            {/* Estado modal como funciona */}
+            {typeof showSocietyInfo !== 'undefined' && showSocietyInfo && (
+              <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.88)', zIndex:400, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowSocietyInfo(false)}>
+                <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:24, width:'100%', maxWidth:500, border:'1px solid rgba(155,89,182,0.3)', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e=>e.stopPropagation()}>
+                  <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
+                  <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 18px' }}></div>
+                  <div style={{ color:'#C9A0E8', fontSize:15, fontWeight:900, textAlign:'center', marginBottom:16 }}>Como funcionan las sociedades?</div>
+                  {[['#C9A0E8','Tu pagas','Solo el 50% del valor del boleto'],['#9B59B6','Buscamos','Otra persona que pague el otro 50%'],['#27AE60','Si gana','Cada socio recibe el 50% del premio'],['#E6BE00','Ejemplo',`Boleto ${fmt(r.ticket_price)} → pagas ${fmt(r.ticket_price/2)} → si hay premio de ${fmt(r.prizes?.[0]?.amount || 1000000)} recibes ${fmt(Math.round((r.prizes?.[0]?.amount || 1000000)/2))}`]].map(([col,t,d]) => (
+                    <div key={t} style={{ display:'flex', alignItems:'flex-start', gap:10, background:'rgba(255,255,255,0.03)', borderRadius:9, padding:10, marginBottom:8 }}>
+                      <div style={{ width:8, height:8, background:col, borderRadius:'50%', marginTop:4, flexShrink:0 }}></div>
+                      <div><div style={{ color:col, fontSize:11, fontWeight:700, marginBottom:2 }}>{t}</div><div style={{ color:'#888', fontSize:11, lineHeight:1.5 }}>{d}</div></div>
+                    </div>
+                  ))}
+                  <button onClick={() => setShowSocietyInfo(false)} style={{ ...S.btnPurple, marginTop:8 }}>Entendido</button>
+                </div>
+              </div>
+            )}
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
               <div style={{ width:40, height:40, background:'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#C9A0E8" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </div>
-              <div>
+              <div style={{ flex:1 }}>
                 <div style={{ color:'#C9A0E8', fontSize:13, fontWeight:900 }}>Numeros en Sociedad</div>
-                <div style={{ color:'#7b5cad', fontSize:9, marginTop:1 }}>Compra la mitad — gana todo el premio</div>
+                <div style={{ color:'#7b5cad', fontSize:9, marginTop:1 }}>Compra la mitad — recibes el 50% del premio</div>
               </div>
+              <button onClick={() => setShowSocietyInfo(true)} style={{ background:'rgba(155,89,182,0.12)', border:'1px solid rgba(155,89,182,0.3)', borderRadius:8, padding:'5px 9px', color:'#9B59B6', fontSize:10, fontWeight:600, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>
+                Como funciona?
+              </button>
             </div>
             <div style={{ background:'rgba(155,89,182,0.08)', border:'1px solid rgba(155,89,182,0.18)', borderRadius:10, padding:12, marginBottom:12 }}>
               {[['Tu pagas','Solo el 50% del valor','#C9A0E8'],['Buscamos','Otra persona para completar','#9B59B6'],['Si gana','AMBOS reciben el premio completo!','#27AE60']].map(([t,d,col]) => (
@@ -881,40 +902,34 @@ www.lacasadelasdinamicas.com`)}`)
           <div style={{ background:'#111', borderRadius:'22px 22px 0 0', padding:24, width:'100%', maxWidth:500, border:'1px solid rgba(155,89,182,0.35)', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e => e.stopPropagation()}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#9B59B6,transparent)' }}></div>
             <div style={{ width:40, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 18px' }}></div>
-            <div style={{ color:'#C9A0E8', fontSize:15, fontWeight:900, textAlign:'center', marginBottom:14 }}>Elige tu numero en sociedad</div>
+            <div style={{ color:'#C9A0E8', fontSize:15, fontWeight:900, textAlign:'center', marginBottom:14 }}>Confirmar sociedad</div>
 
-            {/* Todos los numeros de sociedad */}
-            <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap', justifyContent:'center' }}>
-              {societyNums.map(n => (
-                <div key={n} onClick={() => setSocietyModal(n)} style={{ background: societyModal===n ? 'linear-gradient(135deg,#2a0d4a,#3d1a6e)' : '#1a1a1a', border: societyModal===n ? '2.5px solid #9B59B6' : '1px solid #2a2a2a', borderRadius:14, padding:'14px 20px', textAlign:'center', cursor:'pointer', transition:'all .2s' }}>
-                  <div style={{ color: societyModal===n?'#C9A0E8':'#888', fontSize:32, fontWeight:900, lineHeight:1 }}>{pad(n)}</div>
-                  <div style={{ color: societyModal===n?'#9B59B6':'#555', fontSize:11, fontWeight:700, marginTop:4 }}>{fmt(r.ticket_price/2)}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Opcion: sociedad o completo */}
-            <div style={{ background:'#0d0d0d', borderRadius:12, padding:14, marginBottom:16 }}>
-              <div style={{ color:'#888', fontSize:11, textAlign:'center', marginBottom:10 }}>Como quieres comprar el #{pad(societyModal)}</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                <div onClick={() => setSocietyMode('society')} style={{ background: societyMode==='society'?'rgba(155,89,182,0.15)':'#111', border: societyMode==='society'?'2px solid #9B59B6':'1px solid #2a2a2a', borderRadius:10, padding:12, textAlign:'center', cursor:'pointer' }}>
-                  <div style={{ color:'#C9A0E8', fontSize:12, fontWeight:700, marginBottom:4 }}>En Sociedad</div>
-                  <div style={{ color:'#9B59B6', fontSize:22, fontWeight:900, lineHeight:1, marginBottom:3 }}>{fmt(r.ticket_price/2)}</div>
-                  <div style={{ color:'#555', fontSize:9 }}>Pagas el 50%</div>
-                  <div style={{ color:'#27AE60', fontSize:9, marginTop:3 }}>Ganas el 100% del premio</div>
-                </div>
-                <div onClick={() => setSocietyMode('full')} style={{ background: societyMode==='full'?'rgba(230,190,0,0.1)':'#111', border: societyMode==='full'?`2px solid ${C.gold}`:'1px solid #2a2a2a', borderRadius:10, padding:12, textAlign:'center', cursor:'pointer' }}>
-                  <div style={{ color:C.gold, fontSize:12, fontWeight:700, marginBottom:4 }}>Completo</div>
-                  <div style={{ color:C.gold, fontSize:22, fontWeight:900, lineHeight:1, marginBottom:3 }}>{fmt(r.ticket_price)}</div>
-                  <div style={{ color:'#555', fontSize:9 }}>Pagas el 100%</div>
-                  <div style={{ color:C.gold, fontSize:9, marginTop:3 }}>Todo el premio para ti</div>
-                </div>
+            {/* Numero seleccionado */}
+            <div style={{ display:'flex', justifyContent:'center', marginBottom:16 }}>
+              <div style={{ background:'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border:'2.5px solid #9B59B6', borderRadius:16, padding:'16px 28px', textAlign:'center' }}>
+                <div style={{ color:'#C9A0E8', fontSize:38, fontWeight:900, lineHeight:1 }}>{pad(societyModal)}</div>
+                <div style={{ color:'#9B59B6', fontSize:13, fontWeight:700, marginTop:6 }}>{fmt(r.ticket_price/2)}</div>
               </div>
             </div>
 
+            {/* Resumen claro */}
+            <div style={{ background:'#0d0d0d', borderRadius:12, padding:'12px 14px', marginBottom:16 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7 }}>
+                <span style={{ color:'#888', fontSize:13 }}>Pagas ahora</span>
+                <span style={{ color:'#C9A0E8', fontSize:15, fontWeight:700 }}>{fmt(r.ticket_price/2)}</span>
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7 }}>
+                <span style={{ color:'#888', fontSize:13 }}>Si el numero gana</span>
+                <span style={{ color:'#27AE60', fontSize:13, fontWeight:700 }}>Recibes el 50% del premio</span>
+              </div>
+              <div style={{ height:1, background:'#1a1a1a', margin:'7px 0' }}></div>
+              <div style={{ color:'#555', fontSize:10, textAlign:'center' }}>El otro socio cubre el 50% restante del boleto</div>
+            </div>
+
+            {/* Boton confirmar → va directo a society page */}
             <button onClick={() => { setSocietyModal(null); if(onSociety) onSociety(societyModal) }} style={{ ...S.btnPurple, marginBottom:10 }}>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-              {societyMode==='society' ? `Unirme como socio — ${fmt(r.ticket_price/2)}` : `Comprar completo — ${fmt(r.ticket_price)}`}
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Confirmar — Unirme como socio {fmt(r.ticket_price/2)}
             </button>
             <button onClick={() => setSocietyModal(null)} style={{ width:'100%', background:'transparent', border:'none', color:'#444', fontSize:13, cursor:'pointer', padding:8, fontFamily:'inherit' }}>Cancelar</button>
           </div>
@@ -1554,11 +1569,17 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
               </div>
             </div>
             <button onClick={async () => {
-              await supabase.from('support_messages').insert({ user_id: firstTicket.user_id, message:'Solicito liberar mis boletos '+numsStr+' del sorteo '+(raffle?.title||'')+'. Por favor procesar la liberacion.', from_admin:false })
-              setShowLiberar(false)
-              alert('Solicitud enviada! El administrador procesara la liberacion de tu boleto.')
+              try {
+                // Liberar inmediatamente — marcar tickets como 'released'
+                const ticketIds = tickets.map(t => t.id)
+                await supabase.from('tickets').update({ status:'released' }).in('id', ticketIds)
+                setShowLiberar(false)
+                onRefresh && onRefresh()
+              } catch(e) {
+                console.error('Error liberando boleto:', e)
+              }
             }} style={{ width:'100%', background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:11, padding:13, color:'#E74C3C', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginBottom:10 }}>
-              Si, quiero liberar el boleto
+              Si, liberar el boleto ahora
             </button>
             <button onClick={() => setShowLiberar(false)} style={{ width:'100%', background:C.gold, border:'none', borderRadius:11, padding:13, color:'#000', fontSize:13, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>
               No, conservar mi numero 🍀
