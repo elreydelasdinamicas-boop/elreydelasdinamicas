@@ -357,21 +357,46 @@ export default function App() {
         {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
         {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={async num => {
           if (!user) { setAuthPage('login'); return }
+          const halfPrice = Math.round(selectedRaffle.ticket_price / 2)
           try {
-            const halfPrice = Math.round(selectedRaffle.ticket_price / 2)
-            const { data: existing } = await supabase.from('society_tickets')
+            // Verificar estado actual del número — evitar race condition
+            const { data: fresh } = await supabase.from('society_tickets')
               .select('*').eq('raffle_id', selectedRaffle.id).eq('number', num)
-              .in('status',['waiting','complete']).limit(1)
-            const st = existing?.[0]
+              .limit(1)
+            const st = fresh?.[0]
+
+            // Ya tiene 2 socios — no se puede unir
+            if (st && st.socio2_id) {
+              alert('Este número ya tiene dos socios. Elige otro número.')
+              return
+            }
+            // Ya es socio de este número
+            if (st && (st.socio1_id === user.id || st.socio2_id === user.id)) {
+              setPage('profile')
+              return
+            }
+
             if (!st) {
-              const exp = new Date(Date.now() + 48*3600000).toISOString()
+              // Crear como socio 1
               const { error } = await supabase.from('society_tickets').insert({
                 raffle_id: selectedRaffle.id, number: num,
                 socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
-                status: 'waiting', expires_at: exp
+                status: 'waiting', expires_at: new Date(Date.now()+48*3600000).toISOString()
               })
-              if (error) throw error
-            } else if (st.status === 'waiting' && !st.socio2_id && st.socio1_id !== user.id) {
+              if (error) {
+                // Si falla por duplicado, alguien más llegó primero — intentar como socio 2
+                const { data: retry } = await supabase.from('society_tickets')
+                  .select('*').eq('raffle_id', selectedRaffle.id).eq('number', num).limit(1)
+                const r2 = retry?.[0]
+                if (r2 && !r2.socio2_id && r2.socio1_id !== user.id) {
+                  await supabase.from('society_tickets').update({
+                    socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
+                    status: 'complete', updated_at: new Date().toISOString()
+                  }).eq('id', r2.id)
+                } else { throw error }
+              }
+            } else if (st.status === 'waiting' && !st.socio2_id) {
+              // Unirse como socio 2
               const { error } = await supabase.from('society_tickets').update({
                 socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
                 status: 'complete', updated_at: new Date().toISOString()
@@ -380,7 +405,7 @@ export default function App() {
             }
             await fetchMyTickets()
             setPage('profile')
-          } catch(e) { alert('Error al unirse: ' + e.message) }
+          } catch(e) { console.error('Society error:', e); alert('Error: ' + (e.message||'Intenta de nuevo')) }
         }} />}
         {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { setSupportTicketContext(ctx||null); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
@@ -424,16 +449,15 @@ export default function App() {
               <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Loteria</div><div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.lottery_name}</div></div>
               <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Caduca</div><div style={{ color: '#E74C3C', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.release_hours ? (() => { const d = new Date(Date.now() + (selectedRaffle.release_hours||24)*3600000); return d.toLocaleDateString('es-CO',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) })() : '24h'}</div></div>
             </div>
-            <button onClick={handleReserve} style={{ ...S.btnGold, marginBottom: 10 }}>
-              {/* Texto dinámico según si está logueado */}
-              Apartar mis numeros
-            </button>
             {!user && (
               <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:9, padding:'8px 12px', marginBottom:10, textAlign:'center' }}>
-                <span style={{ color:C.muted, fontSize:11 }}>Se te pedirá ingresar o crear cuenta — </span>
-                <span style={{ color:C.gold, fontSize:11, fontWeight:700 }}>tus números quedan guardados</span>
+                <span style={{ color:C.muted, fontSize:11 }}>Se pedirá login — </span>
+                <span style={{ color:C.gold, fontSize:11, fontWeight:700 }}>tus números quedan guardados ✓</span>
               </div>
             )}
+            <button onClick={handleReserve} style={{ ...S.btnGold, marginBottom: 10 }}>
+              {user ? 'Confirmar reserva' : 'Continuar para apartar'}
+            </button>
             <div style={{ color: C.muted, fontSize: 11, textAlign: 'center', marginBottom: 10 }}>{selectedRaffle.release_hours ? (() => { const d = new Date(Date.now() + (selectedRaffle.release_hours||24)*3600000); return `Los numeros quedan guardados hasta el ${d.toLocaleDateString('es-CO',{day:'numeric',month:'long'})} a las ${d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}` })() : 'Los numeros quedan guardados 24 horas mientras confirmas el pago'}</div>
             <button onClick={() => setShowReservePopup(false)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#444', fontSize: 13, cursor: 'pointer', padding: 8, fontFamily: 'inherit' }}>Cancelar</button>
           </div>
@@ -876,24 +900,26 @@ www.lacasadelasdinamicas.com`)}`)
             })}
           </div>
 
-          {/* Seleccionados */}
-          {selectedNums.length > 0 && (
-            <div style={{ marginTop:12 }}>
-              <div style={{ background:'rgba(201,162,39,0.06)', border:`1px solid rgba(201,162,39,0.15)`, borderRadius:12, padding:'11px 14px', marginBottom:10 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-                  <span style={{ color:C.muted, fontSize:12 }}>Seleccionados</span>
-                  <span style={{ color:C.gold, fontSize:12, fontWeight:700 }}>{selectedNums.map(n=>pad(n)).join(' · ')}</span>
-                </div>
-                {activePromo && <div style={{ color:C.green, fontSize:11, marginBottom:5 }}>+ {activePromo.get} numero(s) GRATIS!</div>}
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <span style={{ color:C.muted, fontSize:12 }}>Total</span>
-                  <span style={{ color:C.gold, fontSize:22, fontWeight:900 }}>{fmt(totalPrice)}</span>
-                </div>
-              </div>
-              <button onClick={onShowPopup} style={S.btnGold}>Apartar mis numeros</button>
-            </div>
-          )}
         </div>
+
+        {/* BARRA FLOTANTE sticky — aparece al seleccionar números */}
+        {selectedNums.length > 0 && (
+          <div style={{ position:'sticky', bottom:68, zIndex:90, background:'rgba(0,0,0,0.95)', borderTop:`2px solid ${C.gold}`, borderRadius:'14px 14px 0 0', padding:'12px 16px', marginTop:8 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <div>
+                <div style={{ color:C.muted, fontSize:10, marginBottom:2 }}>Seleccionados</div>
+                <div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>{selectedNums.map(n=>pad(n)).join('  ·  ')}</div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ color:C.muted, fontSize:10, marginBottom:2 }}>Total</div>
+                <div style={{ color:C.gold, fontSize:20, fontWeight:900 }}>{fmt(totalPrice)}</div>
+              </div>
+            </div>
+            <button onClick={onShowPopup} style={{ ...S.btnGold, margin:0 }}>
+              Apartar mis numeros
+            </button>
+          </div>
+        )}
 
         {/* ── SECCION SOCIEDAD ── */}
         {societyNums.length > 0 && (
