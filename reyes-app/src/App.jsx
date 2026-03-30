@@ -182,9 +182,10 @@ export default function App() {
   useEffect(() => {
     if (!user) return
     fetchMyTickets()
-    // Realtime — boletos se actualizan solos cuando el admin confirma pago
+    // Realtime — boletos y sociedades se actualizan solos
     const ch = supabase.channel(`my-tickets-${user.id}`)
       .on('postgres_changes', { event:'*', schema:'public', table:'tickets', filter:`user_id=eq.${user.id}` }, () => fetchMyTickets())
+      .on('postgres_changes', { event:'*', schema:'public', table:'society_tickets' }, () => fetchMyTickets())
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [user])
@@ -223,23 +224,66 @@ export default function App() {
     if (data) setProfile(data)
   }
   async function fetchRaffles() {
-    setLoadingRaffles(true)
+    // Mostrar cache inmediatamente mientras carga
+    try {
+      const cached = localStorage.getItem('lcdd_raffles')
+      if (cached) { setRaffles(JSON.parse(cached)); setLoadingRaffles(false) }
+    } catch(e) {}
     try {
       const { data, error } = await supabase.from('raffles').select('*').eq('status','active').order('created_at',{ascending:false})
       if (error) { console.error('fetchRaffles error:', error); return }
-      setRaffles(data || [])
-    } finally {
+      const fresh = data || []
+      setRaffles(fresh)
       setLoadingRaffles(false)
-    }
+      try { localStorage.setItem('lcdd_raffles', JSON.stringify(fresh)) } catch(e) {}
+    } catch(e) { setLoadingRaffles(false) }
   }
   async function fetchMyTickets() {
     if (!user) return
-    const { data } = await supabase.from('tickets')
-      .select('*, raffles(title,raffle_date,lottery_name,ticket_price,prizes,close_time,society_numbers)')
-      .eq('user_id', user.id)
-      .in('status', ['reserved','paid','winner'])
-      .order('created_at', { ascending: false })
-    if (data) setMyTickets(data)
+    // Mostrar cache inmediatamente
+    try {
+      const cached = localStorage.getItem('lcdd_tickets_'+user.id)
+      if (cached) setMyTickets(JSON.parse(cached))
+    } catch(e) {}
+    try {
+      const { data } = await supabase.from('tickets')
+        .select('*, raffles(title,raffle_date,lottery_name,ticket_price,prizes,close_time,society_numbers)')
+        .eq('user_id', user.id)
+        .in('status', ['reserved','paid','winner'])
+        .order('created_at', { ascending: false })
+      if (data) {
+        setMyTickets(data)
+        try { localStorage.setItem('lcdd_tickets_'+user.id, JSON.stringify(data)) } catch(e) {}
+      }
+      // Tambien cargar society_tickets del usuario
+      const { data: sData } = await supabase.from('society_tickets')
+        .select('*, raffles(title,raffle_date,lottery_name,ticket_price,prizes,close_time)')
+        .or(`socio1_id.eq.${user.id},socio2_id.eq.${user.id}`)
+        .in('status', ['waiting','complete','paid'])
+        .order('created_at', { ascending: false })
+      if (sData && sData.length > 0) {
+        // Convertir society_tickets al formato de myTickets para mostrar en perfil
+        const societyAsTickets = sData.map(st => ({
+          id: 'soc_'+st.id,
+          raffle_id: st.raffle_id,
+          raffles: st.raffles,
+          numbers: [st.number],
+          status: st.status === 'paid' ? 'paid' : 'reserved',
+          total_amount: st.socio1_id === user.id ? st.socio1_amount : st.socio2_amount,
+          is_society: true,
+          society_id: st.id,
+          society_pct: 50,
+          society_status: st.status,
+          society_partner: st.socio1_id === user.id ? st.socio2_id : st.socio1_id,
+          created_at: st.created_at
+        }))
+        // Merge con tickets normales sin duplicar
+        setMyTickets(prev => {
+          const regular = data || prev.filter(t => !t.is_society)
+          return [...regular, ...societyAsTickets]
+        })
+      }
+    } catch(e) { console.error('fetchMyTickets:', e) }
   }
   async function doLogin(email, password) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -303,7 +347,33 @@ export default function App() {
       </header>
       <main>
         {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
-        {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={num => { setSocietyData({ raffle: selectedRaffle, number: num }); setPage('society') }} />}
+        {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={async num => {
+          if (!user) { setAuthPage('login'); return }
+          try {
+            const halfPrice = Math.round(selectedRaffle.ticket_price / 2)
+            const { data: existing } = await supabase.from('society_tickets')
+              .select('*').eq('raffle_id', selectedRaffle.id).eq('number', num)
+              .in('status',['waiting','complete']).limit(1)
+            const st = existing?.[0]
+            if (!st) {
+              const exp = new Date(Date.now() + 48*3600000).toISOString()
+              const { error } = await supabase.from('society_tickets').insert({
+                raffle_id: selectedRaffle.id, number: num,
+                socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
+                status: 'waiting', expires_at: exp
+              })
+              if (error) throw error
+            } else if (st.status === 'waiting' && !st.socio2_id && st.socio1_id !== user.id) {
+              const { error } = await supabase.from('society_tickets').update({
+                socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
+                status: 'complete', updated_at: new Date().toISOString()
+              }).eq('id', st.id)
+              if (error) throw error
+            }
+            await fetchMyTickets()
+            setPage('profile')
+          } catch(e) { alert('Error al unirse: ' + e.message) }
+        }} />}
         {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { setSupportTicketContext(ctx||null); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
         {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
