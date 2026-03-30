@@ -147,6 +147,11 @@ export default function App() {
   const [supportTicketContext, setSupportTicketContext] = useState(null) // { raffle, number }
   const [bingoVisible, setBingoVisible] = useState(false)
   const pwa = usePWA()
+  const [toast, setToast] = useState(null)
+  function showToast(msg, type='success') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3500)
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -174,7 +179,15 @@ export default function App() {
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
-  useEffect(() => { if (user) fetchMyTickets() }, [user])
+  useEffect(() => {
+    if (!user) return
+    fetchMyTickets()
+    // Realtime — boletos se actualizan solos cuando el admin confirma pago
+    const ch = supabase.channel(`my-tickets-${user.id}`)
+      .on('postgres_changes', { event:'*', schema:'public', table:'tickets', filter:`user_id=eq.${user.id}` }, () => fetchMyTickets())
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [user])
   useEffect(() => {
     if (!selectedRaffle) return
     fetchReserved(selectedRaffle.id)
@@ -220,7 +233,12 @@ export default function App() {
     }
   }
   async function fetchMyTickets() {
-    const { data } = await supabase.from('tickets').select('*, raffles(title,raffle_date,lottery_name,ticket_price)').eq('user_id', user.id).order('created_at', { ascending: false })
+    if (!user) return
+    const { data } = await supabase.from('tickets')
+      .select('*, raffles(title,raffle_date,lottery_name,ticket_price,prizes,close_time,society_numbers)')
+      .eq('user_id', user.id)
+      .in('status', ['reserved','paid','winner'])
+      .order('created_at', { ascending: false })
     if (data) setMyTickets(data)
   }
   async function doLogin(email, password) {
@@ -299,6 +317,13 @@ export default function App() {
         {page === 'admin-bingo' && <AdminBingoPanel onBack={() => setPage('admin')} />}
         {page === 'how' && <HowItWorksPage onBack={() => setPage('home')} onRegister={() => setAuthPage('register')} />}
       </main>
+      {/* TOAST */}
+      {toast && (
+        <div style={{ position:'fixed', top:20, left:'50%', transform:'translateX(-50%)', zIndex:9999, background: toast.type==='error'?'#C0392B':toast.type==='warning'?'#E67E22':'#27AE60', color:'#fff', borderRadius:12, padding:'12px 20px', fontSize:13, fontWeight:700, maxWidth:'85vw', textAlign:'center', display:'flex', alignItems:'center', gap:8 }}>
+          <span>{toast.type==='error'?'⚠️':toast.type==='warning'?'⏳':'✅'}</span>
+          {toast.msg}
+        </div>
+      )}
       <nav style={S.bottomNav}>
         {[{ id: 'home', label: 'Inicio', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
           ...(appConfig.showPoints ? [{ id: 'points', label: 'Puntos', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> }] : []),
@@ -1100,7 +1125,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#5DADE2" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
               <span style={{ color:'#5DADE2', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 }}>Mi Dinero</span>
             </div>
-            <button onClick={() => onSupport && onSupport({ recargar:true })} style={{ background:'#E67E22', border:'none', borderRadius:9, padding:'9px 16px', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:6 }}>
+            <button onClick={() => { if(onSupport) { onSupport({ recargar:true }); } }} style={{ background:'#E67E22', border:'none', borderRadius:9, padding:'9px 16px', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:6 }}>
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="white" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Recargar saldo
             </button>
@@ -1235,7 +1260,9 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   const allNums   = tickets.flatMap(t => t.numbers || [])
   const totalAmt  = tickets.reduce((s,t) => s + (t.total_amount||0), 0)
   const firstTicket = tickets[0] || {}
-  const isSociety = tickets.some(t => t.is_society || t.society_id)
+  const isSociety = tickets.some(t => t.is_society || t.society_id) ||
+    (Array.isArray(group.raffle?.society_numbers) && group.raffle.society_numbers.length > 0 &&
+     allNums.some(n => group.raffle.society_numbers.includes(n)))
   const isReserved = status === 'reserved'
   const isPaid     = status === 'paid'
   const isFinished = status === 'finished'
@@ -1856,17 +1883,18 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
   }
 
   async function sendMessage(text) {
-    const content = text || msg
-    if (!content.trim()) return
-    setMsg(''); setLoading(true)
-    if (isAdmin && selectedConv) {
-      await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:content, from_admin:true })
-      await loadConvMessages(selectedConv.user_id)
-    } else if (user) {
-      await supabase.from('support_messages').insert({ user_id:user.id, message:content, from_admin:false })
-      await loadMyMessages()
-    }
-    setLoading(false)
+    const content = (typeof text === 'string' ? text : msg).trim()
+    if (!content) return
+    setMsg('')
+    try {
+      if (isAdmin && selectedConv) {
+        await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:content, from_admin:true })
+        loadConvMessages(selectedConv.user_id)
+      } else if (user) {
+        await supabase.from('support_messages').insert({ user_id:user.id, message:content, from_admin:false })
+        loadMyMessages()
+      }
+    } catch(e) { console.error('sendMessage error:', e) }
   }
 
   async function confirmPayment() {
@@ -2103,13 +2131,11 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
       </div>
 
       {/* Respuestas rapidas usuario */}
-      {messages.length === 0 && (
-        <div style={{ padding:'6px 14px', overflowX:'auto', display:'flex', gap:6, scrollbarWidth:'none', flexShrink:0 }}>
-          {quickReplies.map(r => (
-            <button key={r} onClick={() => sendMessage(r)} style={{ flexShrink:0, background:C.bg3, border:`1px solid #2a2a2a`, borderRadius:999, padding:'5px 12px', color:'#ccc', fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{r}</button>
-          ))}
-        </div>
-      )}
+      <div style={{ padding:'6px 14px', overflowX:'auto', display:'flex', gap:6, scrollbarWidth:'none', flexShrink:0 }}>
+        {quickReplies.map(r => (
+          <button key={r} onClick={() => sendMessage(r)} style={{ flexShrink:0, background:C.bg3, border:`1px solid #2a2a2a`, borderRadius:999, padding:'5px 12px', color:'#ccc', fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}>{r}</button>
+        ))}
+      </div>
 
       {/* Input */}
       <div style={{ padding:'10px 14px', borderTop:`1px solid ${C.cardBorder}`, display:'flex', gap:8, flexShrink:0 }}>
@@ -2485,7 +2511,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
       }
 
       setSaving(false)
-      alert(isEdit ? 'Dinamica actualizada!' : 'Dinamica creada exitosamente!')
+      showToast(isEdit ? 'Dinamica actualizada!' : 'Dinamica creada exitosamente!')
       onSave()
     } catch(e) {
       console.error('Save error:', e)
