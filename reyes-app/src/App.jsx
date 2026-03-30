@@ -135,6 +135,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [authPage, setAuthPage] = useState(null)
   const [raffles, setRaffles] = useState([])
+  const [loadingRaffles, setLoadingRaffles] = useState(true)
   const [selectedRaffle, setSelectedRaffle] = useState(null)
   const [myTickets, setMyTickets] = useState([])
   const [selectedNums, setSelectedNums] = useState([])
@@ -165,7 +166,14 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  useEffect(() => { fetchRaffles() }, [])
+  useEffect(() => {
+    fetchRaffles()
+    // Realtime — cuando el admin crea/edita un sorteo se actualiza en todos los dispositivos
+    const ch = supabase.channel('raffles-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'raffles' }, () => fetchRaffles())
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [])
   useEffect(() => { if (user) fetchMyTickets() }, [user])
   useEffect(() => {
     if (!selectedRaffle) return
@@ -202,9 +210,14 @@ export default function App() {
     if (data) setProfile(data)
   }
   async function fetchRaffles() {
-    const { data, error } = await supabase.from('raffles').select('*').eq('status', 'active').order('created_at', { ascending: false })
-    if (error) { console.error('Error fetching raffles:', error); return }
-    setRaffles(data || [])
+    setLoadingRaffles(true)
+    try {
+      const { data, error } = await supabase.from('raffles').select('*').eq('status','active').order('created_at',{ascending:false})
+      if (error) { console.error('fetchRaffles error:', error); return }
+      setRaffles(data || [])
+    } finally {
+      setLoadingRaffles(false)
+    }
   }
   async function fetchMyTickets() {
     const { data } = await supabase.from('tickets').select('*, raffles(title,raffle_date,lottery_name,ticket_price)').eq('user_id', user.id).order('created_at', { ascending: false })
@@ -271,7 +284,7 @@ export default function App() {
           : <button onClick={() => setAuthPage('login')} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, border: 'none', color: '#000', cursor: 'pointer', padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, fontFamily: 'inherit' }}>Entrar</button>}
       </header>
       <main>
-        {page === 'home' && <HomePage raffles={raffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
+        {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
         {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={num => { setSocietyData({ raffle: selectedRaffle, number: num }); setPage('society') }} />}
         {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { setSupportTicketContext(ctx||null); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
@@ -439,7 +452,7 @@ function RaffleCard({ r, onRaffle, featured }) {
 
 
 
-function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWinners }) {
+function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, user, onHow, onWinners }) {
   const socials = [
     { key: 'whatsapp', label: 'WhatsApp', bg: '#075E54', icon: Icons.wa, url: appConfig.whatsapp },
     { key: 'canal', label: 'Canal', bg: '#128C7E', icon: Icons.wa, url: appConfig.canal, badge: true },
@@ -496,8 +509,24 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWi
         <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,transparent,${C.gold})` }}></div>
       </div>
 
+      {/* SKELETON mientras cargan */}
+      {loadingRaffles && (
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          {[1,2].map(i => (
+            <div key={i} style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:16, padding:18 }} className="pulse">
+              <div style={{ background:'#1a1a1a', borderRadius:8, height:16, width:'65%', marginBottom:10 }}></div>
+              <div style={{ background:'#1a1a1a', borderRadius:8, height:11, width:'45%', marginBottom:14 }}></div>
+              <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+                {[1,2,3].map(j => <div key={j} style={{ background:'#1a1a1a', borderRadius:8, height:40, flex:1 }}></div>)}
+              </div>
+              <div style={{ background:'#1a1a1a', borderRadius:10, height:44, width:'100%' }}></div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* SORTEOS DESTACADOS */}
-      {featuredRaffles.length > 0 && (
+      {!loadingRaffles && featuredRaffles.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
@@ -510,7 +539,7 @@ function HomePage({ raffles, displayName, appConfig, onRaffle, user, onHow, onWi
         </>
       )}
       {/* RESTO DE SORTEOS */}
-      {otherRaffles.length > 0 && (
+      {!loadingRaffles && otherRaffles.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
@@ -2171,6 +2200,13 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
         <button onClick={() => onOpenBingo && onOpenBingo()} style={{ background:'linear-gradient(135deg,#1a5a1a,#27AE60)', border:'1px solid rgba(39,174,96,0.4)', borderRadius:12, color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', padding:'14px' }}>🎱 Panel Bingo</button>
         <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'14px', display:'flex', alignItems:'center', justifyContent:'center', color:C.muted, fontSize:11 }}>+ Mas pronto</div>
+      {!loadingRaffles && raffles.length === 0 && (
+        <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
+          <div style={{ fontSize:44, marginBottom:10 }}>🎰</div>
+          <div style={{ color:'#fff', fontSize:14, fontWeight:700, marginBottom:6 }}>Pronto nuevas dinamicas</div>
+          <div style={{ fontSize:12 }}>Vuelve pronto para ver las novedades</div>
+        </div>
+      )}
       </div>
       <div style={{ display:'flex', gap:3, background:'rgba(255,255,255,0.03)', borderRadius:10, padding:4, marginBottom:16 }}>
         {['Dinamicas','Boletos','Config'].map((t,i) => (
