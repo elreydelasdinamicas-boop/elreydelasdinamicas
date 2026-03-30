@@ -742,14 +742,16 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
 
   async function confirm() {
     if (!selectedNum || !selectedMode) return
+    if (confirming) return
     setConfirming(true)
     try {
       await onSociety(selectedNum, selectedMode)
+      setConfirming(false)
       setShowModal(false)
     } catch(e) {
+      setConfirming(false)
       alert('Error: ' + (e.message || 'Intenta de nuevo'))
     }
-    setConfirming(false)
   }
 
   const halfPrice = Math.round(r.ticket_price / 2)
@@ -860,9 +862,12 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
                       </div>
                     </div>
                     {!isFull && (
-                      <button onClick={() => { setSelectedNum(n); setSelectedMode(null) }}
-                        style={{ background: isSelected?'rgba(155,89,182,0.2)':'rgba(155,89,182,0.08)', border:'1px solid rgba(155,89,182,0.3)', borderRadius:8, padding:'5px 10px', color:'#9B59B6', fontSize:10, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
-                        {isSelected ? 'Seleccionado ✓' : 'Elegir'}
+                      <button onClick={() => {
+                        setSelectedNum(n)
+                        // Si es waiting, auto-set socio2 mode
+                        setSelectedMode(isWaiting ? 'socio2' : null)
+                      }} style={{ background: isSelected?'rgba(155,89,182,0.2)':'rgba(155,89,182,0.08)', border:'1px solid rgba(155,89,182,0.3)', borderRadius:8, padding:'5px 10px', color:'#9B59B6', fontSize:10, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                        {isSelected ? 'Seleccionado ✓' : isWaiting ? 'Unirme →' : 'Elegir'}
                       </button>
                     )}
                   </div>
@@ -885,16 +890,20 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
                           </div>
                         </div>
                       )}
-                      {/* Waiting (1 socio externo): solo puede ser socio 2 */}
-                      {isWaiting && (
-                        <div onClick={() => setSelectedMode('socio2')} style={{ background:selectedMode==='socio2'?'rgba(155,89,182,0.2)':'#111', border:selectedMode==='socio2'?'2px solid #9B59B6':'1px solid #2a2a2a', borderRadius:9, padding:10, display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }}>
-                          <div>
-                            <div style={{ color:'#C9A0E8', fontSize:12, fontWeight:700 }}>Unirme como socio 2</div>
-                            <div style={{ color:'#27AE60', fontSize:9, marginTop:2 }}>Recibes 50% si gana</div>
+                      {/* Waiting (1 socio externo): auto-confirma como socio 2 sin paso extra */}
+                      {isWaiting && (() => {
+                        // Auto-set mode cuando se selecciona este numero
+                        if (selectedMode !== 'socio2') setTimeout(() => setSelectedMode('socio2'), 0)
+                        return (
+                          <div style={{ background:'rgba(155,89,182,0.15)', border:'2px solid #9B59B6', borderRadius:9, padding:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                            <div>
+                              <div style={{ color:'#C9A0E8', fontSize:12, fontWeight:700 }}>Unirme como socio 2 ✓</div>
+                              <div style={{ color:'#27AE60', fontSize:9, marginTop:2 }}>Recibes 50% si gana — listo para confirmar</div>
+                            </div>
+                            <div style={{ color:'#9B59B6', fontSize:20, fontWeight:900 }}>{fmt(halfPrice)}</div>
                           </div>
-                          <div style={{ color:'#9B59B6', fontSize:20, fontWeight:900 }}>{fmt(halfPrice)}</div>
-                        </div>
-                      )}
+                        )
+                      })()}
                       {/* Yo soy socio 1, falta socio 2 — puede comprar la otra mitad */}
                       {isMine1 && !societyStates[n]?.socio2_id && (
                         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
