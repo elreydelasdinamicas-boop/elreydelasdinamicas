@@ -208,7 +208,9 @@ export default function App() {
     const avail = nums.filter(n => !taken.includes(n))
     if (avail.length > 0) await supabase.from('tickets').insert({ user_id: user.id, raffle_id: raffleId, numbers: avail, status: 'reserved', total_amount: avail.length * price })
     localStorage.removeItem('pendingNums'); setPendingNums(null)
-    await fetchMyTickets(); setPage('profile')
+    await fetchMyTickets()
+    // Pequeño delay para que fetchMyTickets termine antes de ir al perfil
+    setTimeout(() => setPage('profile'), 300)
   }
 
   async function fetchConfig() {
@@ -288,7 +290,9 @@ export default function App() {
   async function doLogin(email, password) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    setAuthPage(null); setPage('home')
+    setAuthPage(null)
+    const hasPending = localStorage.getItem('pendingNums')
+    setPage(hasPending ? 'profile' : 'home')
   }
   async function doRegister(name, phone, email, password) {
     const refCode = 'CASA-' + Math.random().toString(36).substr(2, 6).toUpperCase()
@@ -297,7 +301,11 @@ export default function App() {
     if (data.session) {
       await supabase.from('users_profile').upsert({ id: data.user.id, full_name: name, phone, email, role: 'customer', credits: appConfig.showWelcomeBonus ? 500 : 0, points: appConfig.showWelcomeBonus ? 1000 : 0, referral_code: refCode, is_promoter: false })
       setUser(data.user); await fetchProfile(data.user.id)
-      setAuthPage(null); setPage('home'); return
+      setAuthPage(null)
+      // Si tenía boletos pendientes, esperar a que reservePending los procese y ir al perfil
+      const hasPending = localStorage.getItem('pendingNums')
+      setPage(hasPending ? 'profile' : 'home')
+      return
     }
     if (data.user && !data.session) throw new Error('Revisa tu correo y confirma tu cuenta.')
   }
@@ -416,7 +424,16 @@ export default function App() {
               <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Loteria</div><div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.lottery_name}</div></div>
               <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Caduca</div><div style={{ color: '#E74C3C', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.release_hours ? (() => { const d = new Date(Date.now() + (selectedRaffle.release_hours||24)*3600000); return d.toLocaleDateString('es-CO',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) })() : '24h'}</div></div>
             </div>
-            <button onClick={handleReserve} style={{ ...S.btnGold, marginBottom: 10 }}>Confirmar reserva</button>
+            <button onClick={handleReserve} style={{ ...S.btnGold, marginBottom: 10 }}>
+              {/* Texto dinámico según si está logueado */}
+              Apartar mis numeros
+            </button>
+            {!user && (
+              <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:9, padding:'8px 12px', marginBottom:10, textAlign:'center' }}>
+                <span style={{ color:C.muted, fontSize:11 }}>Se te pedirá ingresar o crear cuenta — </span>
+                <span style={{ color:C.gold, fontSize:11, fontWeight:700 }}>tus números quedan guardados</span>
+              </div>
+            )}
             <div style={{ color: C.muted, fontSize: 11, textAlign: 'center', marginBottom: 10 }}>{selectedRaffle.release_hours ? (() => { const d = new Date(Date.now() + (selectedRaffle.release_hours||24)*3600000); return `Los numeros quedan guardados hasta el ${d.toLocaleDateString('es-CO',{day:'numeric',month:'long'})} a las ${d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}` })() : 'Los numeros quedan guardados 24 horas mientras confirmas el pago'}</div>
             <button onClick={() => setShowReservePopup(false)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#444', fontSize: 13, cursor: 'pointer', padding: 8, fontFamily: 'inherit' }}>Cancelar</button>
           </div>
