@@ -2226,7 +2226,6 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
         onRefresh={onRefresh}
         isSociety={isSociety || isSocietyFull}
       />}
-      )}
     </div>
   )
 }
