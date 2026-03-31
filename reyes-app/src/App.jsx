@@ -82,7 +82,7 @@ const DEFAULT_CONFIG = {
   showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
   whatsapp: '', canal: '', instagram: '', facebook: '', telegram: '',
   supportWhatsapp: '3013986016', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
-  paymentWhatsapp: '3013986016', imgDeleteDays: 3,
+  paymentWhatsapp: '3013986016', showWAPayButton: true, imgDeleteDays: 3,
   winnersInstagram: '',
   paymentNequi: '', paymentDaviplata: '', paymentBancolombia: '', paymentOtro: '', paymentNota: '',
   notifAutoNewRaffle: true, notifAuto24h: true, notifAuto2h: true,
@@ -269,21 +269,19 @@ export default function App() {
           id: 'soc_'+st.id,
           raffle_id: st.raffle_id,
           raffles: st.raffles,
-          numbers: [st.number],
-          status: st.status === 'paid' ? 'paid' : 'reserved',
-          total_amount: st.socio1_id === user.id ? st.socio1_amount : st.socio2_amount,
+          numbers: [st.number],  // society_tickets usa 'number' singular
+          status: (st.status === 'complete' || st.status === 'waiting') ? 'reserved' : st.status === 'paid' ? 'paid' : 'reserved',
+          total_amount: st.socio1_id === user.id ? (st.socio1_amount || 0) : (st.socio2_amount || 0),
           is_society: true,
           society_id: st.id,
           society_pct: 50,
           society_status: st.status,
           society_partner: st.socio1_id === user.id ? st.socio2_id : st.socio1_id,
           created_at: st.created_at
-        }))
-        // Merge con tickets normales sin duplicar
-        setMyTickets(prev => {
-          const regular = data || prev.filter(t => !t.is_society)
-          return [...regular, ...societyAsTickets]
-        })
+        })).filter(st => st.total_amount > 0)  // solo si tiene monto asignado
+        // Merge: normales + sociedad, sin duplicar
+        const regular = data || []
+        setMyTickets([...regular, ...societyAsTickets])
       }
     } catch(e) { console.error('fetchMyTickets:', e) }
   }
@@ -1849,68 +1847,44 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
             <div style={{ flex:1, height:1, background:`rgba(${isSociety?'155,89,182':'230,190,0'},0.18)` }}></div>
           </div>
 
-          {/* WA */}
-          {waUrl ? (
+          {/* 1. WhatsApp — activado/desactivado desde admin */}
+          {appConfig?.showWAPayButton !== false && waUrl && (
             <a href={waUrl} target="_blank" rel="noreferrer" style={{ textDecoration:'none', display:'block', marginBottom:6 }}>
               <div style={{ background:'#25D366', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7 }}>
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 <span style={{ color:'#fff', fontSize:11, fontWeight:700 }}>Pagar {fmt(totalAmt)} por WhatsApp</span>
               </div>
             </a>
-          ) : (
-            <div style={{ background:'#111', borderRadius:10, padding:11, textAlign:'center', color:'#444', fontSize:11, marginBottom:6 }}>Contacta al admin para pagar</div>
           )}
 
-          {/* Chat soporte */}
+          {/* 2. Chat soporte — siempre visible */}
           <div onClick={() => onSupport && onSupport({ title:raffle?.title||'', number:allNums[0]||0, price:totalAmt })} style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:6 }}>
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.gold} strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span style={{ color:C.gold, fontSize:11, fontWeight:600 }}>Pagar y adjuntar comprobante en chat</span>
           </div>
 
-          {/* Mi Dinero */}
-          {dineroOk ? (
-            <button onClick={() => { if(window.confirm('Pagar '+fmt(totalAmt)+' con tu saldo disponible?')) alert('Pago procesado con saldo!') }} style={{ width:'100%', background:'#1a3a5c', border:'1px solid rgba(41,128,185,0.4)', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:3, fontFamily:'inherit' }}>
+          {/* 3. Mi Dinero — SOLO si el saldo alcanza */}
+          {dineroOk && (
+            <button onClick={() => { if(window.confirm('Pagar '+fmt(totalAmt)+' con saldo?')) alert('Pago procesado!') }} style={{ width:'100%', background:'#1a3a5c', border:'1px solid rgba(41,128,185,0.4)', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:6, fontFamily:'inherit' }}>
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#5DADE2" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
               <span style={{ color:'#5DADE2', fontSize:11, fontWeight:600 }}>Pagar con Mi Dinero · {fmt(saldo)}</span>
             </button>
-          ) : (
-            <>
-              <div style={{ width:'100%', background:'#111', border:'1px solid #1a1a1a', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, opacity:.45, marginBottom:3, cursor:'not-allowed' }}>
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#333" strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                <span style={{ color:'#333', fontSize:11 }}>Pagar con Mi Dinero</span>
-              </div>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4, padding:'0 2px' }}>
-                <span style={{ color:'#444', fontSize:8 }}>Saldo: {fmt(saldo)}</span>
-                <span style={{ color:'#666', fontSize:8 }}>Faltan: {fmt(totalAmt - saldo)}</span>
-              </div>
-              {recargaUrl && (
-                <a href={recargaUrl} target="_blank" rel="noreferrer" style={{ textDecoration:'none', display:'block', marginBottom:6 }}>
-                  <div style={{ background:'rgba(230,120,0,0.08)', border:'1px solid rgba(230,120,0,0.2)', borderRadius:8, padding:'6px 10px', display:'flex', alignItems:'center', justifyContent:'center', gap:5 }}>
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#E67E22" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    <span style={{ color:'#E67E22', fontSize:9, fontWeight:600 }}>Recargar saldo via WhatsApp</span>
-                  </div>
-                </a>
-              )}
-            </>
           )}
 
-          {/* Puntos */}
-          {puntosOk ? (
-            <button onClick={() => { if(window.confirm('Pagar con '+ptsNeed.toLocaleString()+' puntos?')) alert('Pago con puntos procesado!') }} style={{ width:'100%', background:'#1a1500', border:'1px solid rgba(230,190,0,0.35)', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:10, fontFamily:'inherit' }}>
+          {/* 4. Puntos — SOLO si alcanza */}
+          {puntosOk && (
+            <button onClick={() => { if(window.confirm('Usar '+ptsNeed.toLocaleString()+' puntos?')) alert('Pago con puntos!') }} style={{ width:'100%', background:'#1a1500', border:'1px solid rgba(230,190,0,0.35)', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:6, fontFamily:'inherit' }}>
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={C.gold} strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
               <span style={{ color:C.gold, fontSize:11, fontWeight:600 }}>Pagar con Puntos · {puntos.toLocaleString()} pts</span>
             </button>
-          ) : (
-            <>
-              <div style={{ width:'100%', background:'#111', border:'1px solid #1a1200', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, opacity:.45, marginBottom:3, cursor:'not-allowed' }}>
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#333" strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
-                <span style={{ color:'#333', fontSize:11 }}>Pagar con Puntos</span>
-              </div>
-              <div style={{ background:'#1a1200', borderRadius:7, padding:'6px 10px', display:'flex', justifyContent:'space-between', marginBottom:10 }}>
-                <span style={{ color:'#555', fontSize:8 }}>Tienes: {puntos.toLocaleString()} pts</span>
-                <span style={{ color:C.gold, fontSize:8, fontWeight:600 }}>Faltan: {Math.max(0,ptsNeed-puntos).toLocaleString()} pts</span>
-              </div>
-            </>
+          )}
+
+          {/* Nota discreta solo si tiene puntos pero no alcanzan */}
+          {!puntosOk && puntos > 0 && (
+            <div style={{ background:'rgba(230,190,0,0.04)', border:'1px solid rgba(230,190,0,0.1)', borderRadius:8, padding:'7px 10px', display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+              <span style={{ color:'#555', fontSize:9 }}>Te faltan {Math.max(0,ptsNeed-puntos).toLocaleString()} pts para pagar con puntos</span>
+              <span style={{ color:'#E6BE00', fontSize:9, fontWeight:600 }}>{puntos.toLocaleString()}/{ptsNeed.toLocaleString()}</span>
+            </div>
           )}
 
           {/* Liberar — discreto, rojo */}
@@ -2693,7 +2667,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <div style={S.card}>
             <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:12 }}>Configuracion General</div>
-            {[['showPoints','Mostrar boton Puntos','Visible en la barra de navegacion'],['showWinners','Mostrar boton Ganadores','Visible en la pantalla de inicio'],['showHowItWorks','Mostrar Como funciona?','Visible en la pantalla de inicio'],['showWelcomeBonus','Bono de bienvenida','$500 + 1000 pts al registrarse'],['show_bingo','Mostrar Bingo','Activa el juego de bingo']].map(([key,label,desc]) => (
+            {[['showPoints','Mostrar boton Puntos','Visible en la barra de navegacion'],['showWinners','Mostrar boton Ganadores','Visible en la pantalla de inicio'],['showHowItWorks','Mostrar Como funciona?','Visible en la pantalla de inicio'],['showWelcomeBonus','Bono de bienvenida','$500 + 1000 pts al registrarse'],['show_bingo','Mostrar Bingo','Activa el juego de bingo'],['showWAPayButton','Boton Pagar por WhatsApp','Desactiva si quieres que paguen solo por el chat de soporte']].map(([key,label,desc]) => (
               <div key={key} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:10, padding:'11px 14px', marginBottom:8 }}>
                 <div><div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>{label}</div><div style={{ color:C.muted, fontSize:10, marginTop:1 }}>{desc}</div></div>
                 <Toggle on={localConfig[key]} onToggle={() => setLocalConfig(prev=>({...prev,[key]:!prev[key]}))} />
