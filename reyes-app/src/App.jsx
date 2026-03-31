@@ -154,18 +154,21 @@ export default function App() {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
+      if (session?.user) await fetchProfile(session.user.id)
       setLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        await fetchProfile(session.user.id)
+      const u = session?.user ?? null
+      setUser(u)
+      if (u) {
+        await fetchProfile(u.id)
         const p = JSON.parse(localStorage.getItem('pendingNums') || 'null')
         if (p?.raffleId && p?.nums?.length > 0) setPendingNums(p)
-      } else setProfile(null)
+      } else {
+        setProfile(null)
+      }
     })
     fetchConfig()
     return () => subscription.unsubscribe()
@@ -359,7 +362,7 @@ export default function App() {
   if (authPage === 'register') return <RegisterScreen onRegister={doRegister} onLogin={() => setAuthPage('login')} appConfig={appConfig} />
 
   const displayName = profile?.full_name || user?.user_metadata?.full_name || 'Amigo'
-  const isAdmin = profile?.role === 'admin' || user?.user_metadata?.role === 'admin' || user?.email === 'domenechgoet@gmail.com'
+  const isAdmin = profile?.role === 'admin' || user?.user_metadata?.role === 'admin' || user?.email === 'domenechgoet@gmail.com' || profile?.email === 'domenechgoet@gmail.com'
 
   return (
     <div style={{ background: C.bg, minHeight: '100vh' }}>
@@ -2847,7 +2850,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
     alert('Configuracion guardada')
   }
 
-  if (!isAdmin) return <div style={{ ...S.content, textAlign:'center', paddingTop:60 }}><div style={{ fontSize:48 }}>🔒</div><p style={{ color:C.muted, marginTop:16 }}>Acceso restringido</p></div>
+  // Admin verificado en el componente padre
   if (showCreateRaffle || editingRaffle) return <RaffleForm raffle={editingRaffle} onBack={() => { setShowCreateRaffle(false); setEditingRaffle(null) }} onSave={() => { setShowCreateRaffle(false); setEditingRaffle(null); onRefreshRaffles(); loadAdminData() }} />
 
   const pending = tickets.filter(t => t.status === 'reserved')
