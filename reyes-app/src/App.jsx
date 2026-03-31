@@ -1868,6 +1868,89 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
 
 
 // ─── RAFFLE TICKET GROUP — todos los numeros del mismo sorteo en una tarjeta ──
+// ─── MODAL LIBERAR ─────────────────────────────────────────────────────────────
+function LiberarModal({ allNums, tickets, liberarNum, setLiberarNum, onClose, onRefresh, isSociety }) {
+  const [working, setWorking] = useState(false)
+  const pad2 = n => String(n).padStart(2,'0')
+
+  async function doLiberar() {
+    if (liberarNum === null || liberarNum === undefined || working) return
+    setWorking(true)
+    try {
+      const ticket = tickets.find(t => (t.numbers||[]).includes(liberarNum))
+      if (!ticket) { alert('Boleto no encontrado'); setWorking(false); return }
+
+      const isSocTicket = String(ticket.id).startsWith('soc_')
+
+      if (isSocTicket) {
+        const realId = ticket.society_id || String(ticket.id).replace('soc_','')
+        const { error } = await supabase.from('society_tickets').delete().eq('id', realId)
+        if (error) {
+          const { error: e2 } = await supabase.from('society_tickets')
+            .update({ status:'cancelled', updated_at: new Date().toISOString() }).eq('id', realId)
+          if (e2) throw e2
+        }
+      } else {
+        const nums = ticket.numbers || []
+        if (nums.length <= 1) {
+          const { error } = await supabase.from('tickets').update({ status:'released' }).eq('id', ticket.id)
+          if (error) throw error
+        } else {
+          const newNums = nums.filter(x => x !== liberarNum)
+          const ppu = ticket.total_amount / nums.length
+          const { error } = await supabase.from('tickets').update({ numbers:newNums, total_amount:Math.round(ppu*newNums.length) }).eq('id', ticket.id)
+          if (error) throw error
+        }
+      }
+      onRefresh && onRefresh()
+      onClose()
+    } catch(e) {
+      console.error('Liberar error:', e)
+      alert('Error: ' + (e.message || 'Intenta de nuevo'))
+    }
+    setWorking(false)
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.92)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={onClose}>
+      <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:'22px 20px 28px', width:'100%', maxWidth:500, border:'1px solid #1a1a1a', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e=>e.stopPropagation()}>
+        <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#E74C3C,transparent)' }}></div>
+        <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
+        <div style={{ fontSize:28, textAlign:'center', marginBottom:8 }}>🍀</div>
+        <div style={{ color:'#fff', fontSize:14, fontWeight:900, textAlign:'center', marginBottom:4 }}>Elige el numero a liberar</div>
+        <div style={{ color:'#666', fontSize:11, textAlign:'center', marginBottom:16 }}>El numero quedara disponible para otros</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:16 }}>
+          {allNums.map(n => {
+            const sel = liberarNum === n
+            return (
+              <div key={n} onClick={() => setLiberarNum(sel ? null : n)}
+                style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:sel?'rgba(231,76,60,0.12)':'#111', border:sel?'1.5px solid #E74C3C':'1px solid #222', borderRadius:10, padding:'12px 14px', cursor:'pointer' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ width:34, height:34, background:sel?'rgba(231,76,60,0.2)':'rgba(230,190,0,0.08)', border:sel?'1.5px solid #E74C3C':'1px solid rgba(230,190,0,0.2)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <span style={{ color:sel?'#E74C3C':'#E6BE00', fontSize:14, fontWeight:900 }}>{pad2(n)}</span>
+                  </div>
+                  <span style={{ color:sel?'#E74C3C':'#888', fontSize:13, fontWeight:600 }}>Numero #{pad2(n)}</span>
+                </div>
+                <div style={{ width:22, height:22, borderRadius:'50%', border:sel?'none':'1.5px solid #333', background:sel?'#E74C3C':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  {sel && <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <button onClick={doLiberar} disabled={liberarNum===null||working}
+          style={{ width:'100%', background:liberarNum!==null&&!working?'rgba(192,57,43,0.15)':'#111', border:liberarNum!==null&&!working?'1px solid rgba(192,57,43,0.4)':'1px solid #1a1a1a', borderRadius:11, padding:14, color:liberarNum!==null&&!working?'#E74C3C':'#444', fontSize:13, fontWeight:700, cursor:liberarNum!==null&&!working?'pointer':'not-allowed', fontFamily:'inherit', marginBottom:10 }}>
+          {working ? 'Liberando...' : liberarNum!==null ? `Liberar el #${pad2(liberarNum)}` : 'Selecciona un numero'}
+        </button>
+        <button onClick={onClose} style={{ width:'100%', background:'#E6BE00', border:'none', borderRadius:11, padding:13, color:'#000', fontSize:13, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>
+          No, conservar mis numeros 🍀
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
 function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSupport }) {
   const { raffle, tickets } = group
   const allNums   = tickets.flatMap(t => t.numbers || [])
@@ -2134,92 +2217,15 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
       )}
 
       {/* MODAL LIBERAR */}
-      {showLiberar && (() => {
-        const pad2 = n => String(n).padStart(2,'0')
-        return (
-          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.92)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowLiberar(false)}>
-            <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:'22px 20px 28px', width:'100%', maxWidth:500, border:'1px solid #1a1a1a', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e => e.stopPropagation()}>
-              <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,#E74C3C,transparent)` }}></div>
-              <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
-              <div style={{ fontSize:30, textAlign:'center', marginBottom:8 }}>🍀</div>
-              <div style={{ color:'#fff', fontSize:14, fontWeight:900, textAlign:'center', marginBottom:4 }}>Estos son tus numeros</div>
-              <div style={{ color:'#666', fontSize:11, textAlign:'center', marginBottom:16 }}>Elige cuál quieres liberar</div>
-
-              {/* Lista de números individuales */}
-              <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:16 }}>
-                {allNums.map(n => {
-                  const numStr = '#'+pad2(n)
-                  const [selNum, setSelNum] = [liberarNum, setLiberarNum]
-                  return (
-                    <div key={n} onClick={() => setLiberarNum(prev => prev===n ? null : n)}
-                      style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background: liberarNum===n?'rgba(231,76,60,0.12)':'#111', border: liberarNum===n?'1.5px solid #E74C3C':'1px solid #1a1a1a', borderRadius:10, padding:'11px 14px', cursor:'pointer' }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                        <div style={{ width:32, height:32, background: liberarNum===n?'rgba(231,76,60,0.2)':'rgba(230,190,0,0.08)', border: liberarNum===n?'1.5px solid #E74C3C':`1px solid rgba(230,190,0,0.2)`, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                          <span style={{ color: liberarNum===n?'#E74C3C':C.gold, fontSize:13, fontWeight:900 }}>{pad2(n)}</span>
-                        </div>
-                        <span style={{ color: liberarNum===n?'#E74C3C':'#888', fontSize:12, fontWeight:600 }}>Numero {numStr}</span>
-                      </div>
-                      <div style={{ width:20, height:20, borderRadius:'50%', border: liberarNum===n?'none':'1.5px solid #333', background: liberarNum===n?'#E74C3C':'transparent', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                        {liberarNum===n && <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              <button onClick={async () => {
-                if (liberarNum === null || liberarNum === undefined) return
-                try {
-                  const numToRelease = liberarNum
-                  const ticket = tickets.find(t => (t.numbers||[]).includes(numToRelease))
-                  if (!ticket) { alert('No se encontró el boleto'); return }
-
-                  // Detectar si es boleto de sociedad (id empieza con 'soc_')
-                  const isSocTicket = String(ticket.id).startsWith('soc_')
-
-                  if (isSocTicket) {
-                    const realId = ticket.society_id || String(ticket.id).replace('soc_', '')
-                    // Intentar eliminar primero
-                    const { error: delErr } = await supabase.from('society_tickets')
-                      .delete().eq('id', realId)
-                    if (delErr) {
-                      // Fallback: marcar como cancelled SIN limpiar FKs (evitar FK violation)
-                      // Solo cambiar status para que confirm() lo ignore
-                      const { error: updErr } = await supabase.from('society_tickets')
-                        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-                        .eq('id', realId)
-                      if (updErr) throw updErr
-                    }
-                  } else {
-                    // Ticket normal
-                    const nums = ticket.numbers || []
-                    if (nums.length <= 1) {
-                      const { error } = await supabase.from('tickets').update({ status:'released' }).eq('id', ticket.id)
-                      if (error) throw error
-                    } else {
-                      const newNums = nums.filter(x => x !== numToRelease)
-                      const pricePerNum = ticket.total_amount / nums.length
-                      const { error } = await supabase.from('tickets').update({ numbers: newNums, total_amount: Math.round(pricePerNum * newNums.length) }).eq('id', ticket.id)
-                      if (error) throw error
-                    }
-                  }
-                  setShowLiberar(false)
-                  setLiberarNum(null)
-                  onRefresh && onRefresh()
-                } catch(e) {
-                  console.error('Error liberando:', e)
-                  alert('Error al liberar: ' + e.message)
-                }
-              }} disabled={liberarNum === null} style={{ width:'100%', background: liberarNum!==null?'rgba(192,57,43,0.15)':'#111', border: liberarNum!==null?'1px solid rgba(192,57,43,0.4)':'1px solid #1a1a1a', borderRadius:11, padding:13, color: liberarNum!==null?'#E74C3C':'#444', fontSize:12, fontWeight:700, cursor: liberarNum!==null?'pointer':'not-allowed', fontFamily:'inherit', marginBottom:10 }}>
-                {liberarNum !== null ? `Liberar el #${pad2(liberarNum)}` : 'Selecciona un numero'}
-              </button>
-              <button onClick={() => { setShowLiberar(false); setLiberarNum(null) }} style={{ width:'100%', background:C.gold, border:'none', borderRadius:11, padding:13, color:'#000', fontSize:13, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>
-                No, conservar mis numeros 🍀
-              </button>
-            </div>
-          </div>
-        )
-      })()}
+      {showLiberar && <LiberarModal
+        allNums={allNums}
+        tickets={tickets}
+        liberarNum={liberarNum}
+        setLiberarNum={setLiberarNum}
+        onClose={() => { setShowLiberar(false); setLiberarNum(null) }}
+        onRefresh={onRefresh}
+        isSociety={isSociety || isSocietyFull}
+      />}
       )}
     </div>
   )
