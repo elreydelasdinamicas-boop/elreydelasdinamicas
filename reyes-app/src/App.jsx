@@ -194,6 +194,7 @@ export default function App() {
     fetchReserved(selectedRaffle.id)
     const ch = supabase.channel(`tickets-${selectedRaffle.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: `raffle_id=eq.${selectedRaffle.id}` }, () => fetchReserved(selectedRaffle.id))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'society_tickets', filter: `raffle_id=eq.${selectedRaffle.id}` }, () => fetchReserved(selectedRaffle.id))
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [selectedRaffle])
@@ -218,8 +219,13 @@ export default function App() {
     if (data) setAppConfig(prev => ({ ...prev, ...data }))
   }
   async function fetchReserved(id) {
+    // Tickets normales
     const { data } = await supabase.from('tickets').select('numbers').eq('raffle_id', id).in('status', ['reserved', 'paid'])
-    if (data) setAllReservedNums(data.flatMap(t => t.numbers || []))
+    const normalNums = (data || []).flatMap(t => t.numbers || [])
+    // Society tickets — numeros con 2 socios completos se marcan como reservados en la tabla
+    const { data: sData } = await supabase.from('society_tickets').select('number').eq('raffle_id', id).eq('status', 'complete')
+    const societyFullNums = (sData || []).map(s => s.number)
+    setAllReservedNums([...normalNums, ...societyFullNums])
   }
   async function fetchProfile(id) {
     const { data } = await supabase.from('users_profile').select('*').eq('id', id).single()
@@ -271,17 +277,19 @@ export default function App() {
           raffles: st.raffles,
           numbers: [st.number],  // society_tickets usa 'number' singular
           status: (st.status === 'complete' || st.status === 'waiting') ? 'reserved' : st.status === 'paid' ? 'paid' : 'reserved',
-          total_amount: st.socio1_id === user.id ? (st.socio1_amount || 0) : (st.socio2_amount || 0),
+          total_amount: st.socio1_id === user.id ? (st.socio1_amount || Math.round((st.raffles?.ticket_price||0)/2)) : (st.socio2_amount || Math.round((st.raffles?.ticket_price||0)/2)),
           is_society: true,
           society_id: st.id,
           society_pct: 50,
           society_status: st.status,
           society_partner: st.socio1_id === user.id ? st.socio2_id : st.socio1_id,
           created_at: st.created_at
-        })).filter(st => st.total_amount > 0)  // solo si tiene monto asignado
-        // Merge: normales + sociedad, sin duplicar
+        }))  // mostrar todos los society tickets del usuario sin filtrar
+        // Merge: normales + sociedad
         const regular = data || []
-        setMyTickets([...regular, ...societyAsTickets])
+        const merged = [...regular, ...societyAsTickets]
+        setMyTickets(merged)
+        try { localStorage.setItem('lcdd_tickets_'+user.id, JSON.stringify(merged)) } catch(e) {}
       }
     } catch(e) { console.error('fetchMyTickets:', e) }
   }
