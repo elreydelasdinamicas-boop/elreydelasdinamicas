@@ -3133,7 +3133,6 @@ function RaffleForm({ raffle, onBack, onSave }) {
       }
 
       setSaving(false)
-      showToast(isEdit ? 'Dinamica actualizada!' : 'Dinamica creada exitosamente!')
       onSave()
     } catch(e) {
       console.error('Save error:', e)
