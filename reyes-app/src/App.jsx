@@ -741,12 +741,18 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
     return 'waiting'                                       // 1 socio externo, falta 1
   }
 
+  const [showMyModal, setShowMyModal] = useState(false)  // modal especial "ya tengo 50%"
+
   function openModal(n) {
     const st = getNumStatus(n)
-    if (st === 'full') return  // no se puede seleccionar
+    if (st === 'full' || st === 'i_am_full') return
     setSelectedNum(n)
     setSelectedMode(null)
-    setShowModal(true)
+    if (st === 'i_am_socio1' || st === 'i_am_socio2') {
+      setShowMyModal(true)  // modal especial para el usuario que ya tiene parte
+    } else {
+      setShowModal(true)
+    }
   }
 
   async function confirm() {
@@ -813,10 +819,15 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
         if (error) throw error
       }
 
-      // Refresh states
+      // Refresh states and tickets
       await loadStates()
+      if (onSociety) {
+        // fetchMyTickets se llama dentro de onSociety para actualizar el perfil
+        await onSociety(selectedNum, selectedMode)
+      }
       setConfirming(false)
       setShowModal(false)
+      setShowMyModal(false)
       // Success toast
       const okDiv = document.createElement('div')
       okDiv.style.cssText = [
@@ -927,6 +938,111 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
           </div>
         </div>
       )}
+
+      {/* MODAL — ya tengo el 50% de este numero */}
+      {showMyModal && selectedNum !== null && (() => {
+        const st = societyStates[selectedNum]
+        const isSocio1 = st?.socio1_id === user?.id
+        const otherHalfFree = !st?.socio2_id
+        return (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.92)', zIndex:400, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowMyModal(false)}>
+            <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:22, width:'100%', maxWidth:500, border:'1px solid rgba(52,152,219,0.3)', borderBottom:'none', position:'relative', overflow:'hidden', maxHeight:'88vh', overflowY:'auto' }} onClick={e=>e.stopPropagation()}>
+              <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#3498DB,transparent)' }}></div>
+              <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
+
+              {/* Header — tu numero */}
+              <div style={{ display:'flex', alignItems:'center', gap:12, background:'rgba(52,152,219,0.08)', border:'1px solid rgba(52,152,219,0.2)', borderRadius:14, padding:14, marginBottom:14 }}>
+                <div style={{ width:52, height:52, background:'rgba(52,152,219,0.15)', border:'2px solid #3498DB', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <span style={{ color:'#5DADE2', fontSize:22, fontWeight:900 }}>{pad(selectedNum)}</span>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ color:'#5DADE2', fontSize:14, fontWeight:700 }}>Ya tienes el 50% del #{pad(selectedNum)}</div>
+                  <div style={{ color:'#888', fontSize:11, marginTop:2 }}>Reservado — pendiente de pago</div>
+                </div>
+                <div style={{ background:'rgba(52,152,219,0.15)', borderRadius:999, padding:'4px 10px', flexShrink:0 }}>
+                  <span style={{ color:'#3498DB', fontSize:11, fontWeight:700 }}>50%</span>
+                </div>
+              </div>
+
+              {/* Resumen */}
+              <div style={{ background:'#111', borderRadius:12, padding:14, marginBottom:14 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+                  <span style={{ color:'#888', fontSize:12 }}>Tu pago</span>
+                  <span style={{ color:'#5DADE2', fontSize:13, fontWeight:700 }}>{fmt(halfPrice)}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
+                  <span style={{ color:'#888', fontSize:12 }}>Si gana, recibes</span>
+                  <span style={{ color:'#27AE60', fontSize:12, fontWeight:700 }}>50% del premio</span>
+                </div>
+                <div style={{ height:1, background:'#1a1a1a', marginBottom:10 }}></div>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <div style={{ width:8, height:8, background: otherHalfFree?'#E67E22':'#27AE60', borderRadius:'50%' }}></div>
+                  <span style={{ color: otherHalfFree?'#E67E22':'#27AE60', fontSize:10 }}>
+                    {otherHalfFree ? 'Esperando un segundo socio' : 'Boleto completo — tienes ambas mitades'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Opcion comprar el otro 50% — solo si aún está libre */}
+              {otherHalfFree && (
+                <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:12, padding:14, marginBottom:14 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#E6BE00" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <span style={{ color:C.gold, fontSize:12, fontWeight:700 }}>Quieres el 100% de este numero?</span>
+                  </div>
+                  <div style={{ color:'#888', fontSize:11, lineHeight:1.6, marginBottom:12 }}>
+                    El otro 50% aún está disponible. Si lo compras tú, tendrías el boleto completo y <span style={{ color:C.gold, fontWeight:600 }}>todo el premio si gana</span>.
+                  </div>
+                  {/* Desglose visual */}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#111', borderRadius:9, padding:'10px 12px', marginBottom:12 }}>
+                    <div style={{ textAlign:'center' }}>
+                      <div style={{ color:'#888', fontSize:9, marginBottom:2 }}>Ya pagaste</div>
+                      <div style={{ color:'#5DADE2', fontSize:13, fontWeight:700 }}>{fmt(halfPrice)}</div>
+                    </div>
+                    <div style={{ color:'#333', fontSize:18 }}>+</div>
+                    <div style={{ textAlign:'center' }}>
+                      <div style={{ color:'#888', fontSize:9, marginBottom:2 }}>Pagarías ahora</div>
+                      <div style={{ color:C.gold, fontSize:13, fontWeight:700 }}>{fmt(halfPrice)}</div>
+                    </div>
+                    <div style={{ color:'#333', fontSize:18 }}>=</div>
+                    <div style={{ textAlign:'center' }}>
+                      <div style={{ color:'#888', fontSize:9, marginBottom:2 }}>Total</div>
+                      <div style={{ color:'#27AE60', fontSize:13, fontWeight:700 }}>{fmt(r.ticket_price)}</div>
+                    </div>
+                  </div>
+                  <button onClick={async () => {
+                    setConfirming(true)
+                    try {
+                      const { error } = await supabase.from('society_tickets').update({
+                        socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
+                        status: 'complete', updated_at: new Date().toISOString()
+                      }).eq('id', st.id)
+                      if (error) throw error
+                      await loadStates()
+                      if (onSociety) await onSociety(selectedNum, 'buy_other_half')
+                      setShowMyModal(false)
+                      setConfirming(false)
+                      // Toast éxito
+                      const ok = document.createElement('div')
+                      ok.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#1a6b2a,#27AE60);color:#fff;border-radius:16px;padding:16px 22px;font-size:13px;font-weight:700;max-width:88vw;min-width:240px;box-shadow:0 8px 32px rgba(0,0,0,0.6);display:flex;align-items:center;gap:12px;font-family:system-ui'
+                      ok.innerHTML = '<div style="font-size:22px">✅</div><div><div style="font-size:11px;opacity:.8;margin-bottom:2px">Boleto completo!</div><div>#'+pad(selectedNum)+' ahora es tuyo al 100% — aparece en tu perfil</div></div>'
+                      document.body.appendChild(ok)
+                      setTimeout(()=>{ok.style.transition='opacity .4s';ok.style.opacity='0';setTimeout(()=>ok.remove(),400)},3000)
+                    } catch(e) {
+                      setConfirming(false)
+                      alert(e.message)
+                    }
+                  }} disabled={confirming} style={{ width:'100%', background:C.gold, border:'none', borderRadius:10, padding:13, color:'#000', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit', opacity:confirming?.6:1 }}>
+                    {confirming ? 'Procesando...' : `Comprar el otro 50% — ${fmt(halfPrice)}`}
+                  </button>
+                </div>
+              )}
+
+              <button onClick={() => setShowMyModal(false)} style={{ width:'100%', background:'transparent', border:'none', color:'#444', fontSize:12, cursor:'pointer', padding:8, fontFamily:'inherit' }}>Cerrar</button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* MODAL elegir numero */}
       {showModal && (
