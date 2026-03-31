@@ -306,7 +306,8 @@ export default function App() {
           society_status: st.status,
           society_partner: iOwn100 ? null : (isSocio1 ? st.socio2_id : st.socio1_id),
           created_at: st.created_at
-        }))  // mostrar todos los society tickets del usuario sin filtrar
+          }  // close return object
+        })  // close .map() — mostrar todos los society tickets del usuario sin filtrar
         // Merge: normales + sociedad
         const regular = data || []
         const merged = [...regular, ...societyAsTickets]
