@@ -412,7 +412,7 @@ export default function App() {
             }
 
             await fetchMyTickets()
-            setPage('profile')
+            setTimeout(() => setPage('profile'), 200)
           } catch(e) { console.error('Society error:', e); throw e }
         }} />}
         {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { setSupportTicketContext(ctx||null); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
@@ -1819,6 +1819,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   const isFinished = status === 'finished'
 
   const [showLiberar, setShowLiberar]   = useState(false)
+  const [liberarNum, setLiberarNum]     = useState(null)
   const [showInfoDinero, setShowInfoDinero] = useState(false)
   const [showInfoPuntos, setShowInfoPuntos] = useState(false)
 
@@ -2067,37 +2068,65 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
       )}
 
       {/* MODAL LIBERAR */}
-      {showLiberar && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowLiberar(false)}>
-          <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:'26px 20px 30px', width:'100%', maxWidth:500, border:'1px solid #1a1a1a', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e => e.stopPropagation()}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-            <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 20px' }}></div>
-            <div style={{ textAlign:'center', marginBottom:20 }}>
-              <div style={{ fontSize:38, marginBottom:10 }}>🍀</div>
-              <div style={{ color:'#fff', fontSize:15, fontWeight:900, marginBottom:8, lineHeight:1.4 }}>Este puede ser tu numero de la suerte...</div>
-              <div style={{ color:'#666', fontSize:12, lineHeight:1.7 }}>
-                {allNums.map(n=>'#'+String(n).padStart(2,'0')).join(' y ')} esta apartado solo para ti.{' '}
-                No lo dejes ir — el sorteo podria sorprenderte antes del cierre.
+      {showLiberar && (() => {
+        const pad2 = n => String(n).padStart(2,'0')
+        return (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.92)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setShowLiberar(false)}>
+            <div style={{ background:'#141414', borderRadius:'22px 22px 0 0', padding:'22px 20px 28px', width:'100%', maxWidth:500, border:'1px solid #1a1a1a', borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e => e.stopPropagation()}>
+              <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,#E74C3C,transparent)` }}></div>
+              <div style={{ width:38, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
+              <div style={{ fontSize:30, textAlign:'center', marginBottom:8 }}>🍀</div>
+              <div style={{ color:'#fff', fontSize:14, fontWeight:900, textAlign:'center', marginBottom:4 }}>Estos son tus numeros</div>
+              <div style={{ color:'#666', fontSize:11, textAlign:'center', marginBottom:16 }}>Elige cuál quieres liberar</div>
+
+              {/* Lista de números individuales */}
+              <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:16 }}>
+                {allNums.map(n => {
+                  const numStr = '#'+pad2(n)
+                  const [selNum, setSelNum] = [liberarNum, setLiberarNum]
+                  return (
+                    <div key={n} onClick={() => setLiberarNum(prev => prev===n ? null : n)}
+                      style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background: liberarNum===n?'rgba(231,76,60,0.12)':'#111', border: liberarNum===n?'1.5px solid #E74C3C':'1px solid #1a1a1a', borderRadius:10, padding:'11px 14px', cursor:'pointer' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ width:32, height:32, background: liberarNum===n?'rgba(231,76,60,0.2)':'rgba(230,190,0,0.08)', border: liberarNum===n?'1.5px solid #E74C3C':`1px solid rgba(230,190,0,0.2)`, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          <span style={{ color: liberarNum===n?'#E74C3C':C.gold, fontSize:13, fontWeight:900 }}>{pad2(n)}</span>
+                        </div>
+                        <span style={{ color: liberarNum===n?'#E74C3C':'#888', fontSize:12, fontWeight:600 }}>Numero {numStr}</span>
+                      </div>
+                      <div style={{ width:20, height:20, borderRadius:'50%', border: liberarNum===n?'none':'1.5px solid #333', background: liberarNum===n?'#E74C3C':'transparent', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                        {liberarNum===n && <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
+
+              <button onClick={async () => {
+                if (!liberarNum && liberarNum !== 0) return
+                try {
+                  // Si el ticket tiene varios números, solo quitar ese número
+                  const ticket = tickets.find(t => (t.numbers||[]).includes(liberarNum))
+                  if (!ticket) return
+                  if ((ticket.numbers||[]).length === 1) {
+                    await supabase.from('tickets').update({ status:'released' }).eq('id', ticket.id)
+                  } else {
+                    const newNums = (ticket.numbers||[]).filter(x => x !== liberarNum)
+                    const newAmt = Math.round(ticket.total_amount / ticket.numbers.length * newNums.length)
+                    await supabase.from('tickets').update({ numbers: newNums, total_amount: newAmt }).eq('id', ticket.id)
+                  }
+                  setShowLiberar(false); setLiberarNum(null)
+                  onRefresh && onRefresh()
+                } catch(e) { console.error('Error liberando:', e) }
+              }} disabled={liberarNum === null} style={{ width:'100%', background: liberarNum!==null?'rgba(192,57,43,0.15)':'#111', border: liberarNum!==null?'1px solid rgba(192,57,43,0.4)':'1px solid #1a1a1a', borderRadius:11, padding:13, color: liberarNum!==null?'#E74C3C':'#444', fontSize:12, fontWeight:700, cursor: liberarNum!==null?'pointer':'not-allowed', fontFamily:'inherit', marginBottom:10 }}>
+                {liberarNum!==null ? `Liberar el #${pad2(liberarNum)}` : 'Selecciona un numero'}
+              </button>
+              <button onClick={() => { setShowLiberar(false); setLiberarNum(null) }} style={{ width:'100%', background:C.gold, border:'none', borderRadius:11, padding:13, color:'#000', fontSize:13, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>
+                No, conservar mis numeros 🍀
+              </button>
             </div>
-            <button onClick={async () => {
-              try {
-                // Liberar inmediatamente — marcar tickets como 'released'
-                const ticketIds = tickets.map(t => t.id)
-                await supabase.from('tickets').update({ status:'released' }).in('id', ticketIds)
-                setShowLiberar(false)
-                onRefresh && onRefresh()
-              } catch(e) {
-                console.error('Error liberando boleto:', e)
-              }
-            }} style={{ width:'100%', background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:11, padding:13, color:'#E74C3C', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginBottom:10 }}>
-              Si, liberar el boleto ahora
-            </button>
-            <button onClick={() => setShowLiberar(false)} style={{ width:'100%', background:C.gold, border:'none', borderRadius:11, padding:13, color:'#000', fontSize:13, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>
-              No, conservar mi numero 🍀
-            </button>
           </div>
-        </div>
+        )
+      })()}
       )}
     </div>
   )
