@@ -3086,57 +3086,51 @@ function RaffleForm({ raffle, onBack, onSave }) {
     setSaving(true)
     setSaveError(null)
     try {
-      // Safe prizes parse
       const prizes = (Array.isArray(form.prizes) ? form.prizes : [])
-        .filter(p => p && typeof p.amount === 'string' && p.amount.trim())
-        .map(p => ({ amount: p.amount.trim(), how_to_win: (p.how_to_win||'').trim() }))
+        .filter(p => p && p.amount && String(p.amount).trim())
+        .map(p => ({ amount: String(p.amount).trim(), how_to_win: (p.how_to_win||'').trim() }))
 
-      // Safe society_numbers parse  
       const snRaw = form.society_numbers
         ? String(form.society_numbers).split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n))
         : []
 
       const data = {
         title:          String(form.title).trim(),
-        ticket_price:   parseInt(form.ticket_price) || 5000,
-        number_range:   parseInt(form.number_range) || 100,
-        max_per_person: parseInt(form.max_per_person) || 5,
+        ticket_price:   Number(form.ticket_price) || 5000,
+        number_range:   Number(form.number_range) || 100,
+        max_per_person: Number(form.max_per_person) || 5,
         raffle_date:    form.raffle_date,
         lottery_name:   String(form.lottery_name).trim(),
         card_color:     form.card_color || '#E67E22',
         is_free:        !!form.is_free,
         accepts_points: form.accepts_points !== false,
-        prizes:         prizes,
+        prizes:         prizes.length > 0 ? prizes : [],
         status:         form.status || 'active',
         description:    form.description || '',
         is_featured:    !!form.is_featured,
         release_hours:  24,
       }
 
-      // Optional fields — only add if have value
       if (snRaw.length > 0) data.society_numbers = snRaw
-      if (form.close_time) data.close_time = form.close_time + ':00'
-
-      let saveErr = null
-      if (isEdit) {
-        const res = await supabase.from('raffles').update(data).eq('id', raffle.id)
-        saveErr = res.error
-      } else {
-        const res = await supabase.from('raffles').insert(data)
-        saveErr = res.error
+      if (form.close_time && form.close_time.trim()) {
+        data.close_time = form.close_time.includes(':') ? form.close_time + (form.close_time.length === 5 ? ':00' : '') : form.close_time
       }
 
-      if (saveErr) {
-        setSaveError('Error: ' + saveErr.message)
-        setSaving(false)
-        return
+      console.log('Saving raffle data:', data)
+
+      if (isEdit) {
+        const { error } = await supabase.from('raffles').update(data).eq('id', raffle.id)
+        if (error) throw new Error(error.message || JSON.stringify(error))
+      } else {
+        const { error } = await supabase.from('raffles').insert([data])
+        if (error) throw new Error(error.message || JSON.stringify(error))
       }
 
       setSaving(false)
       onSave()
     } catch(e) {
-      console.error('Save error:', e)
-      setSaveError('Error inesperado: ' + (e.message || String(e)))
+      console.error('Save raffle error:', e)
+      setSaveError('Error: ' + (e.message || 'Revisa la consola del navegador'))
       setSaving(false)
     }
   }
