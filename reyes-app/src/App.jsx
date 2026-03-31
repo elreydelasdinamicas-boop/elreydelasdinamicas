@@ -275,18 +275,28 @@ export default function App() {
         .order('created_at', { ascending: false })
       if (sData && sData.length > 0) {
         // Convertir society_tickets al formato de myTickets para mostrar en perfil
-        const societyAsTickets = sData.map(st => ({
+        const societyAsTickets = sData.map(st => {
+          const iOwn100 = st.socio1_id === user.id && st.socio2_id === user.id
+          const isSocio1 = st.socio1_id === user.id
+          const pct = iOwn100 ? 100 : 50
+          const myAmt = iOwn100
+            ? (st.socio1_amount||0) + (st.socio2_amount||0) || (st.raffles?.ticket_price||0)
+            : isSocio1
+              ? (st.socio1_amount || Math.round((st.raffles?.ticket_price||0)/2))
+              : (st.socio2_amount || Math.round((st.raffles?.ticket_price||0)/2))
+          return {
           id: 'soc_'+st.id,
           raffle_id: st.raffle_id,
           raffles: st.raffles,
-          numbers: [st.number],  // society_tickets usa 'number' singular
-          status: (st.status === 'complete' || st.status === 'waiting') ? 'reserved' : st.status === 'paid' ? 'paid' : 'reserved',
-          total_amount: st.socio1_id === user.id ? (st.socio1_amount || Math.round((st.raffles?.ticket_price||0)/2)) : (st.socio2_amount || Math.round((st.raffles?.ticket_price||0)/2)),
-          is_society: true,
+          numbers: [st.number],
+          status: (st.status==='complete'||st.status==='waiting') ? 'reserved' : st.status==='paid' ? 'paid' : 'reserved',
+          total_amount: myAmt,
+          is_society: !iOwn100,    // si tengo el 100% ya no es "sociedad" — es completo
+          is_society_full: iOwn100, // flag para mostrar "100% tuyo"
           society_id: st.id,
-          society_pct: 50,
+          society_pct: pct,
           society_status: st.status,
-          society_partner: st.socio1_id === user.id ? st.socio2_id : st.socio1_id,
+          society_partner: iOwn100 ? null : (isSocio1 ? st.socio2_id : st.socio1_id),
           created_at: st.created_at
         }))  // mostrar todos los society tickets del usuario sin filtrar
         // Merge: normales + sociedad
@@ -1863,7 +1873,8 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   const allNums   = tickets.flatMap(t => t.numbers || [])
   const totalAmt  = tickets.reduce((s,t) => s + (t.total_amount||0), 0)
   const firstTicket = tickets[0] || {}
-  const isSociety = group.isSociety || tickets.some(t => t.is_society || t.society_id)
+  const isSociety = group.isSociety || tickets.some(t => t.is_society && !t.is_society_full)
+  const isSocietyFull = tickets.some(t => t.is_society_full)
   const isReserved = status === 'reserved'
   const isPaid     = status === 'paid'
   const isFinished = status === 'finished'
@@ -1874,9 +1885,9 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   const [showInfoPuntos, setShowInfoPuntos] = useState(false)
 
   // Colors by status
-  const borderColor = isPaid ? 'rgba(39,174,96,0.35)' : isFinished ? '#1a1a1a' : isSociety ? 'rgba(155,89,182,0.35)' : 'rgba(230,190,0,0.35)'
-  const lineColor   = isPaid ? '#27AE60' : isFinished ? '#333' : isSociety ? '#9B59B6' : C.gold
-  const numColor    = isPaid ? '#27AE60' : isFinished ? '#444' : isSociety ? '#9B59B6' : C.gold
+  const borderColor = isPaid ? 'rgba(39,174,96,0.35)' : isFinished ? '#1a1a1a' : isSocietyFull ? 'rgba(230,190,0,0.35)' : isSociety ? 'rgba(155,89,182,0.35)' : 'rgba(230,190,0,0.35)'
+  const lineColor   = isPaid ? '#27AE60' : isFinished ? '#333' : isSocietyFull ? C.gold : isSociety ? '#9B59B6' : C.gold
+  const numColor    = isPaid ? '#27AE60' : isFinished ? '#444' : isSocietyFull ? C.gold : isSociety ? '#9B59B6' : C.gold
   const labelColor  = numColor
 
   // WA pago
@@ -1963,7 +1974,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
     a.click()
   }
 
-  const cardBg = isPaid ? '#0a180a' : isFinished ? '#0a0a0a' : isSociety ? '#0d0820' : '#0d0d0d'
+  const cardBg = isPaid ? '#0a180a' : isFinished ? '#0a0a0a' : isSocietyFull ? '#1a1500' : isSociety ? '#0d0820' : '#0d0d0d'
 
   return (
     <div style={{ background:cardBg, border:`1px solid ${borderColor}`, borderRadius:14, padding:14, marginBottom:12, position:'relative', overflow:'hidden' }}>
@@ -2022,15 +2033,20 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
         ))}
       </div>
 
-      {/* SOCIEDAD barra */}
-      {isSociety && firstTicket.society_pct && (
-        <div style={{ background:'#1a0d2a', borderRadius:8, padding:'8px 10px', marginBottom:10 }}>
+      {/* SOCIEDAD / 100% barra */}
+      {(isSociety || isSocietyFull) && firstTicket.society_pct && (
+        <div style={{ background: isSocietyFull?'rgba(230,190,0,0.08)':'#1a0d2a', borderRadius:8, padding:'8px 10px', marginBottom:10 }}>
           <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-            <span style={{ color:'#888', fontSize:9 }}>Tu parte: <span style={{ color:'#9B59B6', fontWeight:700 }}>{firstTicket.society_pct}%</span></span>
-            <span style={{ color:'#fff', fontSize:9, fontWeight:600 }}>Premio si ganas: {fmt(Math.round((raffle?.prizes?.[0]?.amount||0)*firstTicket.society_pct/100))}</span>
+            {isSocietyFull
+              ? <span style={{ color:C.gold, fontSize:9, fontWeight:700 }}>Tuyo al 100% — premio completo!</span>
+              : <span style={{ color:'#888', fontSize:9 }}>Tu parte: <span style={{ color:'#9B59B6', fontWeight:700 }}>{firstTicket.society_pct}%</span></span>
+            }
+            <span style={{ color: isSocietyFull?C.gold:'#fff', fontSize:9, fontWeight:600 }}>
+              Premio: {fmt(Math.round((raffle?.prizes?.[0]?.amount||0)*firstTicket.society_pct/100))}
+            </span>
           </div>
-          <div style={{ background:'#2a1040', borderRadius:999, height:5 }}>
-            <div style={{ background:'#9B59B6', borderRadius:999, height:5, width:(firstTicket.society_pct||33)+'%' }}></div>
+          <div style={{ background: isSocietyFull?'rgba(230,190,0,0.12)':'#2a1040', borderRadius:999, height:5 }}>
+            <div style={{ background: isSocietyFull?C.gold:'#9B59B6', borderRadius:999, height:5, width:'100%' }}></div>
           </div>
         </div>
       )}
