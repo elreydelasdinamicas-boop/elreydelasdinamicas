@@ -780,20 +780,47 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
 
       // Determinar acción según estado real
       if (!active) {
-        // LIBRE — insertar nuevo registro
-        const payload = {
-          raffle_id: r.id, number: selectedNum,
-          socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
-          status: selectedMode === 'full' ? 'complete' : 'waiting',
-          expires_at: exp
+        // Verificar si existe un registro cancelled para este número (fallback del delete)
+        const { data: cancelled } = await supabase
+          .from('society_tickets')
+          .select('id')
+          .eq('raffle_id', r.id)
+          .eq('number', selectedNum)
+          .eq('status', 'cancelled')
+          .limit(1)
+        const cancelledRec = cancelled?.[0]
+
+        if (cancelledRec) {
+          // Reutilizar el registro cancelled — actualizarlo en vez de insertar
+          const updatePayload = {
+            socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
+            socio2_id: null, socio2_paid: false, socio2_amount: 0,
+            status: selectedMode === 'full' ? 'complete' : 'waiting',
+            expires_at: exp, updated_at: new Date().toISOString()
+          }
+          if (selectedMode === 'full') {
+            updatePayload.socio2_id = user.id
+            updatePayload.socio2_amount = halfPrice
+          }
+          const { error } = await supabase.from('society_tickets')
+            .update(updatePayload).eq('id', cancelledRec.id)
+          if (error) throw error
+        } else {
+          // LIBRE — insertar nuevo registro
+          const payload = {
+            raffle_id: r.id, number: selectedNum,
+            socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
+            status: selectedMode === 'full' ? 'complete' : 'waiting',
+            expires_at: exp
+          }
+          if (selectedMode === 'full') {
+            payload.socio2_id = user.id
+            payload.socio2_paid = false
+            payload.socio2_amount = halfPrice
+          }
+          const { error } = await supabase.from('society_tickets').insert(payload)
+          if (error) throw error
         }
-        if (selectedMode === 'full') {
-          payload.socio2_id = user.id
-          payload.socio2_paid = false
-          payload.socio2_amount = halfPrice
-        }
-        const { error } = await supabase.from('society_tickets').insert(payload)
-        if (error) throw error
 
       } else if (active.socio1_id === user.id && !active.socio2_id) {
         // YO SOY SOCIO 1 — comprar la otra mitad
@@ -2136,17 +2163,16 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
 
                   if (isSocTicket) {
                     const realId = ticket.society_id || String(ticket.id).replace('soc_', '')
-                    // Eliminar el registro directamente — más limpio que cancelar
-                    const { error } = await supabase.from('society_tickets')
-                      .delete()
-                      .eq('id', realId)
-                    if (error) {
-                      // Si no se puede eliminar, cancelar y limpiar socios
-                      const { error: e2 } = await supabase.from('society_tickets')
-                        .update({ status:'cancelled', socio1_id:null, socio2_id:null,
-                          socio1_amount:0, socio2_amount:0, updated_at:new Date().toISOString() })
+                    // Intentar eliminar primero
+                    const { error: delErr } = await supabase.from('society_tickets')
+                      .delete().eq('id', realId)
+                    if (delErr) {
+                      // Fallback: marcar como cancelled SIN limpiar FKs (evitar FK violation)
+                      // Solo cambiar status para que confirm() lo ignore
+                      const { error: updErr } = await supabase.from('society_tickets')
+                        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
                         .eq('id', realId)
-                      if (e2) throw e2
+                      if (updErr) throw updErr
                     }
                   } else {
                     // Ticket normal
