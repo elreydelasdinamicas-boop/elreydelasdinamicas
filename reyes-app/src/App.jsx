@@ -349,7 +349,7 @@ export default function App() {
   if (authPage === 'register') return <RegisterScreen onRegister={doRegister} onLogin={() => setAuthPage('login')} appConfig={appConfig} />
 
   const displayName = profile?.full_name || user?.user_metadata?.full_name || 'Amigo'
-  const isAdmin = profile?.role === 'admin' || user?.user_metadata?.role === 'admin'
+  const isAdmin = profile?.role === 'admin' || user?.user_metadata?.role === 'admin' || user?.email === 'domenechgoet@gmail.com'
 
   return (
     <div style={{ background: C.bg, minHeight: '100vh' }}>
@@ -369,45 +369,45 @@ export default function App() {
           if (!user) { setAuthPage('login'); return }
           const halfPrice = Math.round(selectedRaffle.ticket_price / 2)
           try {
-            const { data: fresh } = await supabase.from('society_tickets')
-              .select('*').eq('raffle_id', selectedRaffle.id).eq('number', num).limit(1)
+            // Solo buscar registros activos — ignorar cancelled
+          const { data: fresh } = await supabase.from('society_tickets')
+              .select('*').eq('raffle_id', selectedRaffle.id).eq('number', num)
+              .in('status', ['waiting','complete','paid']).limit(1)
             const st = fresh?.[0]
 
-            if (mode === 'full') {
-              // Comprar completo — insertar como socio1 y socio2 al mismo tiempo
-              if (st) { alert('Este número ya tiene un socio. Solo puedes unirte como socio 2.'); return }
-              const { error } = await supabase.from('society_tickets').insert({
+            // Si no hay registro activo, verificar si hay cancelled para reutilizar
+            const { data: cancelledRows } = !st ? await supabase.from('society_tickets')
+              .select('id').eq('raffle_id', selectedRaffle.id).eq('number', num)
+              .eq('status','cancelled').limit(1) : { data: [] }
+            const cancelledId = cancelledRows?.[0]?.id
+
+            const exp = new Date(Date.now()+48*3600000).toISOString()
+
+            if (!st) {
+              // LIBRE — insertar o reutilizar cancelled
+              const payload = {
                 raffle_id: selectedRaffle.id, number: num,
                 socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
-                socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
-                status: 'complete', expires_at: new Date(Date.now()+48*3600000).toISOString()
-              })
-              if (error) throw error
-
-            } else if (mode === 'society') {
-              // Ser socio 1
-              if (st) { alert('Alguien más ya reservó este número.'); return }
-              const { error } = await supabase.from('society_tickets').insert({
-                raffle_id: selectedRaffle.id, number: num,
-                socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
-                status: 'waiting', expires_at: new Date(Date.now()+48*3600000).toISOString()
-              })
-              if (error) throw error
-
-            } else if (mode === 'socio2') {
-              // Unirse como socio 2
-              if (!st || st.socio2_id) { alert('Este número ya no está disponible.'); return }
-              if (st.socio1_id === user.id) { alert('Ya eres el socio 1 de este número.'); return }
+                socio2_id: (mode==='full'||mode==='buy_other_half') ? user.id : null,
+                socio2_paid: false, socio2_amount: (mode==='full'||mode==='buy_other_half') ? halfPrice : 0,
+                status: (mode==='full'||mode==='buy_other_half') ? 'complete' : 'waiting',
+                expires_at: exp, updated_at: new Date().toISOString()
+              }
+              if (cancelledId) {
+                const { error } = await supabase.from('society_tickets').update(payload).eq('id', cancelledId)
+                if (error) throw error
+              } else {
+                const { error } = await supabase.from('society_tickets').insert(payload)
+                if (error) throw error
+              }
+            } else if (mode === 'socio2' || (!st.socio2_id && st.socio1_id !== user.id)) {
+              if (st.socio2_id) { alert('Este número ya no está disponible.'); return }
               const { error } = await supabase.from('society_tickets').update({
                 socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
                 status: 'complete', updated_at: new Date().toISOString()
               }).eq('id', st.id)
               if (error) throw error
-
-            } else if (mode === 'buy_other_half') {
-              // Yo soy socio1 y quiero comprar la otra mitad también
-              if (!st || st.socio1_id !== user.id) { alert('No puedes comprar esta mitad.'); return }
-              if (st.socio2_id) { alert('Alguien más ya compró esa mitad.'); return }
+            } else if (mode === 'buy_other_half' && st.socio1_id === user.id && !st.socio2_id) {
               const { error } = await supabase.from('society_tickets').update({
                 socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
                 status: 'complete', updated_at: new Date().toISOString()
@@ -3378,7 +3378,13 @@ function ManualSaleForm({ raffles, onSaved }) {
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin, onRegister, onBack }) {
   const [email, setEmail] = useState(''); const [pwd, setPwd] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('')
-  const submit = async () => { setLoading(true); setError(''); try { await onLogin(email, pwd) } catch { setError('Correo o contrasena incorrectos') } finally { setLoading(false) } }
+  const submit = async () => {
+    if (!email || !pwd) { setError('Ingresa tu correo y contrasena'); return }
+    setLoading(true); setError('')
+    try { await onLogin(email, pwd) }
+    catch(e) { setError(e?.message?.includes('Invalid')||e?.message?.includes('invalid') ? 'Correo o contrasena incorrectos' : (e?.message || 'Error al ingresar')) }
+    finally { setLoading(false) }
+  }
   return (
     <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', justifyContent:'center', padding:24 }}>
       <style>{CSS}</style>
