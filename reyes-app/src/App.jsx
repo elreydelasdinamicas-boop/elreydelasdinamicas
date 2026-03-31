@@ -222,9 +222,14 @@ export default function App() {
     const { data } = await supabase.from('tickets').select('numbers').eq('raffle_id', id).in('status', ['reserved', 'paid'])
     const normalNums = (data || []).flatMap(t => t.numbers || [])
     // Society tickets — numeros con 2 socios completos se marcan como reservados en la tabla
-    const { data: sData } = await supabase.from('society_tickets').select('number').eq('raffle_id', id).eq('status', 'complete')
-    const societyFullNums = (sData || []).map(s => s.number)
-    setAllReservedNums([...normalNums, ...societyFullNums])
+    // Society completas (2 socios) Y en espera (1 socio) se marcan como ocupadas
+    // Excluir canceladas explícitamente
+    const { data: sData } = await supabase.from('society_tickets')
+      .select('number')
+      .eq('raffle_id', id)
+      .in('status', ['waiting', 'complete'])  // canceladas NO se incluyen
+    const societyOccupied = (sData || []).map(s => s.number)
+    setAllReservedNums([...normalNums, ...societyOccupied])
   }
   async function fetchProfile(id) {
     const { data } = await supabase.from('users_profile').select('*').eq('id', id).single()
@@ -709,8 +714,8 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
 
   useEffect(() => {
     loadStates()
-    // Poll cada 8 segundos en lugar de realtime (plan gratuito)
-    const interval = setInterval(loadStates, 8000)
+    // Poll cada 5 segundos (plan gratuito — sin realtime)
+    const interval = setInterval(loadStates, 5000)
     return () => clearInterval(interval)
   }, [r.id])
 
@@ -720,7 +725,7 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
       .select('id, number, status, socio1_id, socio2_id, socio1_amount, socio2_amount')
       .eq('raffle_id', r.id)
       .in('number', societyNums)
-      .not('status', 'eq', 'cancelled')
+      .in('status', ['waiting', 'complete', 'paid'])  // excluir cancelled
     const map = {}
     societyNums.forEach(n => { map[n] = null })
     if (data) data.forEach(st => { map[st.number] = st })
