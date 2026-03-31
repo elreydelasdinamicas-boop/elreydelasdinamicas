@@ -724,10 +724,13 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
   function getNumStatus(n) {
     const st = societyStates[n]
     if (!st) return 'free'                                           // nadie ha reservado
-    if (st.socio1_id && st.socio2_id) return 'full'                 // 2 socios completo
-    if (st.socio1_id === user?.id) return 'i_am_socio1'             // yo soy socio 1
-    if (st.socio2_id === user?.id) return 'i_am_socio2'             // yo soy socio 2
-    return 'waiting'                                                 // 1 socio, esperando otro
+    if (st.socio1_id && st.socio2_id) {
+      if (st.socio1_id === user?.id || st.socio2_id === user?.id) return 'i_am_full'  // yo tengo ambas mitades o soy socio
+      return 'full'
+    }
+    if (st.socio1_id === user?.id) return 'i_am_socio1'   // yo soy socio 1, falta otro
+    if (st.socio2_id === user?.id) return 'i_am_socio2'   // yo soy socio 2
+    return 'waiting'                                       // 1 socio externo, falta 1
   }
 
   function openModal(n) {
@@ -765,13 +768,24 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
           if (error) throw error
         }
       } else if (selectedMode === 'society') {
-        if (st) throw new Error('Alguien ya reservó parte de este número')
-        const { error } = await supabase.from('society_tickets').insert({
-          raffle_id: r.id, number: selectedNum,
-          socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
-          status: 'waiting', expires_at: new Date(Date.now()+48*3600000).toISOString()
-        })
-        if (error) throw error
+        if (st && st.socio1_id && st.socio2_id) throw new Error('Este número ya tiene 2 socios y está completo')
+        if (st && st.socio1_id === user?.id) throw new Error('Ya reservaste el 50% de este número')
+        if (st && st.socio1_id && !st.socio2_id) {
+          // Hay 1 socio externo — unirse como socio 2
+          const { error } = await supabase.from('society_tickets').update({
+            socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
+            status: 'complete', updated_at: new Date().toISOString()
+          }).eq('id', st.id)
+          if (error) throw error
+        } else {
+          // Numero libre — ser socio 1
+          const { error } = await supabase.from('society_tickets').insert({
+            raffle_id: r.id, number: selectedNum,
+            socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
+            status: 'waiting', expires_at: new Date(Date.now()+48*3600000).toISOString()
+          })
+          if (error) throw error
+        }
       } else if (selectedMode === 'socio2') {
         if (!st) throw new Error('Este número ya no está disponible')
         if (st.socio2_id) throw new Error('Alguien más ya se unió como socio 2')
@@ -791,14 +805,42 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
         if (error) throw error
       }
 
-      // Refresh states and navigate
+      // Refresh states
       await loadStates()
-      if (onSociety) onSociety(selectedNum, selectedMode)
       setConfirming(false)
       setShowModal(false)
+      // Success toast
+      const okDiv = document.createElement('div')
+      okDiv.style.cssText = [
+        'position:fixed','top:24px','left:50%','transform:translateX(-50%)',
+        'z-index:9999','background:linear-gradient(135deg,#1a6b2a,#27AE60)',
+        'color:#fff','border-radius:16px','padding:16px 22px',
+        'font-size:13px','font-weight:700','max-width:88vw','min-width:240px',
+        'box-shadow:0 8px 32px rgba(0,0,0,0.6)',
+        'display:flex','align-items:center','gap:12px','font-family:system-ui',
+        'border:1px solid rgba(100,255,130,0.3)'
+      ].join(';')
+      okDiv.innerHTML = '<div style="width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px">✅</div><div style="text-align:left"><div style="font-size:11px;opacity:0.8;margin-bottom:2px">Numero reservado</div><div>#' + String(selectedNum).padStart(2,'0') + ' en sociedad — aparece en tu perfil</div></div>'
+      document.body.appendChild(okDiv)
+      setTimeout(() => { okDiv.style.transition='opacity .4s'; okDiv.style.opacity='0'; setTimeout(()=>okDiv.remove(),400) }, 3000)
+      // Navigate to profile
+      setTimeout(() => { if (onSociety) onSociety(selectedNum, selectedMode) }, 600)
     } catch(e) {
       setConfirming(false)
-      alert(e.message || 'Error al procesar. Intenta de nuevo.')
+      // Show error as toast instead of native alert
+      const errDiv = document.createElement('div')
+      errDiv.style.cssText = [
+        'position:fixed','top:24px','left:50%','transform:translateX(-50%)',
+        'z-index:9999','background:linear-gradient(135deg,#922B21,#C0392B)',
+        'color:#fff','border-radius:16px','padding:16px 22px',
+        'font-size:13px','font-weight:700','max-width:88vw','min-width:240px',
+        'text-align:center','box-shadow:0 8px 32px rgba(0,0,0,0.6)',
+        'display:flex','align-items:center','gap:12px','font-family:system-ui',
+        'border:1px solid rgba(255,100,100,0.3)'
+      ].join(';')
+      errDiv.innerHTML = '<div style="width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">⚠️</div><div style="text-align:left"><div style="font-size:11px;opacity:0.7;margin-bottom:2px">Aviso</div><div>' + (e.message || 'Error al procesar. Intenta de nuevo.') + '</div></div>'
+      document.body.appendChild(errDiv)
+      setTimeout(() => { errDiv.style.transition='opacity .4s'; errDiv.style.opacity='0'; setTimeout(()=>errDiv.remove(),400) }, 3200)
     }
   }
 
@@ -836,18 +878,18 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
             const isMine1 = st === 'i_am_socio1'
             return (
               <div key={n} onClick={() => !isFull && openModal(n)}
-                style={{ background: isFull?'#0d0d0d':isMine?'rgba(39,174,96,0.1)':'linear-gradient(135deg,#2a0d4a,#3d1a6e)',
-                  border: isFull?'1px solid #1a1a1a':isMine?'1.5px solid #27AE60':'1.5px solid #9B59B6',
+                style={{ background: isFull?'#0d0d0d':st==='i_am_full'?'rgba(39,174,96,0.1)':isMine1?'rgba(52,152,219,0.1)':isWaiting?'linear-gradient(135deg,#1a1040,#2a1a5a)':'linear-gradient(135deg,#2a0d4a,#3d1a6e)',
+                  border: isFull?'1px solid #1a1a1a':st==='i_am_full'?'1.5px solid #27AE60':isMine1?'1.5px solid #3498DB':isWaiting?'1.5px solid rgba(155,89,182,0.6)':'1.5px solid #9B59B6',
                   borderRadius:10, padding:'8px 12px', textAlign:'center',
-                  cursor:isFull?'not-allowed':'pointer', opacity:isFull?.5:1, position:'relative' }}>
+                  cursor:isFull?'not-allowed':'pointer', opacity:isFull?.4:1, position:'relative' }}>
                 {/* Badge de estado */}
                 <div style={{ position:'absolute', top:-7, right:-4, borderRadius:999, padding:'1px 6px', fontSize:7, fontWeight:700, color:'#fff',
-                  background: isFull?'#555':isMine?'#27AE60':isWaiting?'#E67E22':'#27AE60' }}>
-                  {isFull?'🔒 Lleno':isMine?(isMine1&&!societyStates[n]?.socio2_id?'Tú · falta socio':'Tú · completo'):isWaiting?'1 socio':'Libre'}
+                  background: isFull?'#555':st==='i_am_full'?'#27AE60':isMine1?'#3498DB':isWaiting?'#E67E22':'#27AE60' }}>
+                  {isFull?'🔒 Lleno':st==='i_am_full'?'Tú · completo':isMine1?'Tú · falta socio':isWaiting?'1 socio · disponible':'Libre'}
                 </div>
                 <div style={{ color: isFull?'#444':isMine?'#27AE60':'#C9A0E8', fontSize:20, fontWeight:900, lineHeight:1 }}>{pad(n)}</div>
-                <div style={{ color: isFull?'#333':isMine?'#27AE60':'#9B59B6', fontSize:9, fontWeight:600, marginTop:3 }}>
-                  {isFull?'Lleno':isMine&&isMine1&&!societyStates[n]?.socio2_id?'Pagaste 50% — falta otro socio':fmt(halfPrice)}
+                <div style={{ color: isFull?'#333':st==='i_am_full'?'#27AE60':isMine1?'#3498DB':isWaiting?'#C9A0E8':'#9B59B6', fontSize:9, fontWeight:600, marginTop:3 }}>
+                  {isFull?'Lleno 2/2':st==='i_am_full'?'Tuyo completo':isMine1?'Tu 50% — falta socio':isWaiting?'Disponible 50%':fmt(halfPrice)}
                 </div>
               </div>
             )
