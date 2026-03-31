@@ -747,10 +747,14 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
     const st = getNumStatus(n)
     if (st === 'full' || st === 'i_am_full') return
     setSelectedNum(n)
-    setSelectedMode(null)
     if (st === 'i_am_socio1' || st === 'i_am_socio2') {
-      setShowMyModal(true)  // modal especial para el usuario que ya tiene parte
+      setShowMyModal(true)   // modal especial "ya tienes el 50%"
+      setSelectedMode('buy_other_half')
+    } else if (st === 'waiting') {
+      setSelectedMode('socio2')  // auto-set socio2
+      setShowModal(true)
     } else {
+      setSelectedMode(null)
       setShowModal(true)
     }
   }
@@ -915,7 +919,7 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
           })}
         </div>
 
-        <button onClick={() => setShowModal(true)} style={{ ...S.btnPurple }}>
+        <button onClick={async () => { await loadStates(); setSelectedNum(null); setSelectedMode(null); setShowModal(true) }} style={{ ...S.btnPurple }}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
           Unirme a un numero en sociedad
         </button>
@@ -1078,10 +1082,17 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
                     {!isFull && (
                       <button onClick={() => {
                         setSelectedNum(n)
-                        // Si es waiting, auto-set socio2 mode
-                        setSelectedMode(isWaiting ? 'socio2' : null)
+                        if (st === 'i_am_socio1' || st === 'i_am_socio2') {
+                          setSelectedMode('buy_other_half')
+                          setShowModal(false)
+                          setShowMyModal(true)
+                        } else if (isWaiting) {
+                          setSelectedMode('socio2')
+                        } else {
+                          setSelectedMode(null)
+                        }
                       }} style={{ background: isSelected?'rgba(155,89,182,0.2)':'rgba(155,89,182,0.08)', border:'1px solid rgba(155,89,182,0.3)', borderRadius:8, padding:'5px 10px', color:'#9B59B6', fontSize:10, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
-                        {isSelected ? 'Seleccionado ✓' : isWaiting ? 'Unirme →' : 'Elegir'}
+                        {isSelected ? 'Seleccionado ✓' : st==='i_am_socio1'||st==='i_am_socio2' ? 'Ver mi 50% →' : isWaiting ? 'Unirme →' : 'Elegir'}
                       </button>
                     )}
                   </div>
@@ -2102,23 +2113,30 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
               </div>
 
               <button onClick={async () => {
-                if (!liberarNum && liberarNum !== 0) return
+                if (liberarNum === null || liberarNum === undefined) return
                 try {
-                  // Si el ticket tiene varios números, solo quitar ese número
-                  const ticket = tickets.find(t => (t.numbers||[]).includes(liberarNum))
-                  if (!ticket) return
-                  if ((ticket.numbers||[]).length === 1) {
-                    await supabase.from('tickets').update({ status:'released' }).eq('id', ticket.id)
+                  const numToRelease = liberarNum
+                  const ticket = tickets.find(t => (t.numbers||[]).includes(numToRelease))
+                  if (!ticket) { console.error('Ticket no encontrado para numero', numToRelease); return }
+                  const nums = ticket.numbers || []
+                  if (nums.length <= 1) {
+                    const { error } = await supabase.from('tickets').update({ status:'released' }).eq('id', ticket.id)
+                    if (error) throw error
                   } else {
-                    const newNums = (ticket.numbers||[]).filter(x => x !== liberarNum)
-                    const newAmt = Math.round(ticket.total_amount / ticket.numbers.length * newNums.length)
-                    await supabase.from('tickets').update({ numbers: newNums, total_amount: newAmt }).eq('id', ticket.id)
+                    const newNums = nums.filter(x => x !== numToRelease)
+                    const pricePerNum = ticket.total_amount / nums.length
+                    const { error } = await supabase.from('tickets').update({ numbers: newNums, total_amount: Math.round(pricePerNum * newNums.length) }).eq('id', ticket.id)
+                    if (error) throw error
                   }
-                  setShowLiberar(false); setLiberarNum(null)
+                  setShowLiberar(false)
+                  setLiberarNum(null)
                   onRefresh && onRefresh()
-                } catch(e) { console.error('Error liberando:', e) }
+                } catch(e) {
+                  console.error('Error liberando:', e)
+                  alert('Error al liberar: ' + e.message)
+                }
               }} disabled={liberarNum === null} style={{ width:'100%', background: liberarNum!==null?'rgba(192,57,43,0.15)':'#111', border: liberarNum!==null?'1px solid rgba(192,57,43,0.4)':'1px solid #1a1a1a', borderRadius:11, padding:13, color: liberarNum!==null?'#E74C3C':'#444', fontSize:12, fontWeight:700, cursor: liberarNum!==null?'pointer':'not-allowed', fontFamily:'inherit', marginBottom:10 }}>
-                {liberarNum!==null ? `Liberar el #${pad2(liberarNum)}` : 'Selecciona un numero'}
+                {liberarNum !== null ? `Liberar el #${pad2(liberarNum)}` : 'Selecciona un numero'}
               </button>
               <button onClick={() => { setShowLiberar(false); setLiberarNum(null) }} style={{ width:'100%', background:C.gold, border:'none', borderRadius:11, padding:13, color:'#000', fontSize:13, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>
                 No, conservar mis numeros 🍀
