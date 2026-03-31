@@ -185,7 +185,6 @@ export default function App() {
     // Realtime — boletos y sociedades se actualizan solos
     const ch = supabase.channel(`my-tickets-${user.id}`)
       .on('postgres_changes', { event:'*', schema:'public', table:'tickets', filter:`user_id=eq.${user.id}` }, () => fetchMyTickets())
-      .on('postgres_changes', { event:'*', schema:'public', table:'society_tickets' }, () => fetchMyTickets())
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [user])
@@ -710,10 +709,9 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
 
   useEffect(() => {
     loadStates()
-    const ch = supabase.channel('society-states-'+r.id)
-      .on('postgres_changes', { event:'*', schema:'public', table:'society_tickets', filter:`raffle_id=eq.${r.id}` }, loadStates)
-      .subscribe()
-    return () => supabase.removeChannel(ch)
+    // Poll cada 8 segundos en lugar de realtime (plan gratuito)
+    const interval = setInterval(loadStates, 8000)
+    return () => clearInterval(interval)
   }, [r.id])
 
   async function loadStates() {
@@ -919,10 +917,27 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
           })}
         </div>
 
-        <button onClick={async () => { await loadStates(); setSelectedNum(null); setSelectedMode(null); setShowModal(true) }} style={{ ...S.btnPurple }}>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
-          Unirme a un numero en sociedad
-        </button>
+        {(() => {
+          const allFull = societyNums.every(n => { const s = getNumStatus(n); return s === 'full' || s === 'i_am_full' })
+          const allMine = societyNums.every(n => { const s = getNumStatus(n); return s === 'i_am_socio1' || s === 'i_am_socio2' || s === 'i_am_full' })
+          if (allFull && !allMine) return (
+            <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid #1a1a1a', borderRadius:11, padding:13, textAlign:'center' }}>
+              <div style={{ fontSize:16, marginBottom:4 }}>🔒</div>
+              <div style={{ color:'#555', fontSize:12, fontWeight:600 }}>Todos los numeros en sociedad ya estan reservados</div>
+            </div>
+          )
+          if (allMine) return (
+            <div style={{ background:'rgba(52,152,219,0.08)', border:'1px solid rgba(52,152,219,0.2)', borderRadius:11, padding:13, textAlign:'center' }}>
+              <div style={{ color:'#5DADE2', fontSize:12, fontWeight:700 }}>✓ Ya tienes parte de todos los numeros en sociedad</div>
+            </div>
+          )
+          return (
+            <button onClick={async () => { await loadStates(); setSelectedNum(null); setSelectedMode(null); setShowModal(true) }} style={{ ...S.btnPurple }}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+              Unirme a un numero en sociedad
+            </button>
+          )
+        })()}
       </div>
 
       {/* MODAL como funciona */}
@@ -2117,16 +2132,30 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
                 try {
                   const numToRelease = liberarNum
                   const ticket = tickets.find(t => (t.numbers||[]).includes(numToRelease))
-                  if (!ticket) { console.error('Ticket no encontrado para numero', numToRelease); return }
-                  const nums = ticket.numbers || []
-                  if (nums.length <= 1) {
-                    const { error } = await supabase.from('tickets').update({ status:'released' }).eq('id', ticket.id)
+                  if (!ticket) { alert('No se encontró el boleto'); return }
+
+                  // Detectar si es boleto de sociedad (id empieza con 'soc_')
+                  const isSocTicket = String(ticket.id).startsWith('soc_')
+
+                  if (isSocTicket) {
+                    // Usar tabla society_tickets con el UUID real (sin 'soc_' prefix)
+                    const realId = ticket.society_id || String(ticket.id).replace('soc_', '')
+                    const { error } = await supabase.from('society_tickets')
+                      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                      .eq('id', realId)
                     if (error) throw error
                   } else {
-                    const newNums = nums.filter(x => x !== numToRelease)
-                    const pricePerNum = ticket.total_amount / nums.length
-                    const { error } = await supabase.from('tickets').update({ numbers: newNums, total_amount: Math.round(pricePerNum * newNums.length) }).eq('id', ticket.id)
-                    if (error) throw error
+                    // Ticket normal
+                    const nums = ticket.numbers || []
+                    if (nums.length <= 1) {
+                      const { error } = await supabase.from('tickets').update({ status:'released' }).eq('id', ticket.id)
+                      if (error) throw error
+                    } else {
+                      const newNums = nums.filter(x => x !== numToRelease)
+                      const pricePerNum = ticket.total_amount / nums.length
+                      const { error } = await supabase.from('tickets').update({ numbers: newNums, total_amount: Math.round(pricePerNum * newNums.length) }).eq('id', ticket.id)
+                      if (error) throw error
+                    }
                   }
                   setShowLiberar(false)
                   setLiberarNum(null)
@@ -3444,7 +3473,7 @@ function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
   useEffect(() => {
     fetchSocietyTicket()
     const ch = supabase.channel(`society-${raffle?.id}-${number}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'society_tickets', filter: `raffle_id=eq.${raffle?.id}` }, fetchSocietyTicket)
+      // society_tickets realtime removido (plan gratuito)
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [raffle?.id, number])
