@@ -154,6 +154,11 @@ export default function App() {
   }
 
   useEffect(() => {
+    // Hash navigation — lacasadelasdinamicas.com/#admin
+    if (window.location.hash === '#admin') {
+      setPage('admin')
+      window.location.hash = ''
+    }
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) await fetchProfile(session.user.id)
@@ -2849,52 +2854,54 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
   const [tab, setTab] = useState(0)
   const [tickets, setTickets] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
-  const [localConfig, setLocalConfig] = useState(appConfig)
+  const [localConfig, setLocalConfig] = useState({...DEFAULT_CONFIG, ...(appConfig||{})})
   const [showCreateRaffle, setShowCreateRaffle] = useState(false)
   const [editingRaffle, setEditingRaffle] = useState(null)
+  const [adminRaffles, setAdminRaffles] = useState(raffles||[])
 
-  useEffect(() => { setLocalConfig(appConfig) }, [appConfig])
-  const [adminRaffles, setAdminRaffles] = useState([])
-
-  useEffect(() => {
-    if (!isAdmin) return
-    loadAdminData()
-  }, [isAdmin])
+  useEffect(() => { loadAdminData() }, [])
+  useEffect(() => { setLocalConfig(prev => ({...prev, ...(appConfig||{})})) }, [appConfig])
 
   async function loadAdminData() {
-    // Cargar TODOS los sorteos (activos + borradores)
-    const { data: rd } = await supabase.from('raffles').select('*').order('created_at', { ascending: false })
-    if (rd) setAdminRaffles(rd)
-    // Cargar boletos
-    const { data: td } = await supabase.from('tickets').select('*, users_profile(full_name,phone), raffles(title)').order('created_at',{ascending:false}).limit(50)
-    if (td) setTickets(td)
-    // Mensajes sin leer
-    const { count } = await supabase.from('support_messages').select('id',{count:'exact'}).eq('from_admin',false)
-    setUnreadCount(count||0)
+    try {
+      const { data: rd } = await supabase.from('raffles').select('*').order('created_at',{ascending:false})
+      if (rd) setAdminRaffles(rd)
+      const { data: td } = await supabase.from('tickets').select('*, users_profile(full_name,phone), raffles(title)').order('created_at',{ascending:false}).limit(50)
+      if (td) setTickets(td)
+      const { count } = await supabase.from('support_messages').select('id',{count:'exact'}).eq('from_admin',false)
+      setUnreadCount(count||0)
+    } catch(e) { console.error('loadAdminData:', e) }
   }
 
   async function saveConfig() {
-    await supabase.from('app_config').upsert({ id:1, ...localConfig })
-    setAppConfig(localConfig)
-    alert('Configuracion guardada')
+    try {
+      await supabase.from('app_config').upsert({ id:1, ...localConfig })
+      setAppConfig(localConfig)
+      alert('Configuracion guardada!')
+    } catch(e) { alert('Error: ' + e.message) }
   }
 
-  // Admin verificado en el componente padre
-  if (showCreateRaffle || editingRaffle) return <RaffleForm raffle={editingRaffle} onBack={() => { setShowCreateRaffle(false); setEditingRaffle(null) }} onSave={() => { setShowCreateRaffle(false); setEditingRaffle(null); onRefreshRaffles(); loadAdminData() }} />
+  if (showCreateRaffle || editingRaffle) {
+    return <RaffleForm raffle={editingRaffle} onBack={() => { setShowCreateRaffle(false); setEditingRaffle(null) }} onSave={() => { setShowCreateRaffle(false); setEditingRaffle(null); loadAdminData(); if(onRefreshRaffles) onRefreshRaffles() }} />
+  }
 
   const pending = tickets.filter(t => t.status === 'reserved')
-  const totalRecaudo = tickets.filter(t => t.status === 'paid').reduce((a,t) => a + (t.total_amount||0), 0)
+  const totalRecaudo = tickets.filter(t => t.status === 'paid').reduce((a,t) => a+(t.total_amount||0), 0)
 
   return (
     <div style={S.content}>
       <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
+
+      {/* Header */}
       <div style={{ background:`linear-gradient(160deg,#1a1200,${C.card})`, border:`1px solid ${C.cardBorder}`, borderRadius:18, padding:18, marginBottom:14, position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
+        <GoldLine />
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ width:44, height:44, borderRadius:11, overflow:'hidden', border:`1px solid rgba(201,162,39,0.3)` }}><LogoSVG size={44} /></div>
           <div><h2 style={{ color:'#fff', fontWeight:900, fontSize:18, margin:0 }}>Panel de Administracion</h2><div style={{ color:C.muted, fontSize:12 }}>La Casa De Las Dinamicas</div></div>
         </div>
       </div>
+
+      {/* Stats */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
         {[['🎰',adminRaffles.length,'Dinamicas'],['🎟️',tickets.length,'Boletos'],['⏳',pending.length,'Por confirmar'],['💬',unreadCount,'Mensajes']].map(([icon,val,label]) => (
           <div key={label} style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:14, padding:14, textAlign:'center' }}>
@@ -2904,10 +2911,14 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
           </div>
         ))}
       </div>
+
+      {/* Recaudo */}
       <div style={{ background:'linear-gradient(135deg,rgba(39,174,96,0.08),rgba(39,174,96,0.03))', border:'1px solid rgba(39,174,96,0.2)', borderRadius:14, padding:'14px 18px', marginBottom:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div><div style={{ color:C.green, fontSize:10, fontWeight:700, textTransform:'uppercase', marginBottom:3 }}>Total recaudado</div><div style={{ color:'#fff', fontSize:24, fontWeight:900 }}>{fmt(totalRecaudo)}</div></div>
         <div style={{ fontSize:32 }}>💰</div>
       </div>
+
+      {/* Acciones rapidas */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
         <button onClick={onOpenSupport} style={{ ...S.btnGold, fontSize:13, position:'relative' }}>
           Atender Clientes
@@ -2917,174 +2928,99 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
         <button onClick={() => onOpenBingo && onOpenBingo()} style={{ background:'linear-gradient(135deg,#1a5a1a,#27AE60)', border:'1px solid rgba(39,174,96,0.4)', borderRadius:12, color:'#fff', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', padding:'14px' }}>🎱 Panel Bingo</button>
-        <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'14px', display:'flex', alignItems:'center', justifyContent:'center', color:C.muted, fontSize:11 }}>+ Mas pronto</div>
+        <button onClick={() => setShowCreateRaffle(true)} style={{ background:`linear-gradient(135deg,#1a1200,${C.card})`, border:`1px solid ${C.cardBorder}`, borderRadius:12, color:C.gold, fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', padding:'14px' }}>+ Nueva Dinamica</button>
       </div>
+
+      {/* Tabs */}
       <div style={{ display:'flex', gap:3, background:'rgba(255,255,255,0.03)', borderRadius:10, padding:4, marginBottom:16 }}>
         {['Dinamicas','Boletos','Config'].map((t,i) => (
           <button key={t} onClick={() => setTab(i)} style={{ flex:1, padding:9, border:'none', background:tab===i?C.card:'transparent', color:tab===i?'#fff':'#555', fontSize:12, fontWeight:700, cursor:'pointer', borderRadius:8, fontFamily:'inherit' }}>{t}</button>
         ))}
       </div>
 
+      {/* Tab: Dinamicas */}
       {tab === 0 && (
-        <>
+        <div>
           <button onClick={() => setShowCreateRaffle(true)} style={{ ...S.btnGold, marginBottom:14 }}>+ Crear nueva dinamica</button>
-          {adminRaffles.length === 0 && <div style={{ textAlign:'center', padding:'30px 0', color:C.muted }}><div style={{ fontSize:32, marginBottom:8 }}>🎰</div><div>No hay dinamicas aun</div></div>}
           {adminRaffles.map(r => (
-            <div key={r.id} style={{ ...S.card, marginBottom:10, position:'relative', overflow:'hidden', opacity: r.status==='draft'?0.7:1 }}>
-              <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-              <div style={{ fontWeight:700, color:'#fff', fontSize:13, marginBottom:6 }}>{r.title}</div>
-              <div style={{ display:'flex', gap:5, alignItems:'center', marginBottom:6 }}><span style={{ background:r.status==='active'?'rgba(39,174,96,0.15)':'rgba(255,255,255,0.05)', border:`1px solid ${r.status==='active'?'rgba(39,174,96,0.3)':'rgba(255,255,255,0.1)'}`, borderRadius:999, padding:'2px 8px', color:r.status==='active'?'#27AE60':'#888', fontSize:9, fontWeight:700 }}>{r.status==='active'?'ACTIVO':r.status==='draft'?'BORRADOR':'FINALIZADO'}</span><span style={{ color:C.muted, fontSize:10 }}>{fmt(r.ticket_price)} · {r.lottery_name}</span></div>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                <button onClick={() => setEditingRaffle(r)} style={{ flex:1, background:'rgba(201,162,39,0.08)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:8, color:C.gold, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Editar</button>
-                <button onClick={async () => { const n=window.prompt('Numero ganador (0-'+(r.number_range-1)+'):'); if(n!==null) alert('Ganador: #'+String(parseInt(n)).padStart(r.number_range<=100?2:3,'0')) }} style={{ flex:1, background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, color:C.green, fontSize:11, fontWeight:700, padding:9, cursor:'pointer', fontFamily:'inherit' }}>Realizar sorteo</button>
+            <div key={r.id} style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:14, padding:14, marginBottom:10 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ color:'#fff', fontWeight:800, fontSize:14 }}>{r.title}</div>
+                  <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>{r.raffle_date ? new Date(r.raffle_date).toLocaleDateString('es-CO') : ''} · {fmt(r.ticket_price)}</div>
+                </div>
+                <span style={{ background: r.status==='active'?'rgba(39,174,96,0.15)':'rgba(255,255,255,0.05)', border:`1px solid ${r.status==='active'?'rgba(39,174,96,0.3)':'#2a2a2a'}`, borderRadius:999, padding:'3px 10px', fontSize:9, color: r.status==='active'?C.green:'#666', fontWeight:700 }}>{r.status==='active'?'Activo':'Borrador'}</span>
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => setEditingRaffle(r)} style={{ flex:1, background:'rgba(201,162,39,0.1)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:8, padding:'8px', color:C.gold, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Editar</button>
                 <button onClick={async () => {
-                  if (!window.confirm('Eliminar "'+r.title+'"? Esta accion no se puede deshacer.')) return
-                  const { error } = await supabase.from('raffles').delete().eq('id', r.id)
-                  if (error) { alert('Error al eliminar: ' + error.message); return }
-                  loadAdminData(); onRefreshRaffles()
-                }} style={{ background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.25)', borderRadius:8, color:'#E74C3C', fontSize:11, fontWeight:700, padding:'9px 14px', cursor:'pointer', fontFamily:'inherit' }}>Eliminar</button>
+                  if (!window.confirm('Eliminar esta dinamica?')) return
+                  await supabase.from('raffles').delete().eq('id', r.id)
+                  loadAdminData(); if(onRefreshRaffles) onRefreshRaffles()
+                }} style={{ background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.2)', borderRadius:8, padding:'8px 12px', color:'#E74C3C', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Eliminar</button>
               </div>
             </div>
           ))}
-        </>
+        </div>
       )}
 
+      {/* Tab: Boletos */}
       {tab === 1 && (
-        <>
-          <div style={{ ...S.card, marginBottom:14 }}>
-            <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:10 }}>Registrar venta manual</div>
-            <ManualSaleForm raffles={raffles} onSaved={() => supabase.from('tickets').select('*, users_profile(full_name,phone), raffles(title)').order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setTickets(data)})} />
-          </div>
-          {pending.length === 0
-            ? <div style={{ textAlign:'center', padding:'20px 0', color:C.muted }}>Todo al dia</div>
-            : pending.map(t => (
-              <div key={t.id} style={{ ...S.card, marginBottom:10, position:'relative', overflow:'hidden' }}>
-                <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-                <div style={{ color:'#fff', fontWeight:700, fontSize:13, marginBottom:4 }}>{t.raffles?.title}</div>
-                <div style={{ color:C.muted, fontSize:12, marginBottom:3 }}>👤 {t.users_profile?.full_name}</div>
-                {t.users_profile?.phone && <div style={{ color:C.muted, fontSize:11, marginBottom:6 }}>📱 {t.users_profile.phone}</div>}
-                <div style={{ color:C.muted, fontSize:12, marginBottom:6 }}>Numeros: <span style={{ color:C.gold, fontWeight:700 }}>{(t.numbers||[]).map(n=>String(n).padStart(2,'0')).join(', ')}</span></div>
-                <div style={{ color:C.gold, fontWeight:900, fontSize:16, marginBottom:12 }}>{fmt(t.total_amount)}</div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:7 }}>
-                  <button onClick={async () => { await supabase.from('tickets').update({status:'paid'}).eq('id',t.id); setTickets(prev=>prev.map(x=>x.id===t.id?{...x,status:'paid'}:x)) }} style={{ background:'#27AE60', border:'none', borderRadius:9, color:'#fff', fontSize:11, fontWeight:800, padding:11, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:5 }}><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="white" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>Confirmar Pago</button>
-                  <a href={'https://wa.me/'+(t.users_profile?.phone||'').replace(/\D/g,'')+'?text='+encodeURIComponent('Hola '+( t.users_profile?.full_name||'')+', tu pago del boleto #'+(t.numbers||[]).map(n=>String(n).padStart(2,'0')).join(', ')+' del sorteo '+(t.raffles?.title||'')+' por '+fmt(t.total_amount)+' fue confirmado. Gracias!')} target="_blank" rel="noreferrer" style={{ textDecoration:'none' }}>
-                    <div style={{ background:'#075E54', borderRadius:9, color:'#fff', fontSize:11, fontWeight:800, padding:11, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5, height:'100%' }}><svg viewBox="0 0 24 24" width="13" height="13" fill="none"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>WhatsApp</div>
-                  </a>
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7 }}>
-                  <AdminSMSButton ticket={t} />
-                  <button onClick={async () => { await supabase.from('tickets').update({status:'rejected'}).eq('id',t.id); setTickets(prev=>prev.filter(x=>x.id!==t.id)) }} style={{ background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:9, color:'#E74C3C', fontSize:11, fontWeight:700, padding:11, cursor:'pointer', fontFamily:'inherit' }}>Rechazar</button>
-                </div>
+        <div>
+          {tickets.map(t => (
+            <div key={t.id} style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:12, padding:'12px 14px', marginBottom:8 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                <div style={{ color:'#fff', fontSize:13, fontWeight:700 }}>{t.users_profile?.full_name || 'Sin nombre'}</div>
+                <span style={{ background: t.status==='paid'?'rgba(39,174,96,0.15)':'rgba(230,190,0,0.08)', border:`1px solid ${t.status==='paid'?'rgba(39,174,96,0.3)':'rgba(230,190,0,0.2)'}`, borderRadius:999, padding:'2px 8px', fontSize:9, color: t.status==='paid'?C.green:C.gold, fontWeight:700 }}>{t.status==='paid'?'Pagado':'Reservado'}</span>
               </div>
-            ))
-          }
-        </>
+              <div style={{ color:C.muted, fontSize:10 }}>{t.raffles?.title} · #{(t.numbers||[]).map(n=>String(n).padStart(2,'0')).join(', ')}</div>
+              <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
+                <span style={{ color:C.muted, fontSize:10 }}>{t.users_profile?.phone||''}</span>
+                <span style={{ color:C.gold, fontSize:12, fontWeight:700 }}>{fmt(t.total_amount||0)}</span>
+              </div>
+              {t.status === 'reserved' && (
+                <button onClick={async () => {
+                  await supabase.from('tickets').update({ status:'paid' }).eq('id', t.id)
+                  loadAdminData()
+                }} style={{ width:'100%', background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, padding:'7px', color:C.green, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginTop:8 }}>✓ Confirmar pago</button>
+              )}
+            </div>
+          ))}
+        </div>
       )}
 
+      {/* Tab: Config */}
       {tab === 2 && (
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <div style={S.card}>
             <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:12 }}>Configuracion General</div>
-            {[['showPoints','Mostrar boton Puntos','Visible en la barra de navegacion'],['showWinners','Mostrar boton Ganadores','Visible en la pantalla de inicio'],['showHowItWorks','Mostrar Como funciona?','Visible en la pantalla de inicio'],['showWelcomeBonus','Bono de bienvenida','$500 + 1000 pts al registrarse'],['show_bingo','Mostrar Bingo','Activa el juego de bingo'],['showWAPayButton','Boton Pagar por WhatsApp','Desactiva si quieres que paguen solo por el chat de soporte']].map(([key,label,desc]) => (
+            {[
+              ['showPoints','Mostrar boton Puntos','Visible en navegacion'],
+              ['showWinners','Mostrar Ganadores','Visible en inicio'],
+              ['showHowItWorks','Mostrar Como funciona?','Visible en inicio'],
+              ['showWelcomeBonus','Bono de bienvenida','$500 + 1000 pts'],
+              ['show_bingo','Mostrar Bingo','Activa el bingo'],
+              ['showWAPayButton','Boton Pagar por WhatsApp','Desactiva para solo chat'],
+            ].map(([key,label,desc]) => (
               <div key={key} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:10, padding:'11px 14px', marginBottom:8 }}>
                 <div><div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>{label}</div><div style={{ color:C.muted, fontSize:10, marginTop:1 }}>{desc}</div></div>
-                <Toggle on={localConfig[key]} onToggle={() => setLocalConfig(prev=>({...prev,[key]:!prev[key]}))} />
+                <Toggle on={!!localConfig[key]} onToggle={() => setLocalConfig(prev=>({...prev,[key]:!prev[key]}))} />
               </div>
             ))}
           </div>
           <div style={S.card}>
             <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:10 }}>WhatsApp de Soporte</div>
-            <div style={{ color:C.muted, fontSize:11, marginBottom:10 }}>Aparece como boton en el chat de soporte de los usuarios</div>
-            {[['supportWhatsapp','Numero WhatsApp','+57 300 000 0000'],['supportWhatsappText','Texto del boton','Escribir al WhatsApp'],['supportWhatsappMsg','Mensaje predeterminado','Hola! Necesito ayuda...']].map(([key,label,ph]) => (
-              <div key={key} style={{ marginBottom:10 }}>
-                <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>{label}</label>
-                <input value={localConfig[key]||''} onChange={e=>setLocalConfig(prev=>({...prev,[key]:e.target.value}))} placeholder={ph} />
-              </div>
-            ))}
-          </div>
-          <div style={S.card}>
-            <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:10 }}>WhatsApp de Pagos</div>
-            <div style={{ color:C.muted, fontSize:11, marginBottom:10 }}>Numero al que llegan los comprobantes al presionar "Pagar ahora"</div>
             <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Numero WhatsApp</label>
-            <input value={localConfig.paymentWhatsapp||''} onChange={e=>setLocalConfig(prev=>({...prev,paymentWhatsapp:e.target.value}))} placeholder="+57 300 000 0000" />
+            <input value={localConfig.paymentWhatsapp||''} onChange={e=>setLocalConfig(p=>({...p,paymentWhatsapp:e.target.value}))} placeholder="+57 300 000 0000" />
           </div>
-          <div style={S.card}>
-            <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:12 }}>Redes Sociales</div>
-            {[['whatsapp','WhatsApp'],['canal','Canal WhatsApp'],['instagram','Instagram'],['facebook','Facebook'],['telegram','Telegram']].map(([key,label]) => (
-              <div key={key} style={{ marginBottom:10 }}>
-                <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>{label}</label>
-                <input value={localConfig[key]||''} onChange={e=>setLocalConfig(prev=>({...prev,[key]:e.target.value}))} placeholder={`https://...`} />
-              </div>
-            ))}
-          </div>
-          <div style={S.card}>
-            <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:10 }}>Auto-eliminar comprobantes</div>
-            <div style={{ display:'flex', gap:8 }}>
-              {[1,3,7].map(d => (
-                <button key={d} onClick={() => setLocalConfig(prev=>({...prev,imgDeleteDays:d}))} style={{ flex:1, border:`1px solid ${localConfig.imgDeleteDays===d?C.gold:'rgba(201,162,39,0.2)'}`, background:localConfig.imgDeleteDays===d?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:localConfig.imgDeleteDays===d?C.gold:C.muted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{d} dia{d!==1?'s':''}</button>
-              ))}
-            </div>
-          </div>
-          {/* DATOS DE PAGO */}
-          <div style={S.card}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={C.gold} strokeWidth="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-              <div style={{ color:C.gold, fontSize:13, fontWeight:800 }}>Datos de Pago</div>
-            </div>
-            <div style={{ color:C.muted, fontSize:11, marginBottom:12 }}>Estos datos aparecen automaticamente en el chat cuando un usuario quiere pagar.</div>
-            {[
-              ['paymentNequi','Nequi','Numero Nequi','rgba(168,85,247,0.25)'],
-              ['paymentDaviplata','Daviplata','Numero Daviplata','rgba(248,113,113,0.25)'],
-              ['paymentBancolombia','Bancolombia','Ej: Ahorros 123 456789 00','rgba(230,190,0,0.2)'],
-              ['paymentOtro','Otro metodo (opcional)','Ej: Bold, Nequi empresarial...','rgba(255,255,255,0.06)'],
-              ['paymentNota','Nota adicional (opcional)','Ej: Enviar comprobante por este chat','rgba(255,255,255,0.06)'],
-            ].map(([key,label,ph,border]) => (
-              <div key={key} style={{ marginBottom:10 }}>
-                <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>{label}</label>
-                <input value={localConfig[key]||''} onChange={e => setLocalConfig(p=>({...p,[key]:e.target.value}))} placeholder={ph} style={{ borderColor:border }} />
-              </div>
-            ))}
-            {/* Preview */}
-            {(localConfig.paymentNequi || localConfig.paymentDaviplata || localConfig.paymentBancolombia) && (
-              <div style={{ background:'#0d1a0d', border:'1px solid rgba(39,174,96,0.2)', borderRadius:10, padding:'10px 12px', marginTop:4 }}>
-                <div style={{ color:C.green, fontSize:9, fontWeight:700, marginBottom:5 }}>Preview — como lo ve el usuario:</div>
-                <div style={{ color:'#ccc', fontSize:10, lineHeight:1.8 }}>
-                  {localConfig.paymentNequi && <div>📱 Nequi: <b style={{ color:'#fff' }}>{localConfig.paymentNequi}</b></div>}
-                  {localConfig.paymentDaviplata && <div>📱 Daviplata: <b style={{ color:'#fff' }}>{localConfig.paymentDaviplata}</b></div>}
-                  {localConfig.paymentBancolombia && <div>🏦 Bancolombia: <b style={{ color:'#fff' }}>{localConfig.paymentBancolombia}</b></div>}
-                  {localConfig.paymentOtro && <div>💳 {localConfig.paymentOtro}</div>}
-                </div>
-              </div>
-            )}
-          </div>
-          {/* GANADORES INSTAGRAM */}
-          <div style={S.card}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:'linear-gradient(90deg,transparent,#dc2743,transparent)' }}></div>
-            <div style={{ color:'#fff', fontSize:13, fontWeight:800, marginBottom:4 }}>Boton Ganadores</div>
-            <div style={{ color:C.muted, fontSize:11, marginBottom:12 }}>Configura el boton Ganadores del home. Si pones un link de Instagram, redirige ahi.</div>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:10, padding:'10px 14px', marginBottom:10 }}>
-              <div>
-                <div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>Mostrar boton Ganadores</div>
-                <div style={{ color:C.muted, fontSize:10, marginTop:2 }}>Visible en la pantalla de inicio</div>
-              </div>
-              <div onClick={() => setLocalConfig(p=>({...p, showWinners:!p.showWinners}))} style={{ width:40, height:22, background:localConfig.showWinners?C.gold:'#2a2a2a', borderRadius:11, position:'relative', cursor:'pointer', transition:'background .2s', flexShrink:0 }}>
-                <div style={{ position:'absolute', width:16, height:16, background:'#fff', borderRadius:'50%', top:3, left:localConfig.showWinners?21:3, transition:'left .2s' }}></div>
-              </div>
-            </div>
-            <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Link de Instagram (ganadores)</label>
-            <input value={localConfig.winnersInstagram||''} onChange={e => setLocalConfig(p=>({...p,winnersInstagram:e.target.value}))} placeholder="https://instagram.com/tu_perfil" />
-            <div style={{ color:C.muted, fontSize:10, marginTop:6 }}>Si esta vacio, el boton muestra la pagina de Ganadores interna.</div>
-          </div>
-          <button onClick={saveConfig} style={S.btnGold}>Guardar toda la configuracion</button>
+          <button onClick={saveConfig} style={S.btnGold}>Guardar configuracion</button>
         </div>
       )}
     </div>
   )
 }
 
-// ─── RAFFLE FORM ──────────────────────────────────────────────────────────────
-// ─── FORM FIELD — definido fuera para evitar re-render y perdida de foco ────
+
 function FormField({ label, children }) {
   return (
     <div style={{ marginBottom:14 }}>
