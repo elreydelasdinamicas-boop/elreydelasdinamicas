@@ -767,12 +767,13 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
     setConfirming(true)
     const halfPrice = Math.round(r.ticket_price / 2)
     try {
-      // Fetch fresh state to avoid race conditions
+      // Solo buscar registros activos (ignorar cancelados)
       const { data: fresh } = await supabase
         .from('society_tickets')
         .select('*')
         .eq('raffle_id', r.id)
         .eq('number', selectedNum)
+        .in('status', ['waiting', 'complete', 'paid'])
         .limit(1)
       const st = fresh?.[0]
 
@@ -1037,10 +1038,11 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
                   <button onClick={async () => {
                     setConfirming(true)
                     try {
+                      // Solo actualizar si el registro sigue activo
                       const { error } = await supabase.from('society_tickets').update({
                         socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
                         status: 'complete', updated_at: new Date().toISOString()
-                      }).eq('id', st.id)
+                      }).eq('id', st.id).in('status', ['waiting'])
                       if (error) throw error
                       await loadStates()
                       if (onSociety) await onSociety(selectedNum, 'buy_other_half')
@@ -2145,8 +2147,14 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
                   if (isSocTicket) {
                     // Usar tabla society_tickets con el UUID real (sin 'soc_' prefix)
                     const realId = ticket.society_id || String(ticket.id).replace('soc_', '')
+                    // Limpiar socios al cancelar para que el número quede libre de verdad
                     const { error } = await supabase.from('society_tickets')
-                      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                      .update({
+                        status: 'cancelled',
+                        socio1_id: null, socio1_paid: false, socio1_amount: 0,
+                        socio2_id: null, socio2_paid: false, socio2_amount: 0,
+                        updated_at: new Date().toISOString()
+                      })
                       .eq('id', realId)
                     if (error) throw error
                   } else {
