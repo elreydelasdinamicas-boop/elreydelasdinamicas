@@ -764,67 +764,57 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
 
   async function confirm() {
     if (!selectedNum || !selectedMode || confirming) return
+    if (!user) { onSociety && onSociety(selectedNum, selectedMode); return }
     setConfirming(true)
     const halfPrice = Math.round(r.ticket_price / 2)
+    const exp = new Date(Date.now() + 48*3600000).toISOString()
     try {
-      // Solo buscar registros activos (ignorar cancelados)
-      const { data: fresh } = await supabase
+      // Buscar SOLO registros activos — cancelled son invisibles
+      const { data: rows } = await supabase
         .from('society_tickets')
-        .select('*')
+        .select('id, status, socio1_id, socio2_id')
         .eq('raffle_id', r.id)
         .eq('number', selectedNum)
         .in('status', ['waiting', 'complete', 'paid'])
-        .limit(1)
-      const st = fresh?.[0]
+      const active = rows?.[0] || null
 
-      if (selectedMode === 'full') {
-        if (st && st.socio1_id && st.socio2_id) throw new Error('Este número ya tiene 2 socios')
-        if (st && st.socio1_id && st.socio1_id !== user?.id) throw new Error('Alguien ya reservó el 50% de este número')
-        if (!st) {
-          const { error } = await supabase.from('society_tickets').insert({
-            raffle_id: r.id, number: selectedNum,
-            socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
-            socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
-            status: 'complete', expires_at: new Date(Date.now()+48*3600000).toISOString()
-          })
-          if (error) throw error
+      // Determinar acción según estado real
+      if (!active) {
+        // LIBRE — insertar nuevo registro
+        const payload = {
+          raffle_id: r.id, number: selectedNum,
+          socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
+          status: selectedMode === 'full' ? 'complete' : 'waiting',
+          expires_at: exp
         }
-      } else if (selectedMode === 'society') {
-        if (st && st.socio1_id && st.socio2_id) throw new Error('Este número ya tiene 2 socios y está completo')
-        if (st && st.socio1_id === user?.id) throw new Error('Ya reservaste el 50% de este número')
-        if (st && st.socio1_id && !st.socio2_id) {
-          // Hay 1 socio externo — unirse como socio 2
-          const { error } = await supabase.from('society_tickets').update({
-            socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
-            status: 'complete', updated_at: new Date().toISOString()
-          }).eq('id', st.id)
-          if (error) throw error
-        } else {
-          // Numero libre — ser socio 1
-          const { error } = await supabase.from('society_tickets').insert({
-            raffle_id: r.id, number: selectedNum,
-            socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
-            status: 'waiting', expires_at: new Date(Date.now()+48*3600000).toISOString()
-          })
-          if (error) throw error
+        if (selectedMode === 'full') {
+          payload.socio2_id = user.id
+          payload.socio2_paid = false
+          payload.socio2_amount = halfPrice
         }
-      } else if (selectedMode === 'socio2') {
-        if (!st) throw new Error('Este número ya no está disponible')
-        if (st.socio2_id) throw new Error('Alguien más ya se unió como socio 2')
-        if (st.socio1_id === user?.id) throw new Error('Ya eres el socio 1 de este número')
+        const { error } = await supabase.from('society_tickets').insert(payload)
+        if (error) throw error
+
+      } else if (active.socio1_id === user.id && !active.socio2_id) {
+        // YO SOY SOCIO 1 — comprar la otra mitad
         const { error } = await supabase.from('society_tickets').update({
           socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
           status: 'complete', updated_at: new Date().toISOString()
-        }).eq('id', st.id)
+        }).eq('id', active.id)
         if (error) throw error
-      } else if (selectedMode === 'buy_other_half') {
-        if (!st || st.socio1_id !== user?.id) throw new Error('No puedes comprar esta mitad')
-        if (st.socio2_id) throw new Error('Alguien más ya compró esa mitad')
+
+      } else if (!active.socio2_id && active.socio1_id !== user.id) {
+        // HAY 1 SOCIO EXTERNO — unirse como socio 2
         const { error } = await supabase.from('society_tickets').update({
           socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
           status: 'complete', updated_at: new Date().toISOString()
-        }).eq('id', st.id)
+        }).eq('id', active.id)
         if (error) throw error
+
+      } else if (active.socio1_id === user.id || active.socio2_id === user.id) {
+        // YA SOY SOCIO — ir directo al perfil sin error
+      } else {
+        throw new Error('Este número ya está completo')
       }
 
       // Refresh states and tickets
@@ -2145,18 +2135,19 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
                   const isSocTicket = String(ticket.id).startsWith('soc_')
 
                   if (isSocTicket) {
-                    // Usar tabla society_tickets con el UUID real (sin 'soc_' prefix)
                     const realId = ticket.society_id || String(ticket.id).replace('soc_', '')
-                    // Limpiar socios al cancelar para que el número quede libre de verdad
+                    // Eliminar el registro directamente — más limpio que cancelar
                     const { error } = await supabase.from('society_tickets')
-                      .update({
-                        status: 'cancelled',
-                        socio1_id: null, socio1_paid: false, socio1_amount: 0,
-                        socio2_id: null, socio2_paid: false, socio2_amount: 0,
-                        updated_at: new Date().toISOString()
-                      })
+                      .delete()
                       .eq('id', realId)
-                    if (error) throw error
+                    if (error) {
+                      // Si no se puede eliminar, cancelar y limpiar socios
+                      const { error: e2 } = await supabase.from('society_tickets')
+                        .update({ status:'cancelled', socio1_id:null, socio2_id:null,
+                          socio1_amount:0, socio2_amount:0, updated_at:new Date().toISOString() })
+                        .eq('id', realId)
+                      if (e2) throw e2
+                    }
                   } else {
                     // Ticket normal
                     const nums = ticket.numbers || []
