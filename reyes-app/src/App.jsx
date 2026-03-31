@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase.js'
 
 const fmt = v => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v)
@@ -436,7 +436,7 @@ export default function App() {
         {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
         {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
         {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={isAdmin} onBack={() => setPage('home')} appConfig={appConfig} ticketContext={supportTicketContext} />}
-        {page === 'admin' && <AdminPage user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={() => setPage('home')} onOpenSupport={() => setPage('admin-support')} onOpenSociety={() => setPage('admin-society')} onOpenBingo={() => setPage('admin-bingo')} onRefreshRaffles={fetchRaffles} />}
+        {page === 'admin' && <AdminSafe user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={() => setPage('home')} onOpenSupport={() => setPage('admin-support')} onOpenSociety={() => setPage('admin-society')} onOpenBingo={() => setPage('admin-bingo')} onRefreshRaffles={fetchRaffles} />}
         {page === 'admin-support' && <SupportPage user={user} profile={profile} isAdmin={true} onBack={() => setPage('admin')} appConfig={appConfig} />}
         {page === 'winners' && <WinnersPage onBack={() => setPage('home')} onRaffle={() => setPage('home')} />}
         {page === 'society' && societyData && <SocietyPage user={user} profile={profile} raffle={societyData.raffle} number={societyData.number} onBack={() => { setPage('raffle') }} onLogin={() => setAuthPage('login')} />}
@@ -2816,6 +2816,35 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
+
+// ─── ADMIN SAFE WRAPPER ────────────────────────────────────────────────────────
+class AdminErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(e) { return { error: e } }
+  render() {
+    if (this.state.error) return (
+      <div style={{ padding:24, color:'#fff', background:'#000', minHeight:'100vh' }}>
+        <div style={{ color:'#E74C3C', fontSize:16, fontWeight:700, marginBottom:12 }}>Error en el panel admin:</div>
+        <div style={{ color:'#aaa', fontSize:12, fontFamily:'monospace', background:'#111', padding:12, borderRadius:8 }}>
+          {this.state.error.message}
+        </div>
+        <button onClick={() => this.setState({error:null})} style={{ marginTop:16, background:'#E6BE00', border:'none', borderRadius:8, padding:'10px 20px', fontWeight:700, cursor:'pointer' }}>
+          Reintentar
+        </button>
+      </div>
+    )
+    return this.props.children
+  }
+}
+function AdminSafe(props) {
+  return (
+    <AdminErrorBoundary>
+      <AdminPage {...props} />
+    </AdminErrorBoundary>
+  )
+}
+
+
 function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, onOpenSupport, onOpenSociety, onOpenBingo, onRefreshRaffles }) {
   const [tab, setTab] = useState(0)
   const [tickets, setTickets] = useState([])
