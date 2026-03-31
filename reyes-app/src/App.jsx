@@ -741,16 +741,66 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
   }
 
   async function confirm() {
-    if (!selectedNum || !selectedMode) return
-    if (confirming) return
+    if (!selectedNum || !selectedMode || confirming) return
     setConfirming(true)
+    const halfPrice = Math.round(r.ticket_price / 2)
     try {
-      await onSociety(selectedNum, selectedMode)
+      // Fetch fresh state to avoid race conditions
+      const { data: fresh } = await supabase
+        .from('society_tickets')
+        .select('*')
+        .eq('raffle_id', r.id)
+        .eq('number', selectedNum)
+        .limit(1)
+      const st = fresh?.[0]
+
+      if (selectedMode === 'full') {
+        if (st && st.socio1_id && st.socio2_id) throw new Error('Este número ya tiene 2 socios')
+        if (st && st.socio1_id && st.socio1_id !== user?.id) throw new Error('Alguien ya reservó el 50% de este número')
+        if (!st) {
+          const { error } = await supabase.from('society_tickets').insert({
+            raffle_id: r.id, number: selectedNum,
+            socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
+            socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
+            status: 'complete', expires_at: new Date(Date.now()+48*3600000).toISOString()
+          })
+          if (error) throw error
+        }
+      } else if (selectedMode === 'society') {
+        if (st) throw new Error('Alguien ya reservó parte de este número')
+        const { error } = await supabase.from('society_tickets').insert({
+          raffle_id: r.id, number: selectedNum,
+          socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
+          status: 'waiting', expires_at: new Date(Date.now()+48*3600000).toISOString()
+        })
+        if (error) throw error
+      } else if (selectedMode === 'socio2') {
+        if (!st) throw new Error('Este número ya no está disponible')
+        if (st.socio2_id) throw new Error('Alguien más ya se unió como socio 2')
+        if (st.socio1_id === user?.id) throw new Error('Ya eres el socio 1 de este número')
+        const { error } = await supabase.from('society_tickets').update({
+          socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
+          status: 'complete', updated_at: new Date().toISOString()
+        }).eq('id', st.id)
+        if (error) throw error
+      } else if (selectedMode === 'buy_other_half') {
+        if (!st || st.socio1_id !== user?.id) throw new Error('No puedes comprar esta mitad')
+        if (st.socio2_id) throw new Error('Alguien más ya compró esa mitad')
+        const { error } = await supabase.from('society_tickets').update({
+          socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
+          status: 'complete', updated_at: new Date().toISOString()
+        }).eq('id', st.id)
+        if (error) throw error
+      }
+
+      // Refresh states and navigate
+      await loadStates()
+      if (onSociety) onSociety(selectedNum, selectedMode)
       setConfirming(false)
       setShowModal(false)
     } catch(e) {
       setConfirming(false)
-      alert('Error: ' + (e.message || 'Intenta de nuevo'))
+      alert(e.message || 'Error al procesar. Intenta de nuevo.')
     }
   }
 
