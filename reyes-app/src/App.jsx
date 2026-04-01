@@ -2960,8 +2960,11 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
                   e.target.disabled = true
                   try {
                     const t = new Promise((_,rj) => setTimeout(()=>rj(new Error('timeout')),10000))
-                    const q = supabase.from('raffles').delete().eq('id', r.id)
-                    const res = await Promise.race([q, t])
+                    // Eliminar tickets y boletos asociados primero
+                    await Promise.race([supabase.from('tickets').delete().eq('raffle_id', r.id), t])
+                    await Promise.race([supabase.from('society_tickets').delete().eq('raffle_id', r.id), t])
+                    // Luego eliminar el sorteo
+                    const res = await Promise.race([supabase.from('raffles').delete().eq('id', r.id), t])
                     if (res?.error) { alert('Error: ' + res.error.message); e.target.textContent='Eliminar'; e.target.disabled=false; return }
                     loadAdminData(); if(onRefreshRaffles) onRefreshRaffles()
                   } catch(err) { alert('Error: ' + err.message); e.target.textContent='Eliminar'; e.target.disabled=false }
@@ -3093,33 +3096,46 @@ function RaffleForm({ raffle, onBack, onSave }) {
     setSaving(true)
     setSaveError(null)
     try {
-      // Datos minimos — solo campos seguros
+      // Parsear premios
+      const prizes = (Array.isArray(form.prizes) ? form.prizes : [])
+        .filter(p => p && p.amount && String(p.amount).trim())
+        .map(p => ({ amount: String(p.amount).trim(), how_to_win: (p.how_to_win||'').trim() }))
+
+      // Parsear numeros de sociedad
+      const snRaw = form.society_numbers
+        ? String(form.society_numbers).split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n))
+        : []
+
       const data = {
-        title:        String(form.title || '').trim(),
-        ticket_price: Number(form.ticket_price) || 5000,
-        raffle_date:  form.raffle_date,
-        lottery_name: String(form.lottery_name || '').trim(),
-        status:       'active',
-        number_range: Number(form.number_range) || 100,
-        prizes:       [],
-        description:  '',
-        is_featured:  false,
-        is_free:      false,
-        accepts_points: true,
-        release_hours: 24,
-        card_color:   '#E67E22',
+        title:          String(form.title || '').trim(),
+        ticket_price:   Number(form.ticket_price) || 5000,
+        raffle_date:    form.raffle_date,
+        lottery_name:   String(form.lottery_name || '').trim(),
+        status:         form.status || 'active',
+        number_range:   Number(form.number_range) || 100,
+        prizes:         prizes,
+        description:    form.description || '',
+        is_featured:    !!form.is_featured,
+        is_free:        !!form.is_free,
+        accepts_points: form.accepts_points !== false,
+        release_hours:  24,
+        card_color:     form.card_color || '#E67E22',
+        max_per_person: Number(form.max_per_person) || 5,
       }
 
-      setSaveError('Conectando con Supabase...')
+      // Campos opcionales
+      if (snRaw.length > 0) data.society_numbers = snRaw
+      else data.society_numbers = null
 
-      // Timeout de 15 segundos
+      if (form.close_time && form.close_time.trim()) {
+        data.close_time = form.close_time.length === 5 ? form.close_time + ':00' : form.close_time
+      }
+
+      setSaveError('Guardando...')
+
       const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout — la conexion tardó demasiado. Intenta de nuevo.')), 15000)
+        setTimeout(() => reject(new Error('Timeout — intenta de nuevo')), 15000)
       )
-      // Forzar nueva sesión para el request
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Sesion expirada — cierra sesion y vuelve a entrar')
-
       const query = isEdit
         ? supabase.from('raffles').update(data).eq('id', raffle.id)
         : supabase.from('raffles').insert(data)
@@ -3127,7 +3143,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
       const result = await Promise.race([query, timeout])
 
       if (result.error) {
-        setSaveError('ERROR: ' + result.error.message + ' (code: ' + result.error.code + ')')
+        setSaveError('Error: ' + result.error.message)
         setSaving(false)
         return
       }
@@ -3136,7 +3152,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
       setSaving(false)
       onSave()
     } catch(e) {
-      setSaveError('EXCEPCION: ' + (e.message || String(e)))
+      setSaveError('Error: ' + (e.message || String(e)))
       setSaving(false)
     }
   }
