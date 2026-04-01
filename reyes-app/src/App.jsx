@@ -30,7 +30,7 @@ const S = {
   }
 }
 
-const CSS = `@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes houseFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}.house-float{animation:houseFloat 3s ease-in-out infinite}.pulse{animation:pulse 2s infinite}@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}.slide-up{animation:slideUp .3s ease}@keyframes glow{0%,100%{box-shadow:0 0 6px rgba(155,89,182,0.4),0 0 0 1px rgba(155,89,182,0.5)}50%{box-shadow:0 0 18px rgba(155,89,182,0.9),0 0 0 1.5px #9B59B6}}.society-glow{animation:glow 2s ease-in-out infinite}@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}.society-float{animation:float 3s ease-in-out infinite}input,select,textarea{background:#1a1a1a;border:1px solid rgba(201,162,39,0.2);border-radius:12px;padding:13px 16px;color:#fff;font-size:15px;outline:none;width:100%;transition:border-color .2s;font-family:inherit;box-sizing:border-box}input:focus,select:focus,textarea:focus{border-color:#C9A227}input::placeholder,textarea::placeholder{color:#444}textarea{resize:none}::-webkit-scrollbar{display:none}`
+const CSS = `@keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}@keyframes houseFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}.house-float{animation:houseFloat 3s ease-in-out infinite}.pulse{animation:pulse 2s infinite}@keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}.slide-up{animation:slideUp .3s ease}@keyframes glow{0%,100%{box-shadow:0 0 6px rgba(155,89,182,0.4),0 0 0 1px rgba(155,89,182,0.5)}50%{box-shadow:0 0 18px rgba(155,89,182,0.9),0 0 0 1.5px #9B59B6}}.society-glow{animation:glow 2s ease-in-out infinite}@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}.society-float{animation:float 3s ease-in-out infinite}input,select,textarea{background:#1a1a1a;border:1px solid rgba(201,162,39,0.2);border-radius:12px;padding:13px 16px;color:#fff;font-size:15px;outline:none;width:100%;transition:border-color .2s;font-family:inherit;box-sizing:border-box}input:focus,select:focus,textarea:focus{border-color:#C9A227}input::placeholder,textarea::placeholder{color:#444}textarea{resize:none}::-webkit-scrollbar{display:none}`
 
 const LogoSVG = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -82,7 +82,7 @@ const DEFAULT_CONFIG = {
   showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
   whatsapp: '', canal: '', instagram: '', facebook: '', telegram: '',
   supportWhatsapp: '3013986016', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
-  paymentWhatsapp: '3013986016', showWAPayButton: true, showChatPayButton: true, waMsgTemplate: '', imgDeleteDays: 3,
+  paymentWhatsapp: '3013986016', showWAPayButton: true, showChatPayButton: true, waMsgTemplate: '', imgDeleteDays: 3, showBanner: false, bannerText: '🔥 ¡Hoy es tu día de suerte! Aparta tu número antes de que se agote · 💰 Premios reales cada semana · ✅ Pagos seguros y verificados · 🏆 Ganadores publicados en Instagram', bannerBg: '#E6BE00', bannerColor: '#5a3e00', bannerSpeed: 3,
   winnersInstagram: '',
   paymentNequi: '', paymentDaviplata: '', paymentBancolombia: '', paymentOtro: '', paymentNota: '',
   notifAutoNewRaffle: true, notifAuto24h: true, notifAuto2h: true,
@@ -373,6 +373,19 @@ export default function App() {
   return (
     <div style={{ background: C.bg, minHeight: '100vh' }}>
       <style>{CSS}</style>
+      {/* BANNER MARQUEE */}
+      {appConfig?.showBanner && appConfig?.bannerText && (
+        <div style={{ background: appConfig.bannerBg || '#E6BE00', overflow:'hidden', height:28, display:'flex', alignItems:'center', flexShrink:0 }}>
+          <div style={{ display:'flex', width:'max-content', animation:`marquee ${(6 - (appConfig.bannerSpeed||3)) * 5 + 8}s linear infinite` }}>
+            <span style={{ whiteSpace:'nowrap', padding:'0 40px', fontSize:12, fontWeight:700, color: appConfig.bannerColor || '#5a3e00' }}>
+              {appConfig.bannerText}&nbsp;&nbsp;&nbsp;
+            </span>
+            <span style={{ whiteSpace:'nowrap', padding:'0 40px', fontSize:12, fontWeight:700, color: appConfig.bannerColor || '#5a3e00' }} aria-hidden="true">
+              {appConfig.bannerText}&nbsp;&nbsp;&nbsp;
+            </span>
+          </div>
+        </div>
+      )}
       <header style={S.header}>
         <button onClick={() => setPage('home')} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: 8, position: 'relative' }}>
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -3036,6 +3049,48 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
             <div style={{ color:C.muted, fontSize:10, lineHeight:1.6 }}>
               Variables disponibles: <span style={{ color:C.gold }}>{'{'+'sorteo{'+'}'}</span> nombre del sorteo · <span style={{ color:C.gold }}>{'{'+'numeros{'+'}'}</span> numeros · <span style={{ color:C.gold }}>{'{'+'total{'+'}'}</span> total a pagar
             </div>
+          </div>
+          <div style={S.card}>
+            <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:12 }}>Barra Promocional</div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:10, padding:'11px 14px', marginBottom:10 }}>
+              <div>
+                <div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>Activar barra promocional</div>
+                <div style={{ color:C.muted, fontSize:10, marginTop:1 }}>Ticker animado encima del header</div>
+              </div>
+              <Toggle on={!!localConfig.showBanner} onToggle={() => setLocalConfig(p=>({...p, showBanner:!p.showBanner}))} />
+            </div>
+            <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Texto del mensaje</label>
+            <textarea value={localConfig.bannerText||''} onChange={e=>setLocalConfig(p=>({...p,bannerText:e.target.value}))} rows={3} placeholder="🔥 ¡Hoy es tu día de suerte! · 💰 Premios reales cada semana" style={{ marginBottom:10 }} />
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              <div>
+                <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Color de fondo</label>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <input type="color" value={localConfig.bannerBg||'#E6BE00'} onChange={e=>setLocalConfig(p=>({...p,bannerBg:e.target.value}))} style={{ width:40, height:32, border:`1px solid ${C.cardBorder}`, borderRadius:6, cursor:'pointer', padding:2, background:'transparent' }} />
+                  <span style={{ color:C.muted, fontSize:11, fontFamily:'monospace' }}>{localConfig.bannerBg||'#E6BE00'}</span>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Color del texto</label>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <input type="color" value={localConfig.bannerColor||'#5a3e00'} onChange={e=>setLocalConfig(p=>({...p,bannerColor:e.target.value}))} style={{ width:40, height:32, border:`1px solid ${C.cardBorder}`, borderRadius:6, cursor:'pointer', padding:2, background:'transparent' }} />
+                  <span style={{ color:C.muted, fontSize:11, fontFamily:'monospace' }}>{localConfig.bannerColor||'#5a3e00'}</span>
+                </div>
+              </div>
+            </div>
+            <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Velocidad del scroll</label>
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <input type="range" min={1} max={5} step={1} value={localConfig.bannerSpeed||3} onChange={e=>setLocalConfig(p=>({...p,bannerSpeed:Number(e.target.value)}))} style={{ flex:1 }} />
+              <span style={{ color:C.muted, fontSize:11, minWidth:50 }}>{['','Muy lento','Lento','Normal','Rápido','Muy rápido'][localConfig.bannerSpeed||3]}</span>
+            </div>
+            {/* Preview */}
+            {localConfig.showBanner && localConfig.bannerText && (
+              <div style={{ marginTop:12, background:localConfig.bannerBg||'#E6BE00', overflow:'hidden', height:28, borderRadius:6, display:'flex', alignItems:'center' }}>
+                <div style={{ display:'flex', width:'max-content', animation:`marquee ${(6-(localConfig.bannerSpeed||3))*5+8}s linear infinite` }}>
+                  <span style={{ whiteSpace:'nowrap', padding:'0 30px', fontSize:12, fontWeight:700, color:localConfig.bannerColor||'#5a3e00' }}>{localConfig.bannerText}&nbsp;&nbsp;&nbsp;</span>
+                  <span style={{ whiteSpace:'nowrap', padding:'0 30px', fontSize:12, fontWeight:700, color:localConfig.bannerColor||'#5a3e00' }} aria-hidden="true">{localConfig.bannerText}&nbsp;&nbsp;&nbsp;</span>
+                </div>
+              </div>
+            )}
           </div>
           <button onClick={saveConfig} style={S.btnGold}>Guardar configuracion</button>
         </div>
