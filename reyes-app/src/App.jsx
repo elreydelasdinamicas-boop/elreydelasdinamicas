@@ -3138,15 +3138,14 @@ function RaffleForm({ raffle, onBack, onSave }) {
       )
       let result
       if (isEdit) {
-        // Usar upsert en vez de update — más robusto con RLS
-        const upsertData = { ...data, id: raffle.id }
+        // .select() es CRITICO — sin el, el update no devuelve respuesta en algunas versiones
         result = await Promise.race([
-          supabase.from('raffles').upsert(upsertData, { onConflict: 'id' }),
+          supabase.from('raffles').update(data).eq('id', raffle.id).select('id'),
           timeout
         ])
       } else {
         result = await Promise.race([
-          supabase.from('raffles').insert(data),
+          supabase.from('raffles').insert(data).select('id'),
           timeout
         ])
       }
