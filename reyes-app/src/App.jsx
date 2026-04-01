@@ -3136,11 +3136,20 @@ function RaffleForm({ raffle, onBack, onSave }) {
       const timeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Timeout — intenta de nuevo')), 15000)
       )
-      const query = isEdit
-        ? supabase.from('raffles').update(data).eq('id', raffle.id)
-        : supabase.from('raffles').insert(data)
-
-      const result = await Promise.race([query, timeout])
+      let result
+      if (isEdit) {
+        // Usar upsert en vez de update — más robusto con RLS
+        const upsertData = { ...data, id: raffle.id }
+        result = await Promise.race([
+          supabase.from('raffles').upsert(upsertData, { onConflict: 'id' }),
+          timeout
+        ])
+      } else {
+        result = await Promise.race([
+          supabase.from('raffles').insert(data),
+          timeout
+        ])
+      }
 
       if (result.error) {
         setSaveError('Error: ' + result.error.message)
