@@ -223,28 +223,7 @@ export default function App() {
 
   async function fetchConfig() {
     const { data } = await supabase.from('app_config').select('*').eq('id', 1).single()
-    if (data) {
-      // Map snake_case DB columns to camelCase app config
-      const mapped = {
-        ...data,
-        showPoints:        data.show_points        ?? data.showPoints        ?? true,
-        showWinners:       data.show_winners       ?? data.showWinners       ?? true,
-        showHowItWorks:    data.show_how_it_works  ?? data.showHowItWorks    ?? true,
-        showWelcomeBonus:  data.show_welcome_bonus ?? data.showWelcomeBonus  ?? true,
-        showBanner:        data.show_banner        ?? data.showBanner        ?? false,
-        bannerText:        data.banner_text        ?? data.bannerText        ?? '',
-        bannerBg:          data.banner_bg          ?? data.bannerBg          ?? '#E6BE00',
-        bannerColor:       data.banner_color       ?? data.bannerColor       ?? '#5a3e00',
-        bannerSpeed:       data.banner_speed       ?? data.bannerSpeed       ?? 3,
-        showWAPayButton:   data.show_wa_pay_button ?? data.showWAPayButton   ?? true,
-        showChatPayButton: data.show_chat_pay_button ?? data.showChatPayButton ?? true,
-        waMsgTemplate:     data.wa_msg_template    ?? data.waMsgTemplate     ?? '',
-        show_bingo:        data.show_bingo         ?? false,
-        paymentWhatsapp:   data.payment_whatsapp   ?? data.paymentWhatsapp   ?? '',
-        winnersInstagram:  data.winners_instagram  ?? data.winnersInstagram  ?? '',
-      }
-      setAppConfig(prev => ({ ...prev, ...mapped }))
-    }
+    if (data) setAppConfig(prev => ({ ...prev, ...data }))
   }
   async function fetchReserved(id) {
     // Tickets normales
@@ -501,7 +480,7 @@ export default function App() {
         ].map(({ id, label, icon }) => (<button key={id} onClick={() => setPage(id)} style={S.navBtn(page === id)}>{icon}<span style={{ fontSize: 9, fontWeight: 700 }}>{label}</span></button>))}
       </nav>
       {showReservePopup && selectedRaffle && selectedNums.length > 0 && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setShowReservePopup(false)}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setShowReservePopup(false)}>
           <div className="slide-up" style={{ background: '#111', borderRadius: '22px 22px 0 0', padding: 24, width: '100%', maxWidth: 500, border: `1px solid rgba(201,162,39,0.25)`, borderBottom: 'none', position: 'relative', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
             <GoldLine />
             <div style={{ width: 40, height: 4, background: '#2a2a2a', borderRadius: 2, margin: '0 auto 18px' }}></div>
@@ -2917,28 +2896,24 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
 
   async function saveConfig() {
     try {
+      // Solo guardar columnas que sabemos que existen en app_config
       const payload = {
         id: 1,
-        // snake_case para Supabase
-        show_points:          localConfig.showPoints        ?? true,
-        show_winners:         localConfig.showWinners       ?? true,
-        show_how_it_works:    localConfig.showHowItWorks    ?? true,
-        show_welcome_bonus:   localConfig.showWelcomeBonus  ?? true,
-        show_banner:          localConfig.showBanner        ?? false,
-        banner_text:          localConfig.bannerText        ?? '',
-        banner_bg:            localConfig.bannerBg          ?? '#E6BE00',
-        banner_color:         localConfig.bannerColor       ?? '#5a3e00',
-        banner_speed:         localConfig.bannerSpeed       ?? 3,
-        show_wa_pay_button:   localConfig.showWAPayButton   ?? true,
-        show_chat_pay_button: localConfig.showChatPayButton ?? true,
-        wa_msg_template:      localConfig.waMsgTemplate     ?? '',
-        show_bingo:           localConfig.show_bingo        ?? false,
-        payment_whatsapp:     localConfig.paymentWhatsapp   ?? '',
-        winners_instagram:    localConfig.winnersInstagram  ?? '',
-        support_whatsapp:     localConfig.supportWhatsapp   ?? '',
-        payment_nequi:        localConfig.paymentNequi      ?? '',
-        payment_daviplata:    localConfig.paymentDaviplata  ?? '',
-        payment_bancolombia:  localConfig.paymentBancolombia ?? '',
+        showPoints:       localConfig.showPoints       ?? true,
+        showWinners:      localConfig.showWinners      ?? true,
+        showHowItWorks:   localConfig.showHowItWorks   ?? true,
+        showWelcomeBonus: localConfig.showWelcomeBonus ?? true,
+        show_bingo:       localConfig.show_bingo       ?? false,
+        showWAPayButton:  localConfig.showWAPayButton  ?? true,
+        showChatPayButton: localConfig.showChatPayButton ?? true,
+        waMsgTemplate:    localConfig.waMsgTemplate    ?? '',
+        showBanner:       localConfig.showBanner       ?? false,
+        bannerText:       localConfig.bannerText       ?? '',
+        bannerBg:         localConfig.bannerBg         ?? '#E6BE00',
+        bannerColor:      localConfig.bannerColor      ?? '#5a3e00',
+        bannerSpeed:      localConfig.bannerSpeed      ?? 3,
+        paymentWhatsapp:  localConfig.paymentWhatsapp  ?? '',
+        winnersInstagram: localConfig.winnersInstagram ?? '',
       }
       const { error } = await supabase.from('app_config').upsert(payload, { onConflict: 'id' })
       if (error) throw error
