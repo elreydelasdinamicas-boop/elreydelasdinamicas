@@ -18,7 +18,7 @@ const C = {
 const S = {
   header: { position: 'sticky', top: 0, zIndex: 40, background: 'rgba(8,8,8,0.97)', backdropFilter: 'blur(20px)', borderBottom: `1px solid ${C.cardBorder}`, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px' },
   bottomNav: { position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(8,8,8,0.98)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(201,162,39,0.2)', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 4px' },
-  content: { padding: '16px 16px 88px', maxWidth: 500, margin: '0 auto' },
+  content: { padding: '12px 10px 88px', maxWidth: 500, margin: '0 auto' },
   card: { background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16, padding: 16, position: 'relative', overflow: 'hidden' },
   btnGold: { background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, color: '#000', border: 'none', borderRadius: 12, padding: '14px 20px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 15, width: '100%', fontFamily: 'inherit' },
   btnOutline: { background: 'transparent', color: C.gold, border: `1px solid rgba(201,162,39,0.4)`, borderRadius: 12, padding: '13px 20px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, width: '100%', fontFamily: 'inherit' },
@@ -82,7 +82,7 @@ const DEFAULT_CONFIG = {
   showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
   whatsapp: '', canal: '', instagram: '', facebook: '', telegram: '',
   supportWhatsapp: '3013986016', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
-  paymentWhatsapp: '3013986016', showWAPayButton: true, imgDeleteDays: 3,
+  paymentWhatsapp: '3013986016', showWAPayButton: true, showChatPayButton: true, waMsgTemplate: '', imgDeleteDays: 3,
   winnersInstagram: '',
   paymentNequi: '', paymentDaviplata: '', paymentBancolombia: '', paymentOtro: '', paymentNota: '',
   notifAutoNewRaffle: true, notifAuto24h: true, notifAuto2h: true,
@@ -1985,8 +1985,13 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
   // WA pago
   const waNum = (appConfig?.paymentWhatsapp || appConfig?.payment_whatsapp || appConfig?.whatsapp || appConfig?.supportWhatsapp || '').replace(/\D/g,'')
   const numsStr = allNums.map(n => '#'+String(n).padStart(2,'0')).join(', ')
-  const waMsg = 'Hola! Quiero pagar mis boletos:%0A%0ASorteo: '+(raffle?.title||'')+'%0ANumeros: '+numsStr+'%0ATotal: $'+totalAmt
-  const waUrl = waNum ? 'https://wa.me/'+waNum+'?text='+waMsg : null
+  const waTpl = appConfig?.waMsgTemplate ||
+    'Hola! Quiero pagar mis boletos\n\nSorteo: {sorteo}\nNumeros: {numeros}\nTotal: {total}\n\nPor favor confirmar mi pago 🙏'
+  const waMsg = waTpl
+    .replace('{sorteo}', raffle?.title||'')
+    .replace('{numeros}', numsStr)
+    .replace('{total}', fmt(totalAmt))
+  const waUrl = waNum ? 'https://wa.me/'+waNum+'?text='+encodeURIComponent(waMsg) : null
 
   // Pago con Mi Dinero — activo solo si alcanza
   const saldo  = profile?.credits || 0
@@ -2182,11 +2187,13 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
             </a>
           )}
 
-          {/* 2. Chat soporte — siempre visible */}
-          <div onClick={() => onSupport && onSupport({ title:raffle?.title||'', number:allNums[0]||0, price:totalAmt })} style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:6 }}>
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.gold} strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            <span style={{ color:C.gold, fontSize:11, fontWeight:600 }}>Pagar y adjuntar comprobante en chat</span>
-          </div>
+          {/* 2. Chat soporte — controlado por config admin */}
+          {appConfig?.showChatPayButton !== false && (
+            <div onClick={() => onSupport && onSupport({ title:raffle?.title||'', number:allNums[0]||0, price:totalAmt })} style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:10, padding:11, display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', marginBottom:6 }}>
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.gold} strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span style={{ color:C.gold, fontSize:11, fontWeight:600 }}>Pagar y adjuntar comprobante en chat</span>
+            </div>
+          )}
 
           {/* 3. Mi Dinero — SOLO si el saldo alcanza */}
           {dineroOk && (
@@ -3012,6 +3019,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
               ['showWelcomeBonus','Bono de bienvenida','$500 + 1000 pts'],
               ['show_bingo','Mostrar Bingo','Activa el bingo'],
               ['showWAPayButton','Boton Pagar por WhatsApp','Desactiva para solo chat'],
+              ['showChatPayButton','Boton Adjuntar comprobante en chat','Desactiva si no quieres ese boton'],
             ].map(([key,label,desc]) => (
               <div key={key} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:10, padding:'11px 14px', marginBottom:8 }}>
                 <div><div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>{label}</div><div style={{ color:C.muted, fontSize:10, marginTop:1 }}>{desc}</div></div>
@@ -3020,9 +3028,14 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
             ))}
           </div>
           <div style={S.card}>
-            <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:10 }}>WhatsApp de Soporte</div>
+            <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:10 }}>WhatsApp de Pagos</div>
             <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Numero WhatsApp</label>
-            <input value={localConfig.paymentWhatsapp||''} onChange={e=>setLocalConfig(p=>({...p,paymentWhatsapp:e.target.value}))} placeholder="+57 300 000 0000" />
+            <input value={localConfig.paymentWhatsapp||''} onChange={e=>setLocalConfig(p=>({...p,paymentWhatsapp:e.target.value}))} placeholder="3013986016" style={{ marginBottom:12 }} />
+            <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Mensaje automatico de pago</label>
+            <textarea value={localConfig.waMsgTemplate||''} onChange={e=>setLocalConfig(p=>({...p,waMsgTemplate:e.target.value}))} placeholder={'Hola! Quiero pagar mis boletos\n\nSorteo: {sorteo}\nNumeros: {numeros}\nTotal: {total}\n\nPor favor confirmar mi pago 🙏'} rows={5} style={{ marginBottom:6 }} />
+            <div style={{ color:C.muted, fontSize:10, lineHeight:1.6 }}>
+              Variables disponibles: <span style={{ color:C.gold }}>{'{'+'sorteo{'+'}'}</span> nombre del sorteo · <span style={{ color:C.gold }}>{'{'+'numeros{'+'}'}</span> numeros · <span style={{ color:C.gold }}>{'{'+'total{'+'}'}</span> total a pagar
+            </div>
           </div>
           <button onClick={saveConfig} style={S.btnGold}>Guardar configuracion</button>
         </div>
