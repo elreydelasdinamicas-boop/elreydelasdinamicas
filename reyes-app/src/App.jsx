@@ -2954,10 +2954,17 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
               </div>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={() => setEditingRaffle(r)} style={{ flex:1, background:'rgba(201,162,39,0.1)', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:8, padding:'8px', color:C.gold, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Editar</button>
-                <button onClick={async () => {
+                <button onClick={async (e) => {
                   if (!window.confirm('Eliminar esta dinamica?')) return
-                  await supabase.from('raffles').delete().eq('id', r.id)
-                  loadAdminData(); if(onRefreshRaffles) onRefreshRaffles()
+                  e.target.textContent = '...'
+                  e.target.disabled = true
+                  try {
+                    const t = new Promise((_,rj) => setTimeout(()=>rj(new Error('timeout')),10000))
+                    const q = supabase.from('raffles').delete().eq('id', r.id)
+                    const res = await Promise.race([q, t])
+                    if (res?.error) { alert('Error: ' + res.error.message); e.target.textContent='Eliminar'; e.target.disabled=false; return }
+                    loadAdminData(); if(onRefreshRaffles) onRefreshRaffles()
+                  } catch(err) { alert('Error: ' + err.message); e.target.textContent='Eliminar'; e.target.disabled=false }
                 }} style={{ background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.2)', borderRadius:8, padding:'8px 12px', color:'#E74C3C', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Eliminar</button>
               </div>
             </div>
@@ -3104,20 +3111,30 @@ function RaffleForm({ raffle, onBack, onSave }) {
       }
 
       setSaveError('Conectando con Supabase...')
-      
-      const result = isEdit
-        ? await supabase.from('raffles').update(data).eq('id', raffle.id)
-        : await supabase.from('raffles').insert(data)
+
+      // Timeout de 15 segundos
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout — la conexion tardó demasiado. Intenta de nuevo.')), 15000)
+      )
+      // Forzar nueva sesión para el request
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Sesion expirada — cierra sesion y vuelve a entrar')
+
+      const query = isEdit
+        ? supabase.from('raffles').update(data).eq('id', raffle.id)
+        : supabase.from('raffles').insert(data)
+
+      const result = await Promise.race([query, timeout])
 
       if (result.error) {
-        setSaveError('ERROR Supabase: ' + result.error.message + ' | code: ' + result.error.code)
+        setSaveError('ERROR: ' + result.error.message + ' (code: ' + result.error.code + ')')
         setSaving(false)
         return
       }
 
-      setSaveError('✅ Guardado exitosamente!')
+      setSaveError(null)
       setSaving(false)
-      setTimeout(() => onSave(), 800)
+      onSave()
     } catch(e) {
       setSaveError('EXCEPCION: ' + (e.message || String(e)))
       setSaving(false)
