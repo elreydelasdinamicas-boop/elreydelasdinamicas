@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+<textarea id="code" readonly>import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase.js'
 
 const fmt = v => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v)
@@ -2903,7 +2903,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
         showWinners:      localConfig.showWinners      ?? true,
         showHowItWorks:   localConfig.showHowItWorks   ?? true,
         showWelcomeBonus: localConfig.showWelcomeBonus ?? true,
-        show_bingo:       localConfig.show_bingo       ?? false,
+        show_bingo:       localConfig.show_bingo       ?? true,
         showWAPayButton:  localConfig.showWAPayButton  ?? true,
         showChatPayButton: localConfig.showChatPayButton ?? true,
         waMsgTemplate:    localConfig.waMsgTemplate    ?? '',
@@ -4006,64 +4006,97 @@ function AdminSMSButton({ ticket, compact = false }) {
 }
 
 
-// ─── BINGO PAGE — completo y didactico ───────────────────────────────────────
+// ─── BINGO PAGE — v64 completo con 6 cartones, live, ganadores ───────────────
 function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   const [game, setGame] = useState(null)
   const [myCartones, setMyCartones] = useState([])
   const [showGuide, setShowGuide] = useState(false)
-  const [buyingCarton, setBuyingCarton] = useState(false)
+  const [buyingPack, setBuyingPack] = useState(false)
   const [bingoClaim, setBingoClaim] = useState(false)
   const [winType, setWinType] = useState('')
+  const [autoMark, setAutoMark] = useState(true)
+  const [expandedCarton, setExpandedCarton] = useState(null)
+  const [showBoard, setShowBoard] = useState(false)
 
   useEffect(() => {
     fetchGame()
     const ch = supabase.channel('bingo-live')
-      .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, fetchGame)
+      .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => fetchGame())
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
 
-  useEffect(() => { if (user && game) fetchMyCartones() }, [user, game])
+  useEffect(() => { if (user && game) fetchMyCartones() }, [user, game?.id])
+
+  // Auto-marcar cuando llega un número nuevo
+  useEffect(() => {
+    if (!autoMark || !game || !user || myCartones.length === 0) return
+    const called = game.called_numbers || []
+    if (called.length === 0) return
+    myCartones.forEach(carton => {
+      const nums = carton.numbers || []
+      const marked = carton.marked || []
+      const allNums = nums.flat().filter(n => n !== null)
+      const shouldMark = allNums.filter(n => called.includes(n) && !marked.includes(n))
+      if (shouldMark.length > 0) {
+        const newMarked = [...marked, ...shouldMark]
+        supabase.from('bingo_cartones').update({ marked: newMarked }).eq('id', carton.id)
+        setMyCartones(prev => prev.map(c => c.id === carton.id ? { ...c, marked: newMarked } : c))
+      }
+    })
+  }, [game?.called_numbers?.length, autoMark])
 
   async function fetchGame() {
-    const { data } = await supabase.from('bingo_games').select('*').eq('status', 'active').order('created_at', { ascending: false }).limit(1).single()
+    const { data } = await supabase.from('bingo_games').select('*').in('status', ['active', 'waiting', 'paused']).order('created_at', { ascending: false }).limit(1).single()
     setGame(data || null)
   }
 
   async function fetchMyCartones() {
     if (!game) return
-    const { data } = await supabase.from('bingo_cartones').select('*').eq('game_id', game.id).eq('user_id', user.id)
+    const { data } = await supabase.from('bingo_cartones').select('*').eq('game_id', game.id).eq('user_id', user.id).order('carton_number')
     setMyCartones(data || [])
   }
 
   function generateCarton() {
-    const cols = { B:[1,15], I:[16,30], N:[31,45], G:[46,60], O:[61,75] }
-    return Object.values(cols).map(([ min, max ], ci) =>
-      Array.from({length:5},(_,ri) => {
-        if (ci===2 && ri===2) return null // estrella gratis
-        const pool = Array.from({length:max-min+1},(_,i)=>i+min)
-        return pool[Math.floor(Math.random()*pool.length)]
+    const cols = { B: [1, 15], I: [16, 30], N: [31, 45], G: [46, 60], O: [61, 75] }
+    return Object.entries(cols).map(([letter, [min, max]], ci) => {
+      const pool = Array.from({ length: max - min + 1 }, (_, i) => i + min)
+      const shuffled = pool.sort(() => Math.random() - 0.5)
+      return Array.from({ length: 5 }, (_, ri) => {
+        if (ci === 2 && ri === 2) return null
+        return shuffled[ri]
       })
-    )
+    })
   }
 
-  async function buyCarton() {
+  async function buyPack() {
     if (!user) { onLogin(); return }
-    if (myCartones.length >= 6) { alert('Ya tienes el maximo de 6 cartones!'); return }
-    setBuyingCarton(true)
-    const numbers = generateCarton()
-    await supabase.from('bingo_cartones').insert({ game_id: game.id, user_id: user.id, numbers, marked: [], carton_number: myCartones.length + 1, paid: false })
+    if (myCartones.length >= 6) { alert('Ya tienes tu pack de 6 cartones!'); return }
+    setBuyingPack(true)
+    const cartones = []
+    for (let i = 0; i < 6; i++) {
+      cartones.push({
+        game_id: game.id,
+        user_id: user.id,
+        numbers: generateCarton(),
+        marked: [],
+        carton_number: i + 1,
+        paid: false,
+        is_pack: true
+      })
+    }
+    await supabase.from('bingo_cartones').insert(cartones)
     await fetchMyCartones()
-    setBuyingCarton(false)
+    setBuyingPack(false)
   }
 
   async function markNumber(cartonId, num) {
     if (!game?.called_numbers?.includes(num)) return
     const carton = myCartones.find(c => c.id === cartonId)
     if (!carton) return
-    const newMarked = carton.marked.includes(num) ? carton.marked.filter(n=>n!==num) : [...carton.marked, num]
+    const newMarked = carton.marked.includes(num) ? carton.marked.filter(n => n !== num) : [...carton.marked, num]
     await supabase.from('bingo_cartones').update({ marked: newMarked }).eq('id', cartonId)
-    setMyCartones(prev => prev.map(c => c.id===cartonId ? {...c, marked:newMarked} : c))
+    setMyCartones(prev => prev.map(c => c.id === cartonId ? { ...c, marked: newMarked } : c))
   }
 
   async function claimBingo() {
@@ -4073,182 +4106,356 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     alert('BINGO reclamado! El admin va a verificar tu carton.')
   }
 
+  function getLetterForNum(n) {
+    if (n <= 15) return 'B'
+    if (n <= 30) return 'I'
+    if (n <= 45) return 'N'
+    if (n <= 60) return 'G'
+    return 'O'
+  }
+
+  function handlePrint() {
+    const printContent = myCartones.map((carton, ci) => {
+      const letters = ['B', 'I', 'N', 'G', 'O']
+      const nums = carton.numbers || []
+      let html = `<div style="page-break-inside:avoid;margin-bottom:20px;border:2px solid #ccc;padding:10px;display:inline-block;width:45%;margin:2%"><h3 style="text-align:center;margin:0 0 8px">Carton #${ci + 1}</h3>`
+      html += `<table style="border-collapse:collapse;width:100%"><tr>${letters.map(l => `<th style="background:#E6BE00;color:#000;padding:6px;text-align:center;border:1px solid #999;font-size:16px">${l}</th>`).join('')}</tr>`
+      for (let row = 0; row < 5; row++) {
+        html += '<tr>'
+        for (let col = 0; col < 5; col++) {
+          const n = nums[col]?.[row]
+          html += `<td style="border:1px solid #999;padding:8px;text-align:center;font-size:18px;font-weight:bold;width:20%">${n === null ? '★' : n}</td>`
+        }
+        html += '</tr>'
+      }
+      html += '</table></div>'
+      return html
+    }).join('')
+    const win = window.open('', '_blank')
+    win.document.write(`<html><head><title>Mis Cartones - Bingo La Casa</title></head><body style="font-family:Arial;padding:20px"><h1 style="text-align:center">Bingo La Casa De Las Dinamicas</h1><h2 style="text-align:center;color:#555">${game.title || 'Bingo'}</h2><div style="display:flex;flex-wrap:wrap;justify-content:center">${printContent}</div><script>setTimeout(()=>window.print(),500)<\/script></body></html>`)
+    win.document.close()
+  }
+
   const calledNums = game?.called_numbers || []
   const currentNum = game?.current_number
+  const winners = game?.winners || []
+  const winTypesAvail = game?.win_types || ['linea', 'vertical', 'diagonal', 'esquinas', 'full']
+  const winTypeLabels = { linea: '→ Linea', vertical: '↓ Vertical', diagonal: '↗ Diagonal', esquinas: '◻️ Esquinas', full: '⬛ Carton lleno' }
 
   if (!game) return (
-    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, gap:16 }}>
+    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }}>
       <style>{CSS}</style>
-      <div style={{ fontSize:64, marginBottom:8 }}>🎱</div>
-      <div style={{ color:'#fff', fontSize:20, fontWeight:900, textAlign:'center' }}>No hay Bingo activo</div>
-      <div style={{ color:C.muted, fontSize:13, textAlign:'center' }}>El admin iniciara una partida pronto</div>
-      <button onClick={onBack} style={{ ...S.btnOutline, marginTop:8, maxWidth:200 }}>← Volver</button>
+      <div style={{ fontSize: 64, marginBottom: 8 }}>🎱</div>
+      <div style={{ color: '#fff', fontSize: 20, fontWeight: 900, textAlign: 'center' }}>No hay Bingo activo</div>
+      <div style={{ color: C.muted, fontSize: 13, textAlign: 'center' }}>El admin iniciara una partida pronto</div>
+      <button onClick={onBack} style={{ ...S.btnOutline, marginTop: 8, maxWidth: 200 }}>← Volver</button>
     </div>
   )
 
   return (
-    <div style={{ background:C.bg, minHeight:'100vh' }}>
+    <div style={{ background: C.bg, minHeight: '100vh' }}>
       <style>{CSS}</style>
       {/* Header */}
-      <div style={{ background:C.bg2, padding:'11px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid #1a1a1a`, position:'sticky', top:0, zIndex:40 }}>
-        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>← Volver</button>
-        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-          <div style={{ width:8, height:8, background:'#27AE60', borderRadius:'50%' }} className="pulse"></div>
-          <span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>Bingo La Casa</span>
+      <div style={{ background: C.bg2, padding: '11px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid #1a1a1a`, position: 'sticky', top: 0, zIndex: 40 }}>
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, fontSize: 13, padding: 0, fontFamily: 'inherit' }}>← Volver</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 8, height: 8, background: game.status === 'active' ? '#27AE60' : '#E67E22', borderRadius: '50%' }} className="pulse" />
+          <span style={{ color: '#fff', fontSize: 12, fontWeight: 900 }}>{game.title || 'Bingo La Casa'}</span>
         </div>
-        <button onClick={() => setShowGuide(!showGuide)} style={{ background:'rgba(230,190,0,0.1)', border:`1px solid rgba(230,190,0,0.3)`, borderRadius:8, color:C.gold, fontSize:10, fontWeight:700, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit' }}>
-          {showGuide ? 'Cerrar guia' : '? Guia'}
+        <button onClick={() => setShowGuide(!showGuide)} style={{ background: 'rgba(230,190,0,0.1)', border: `1px solid rgba(230,190,0,0.3)`, borderRadius: 8, color: C.gold, fontSize: 10, fontWeight: 700, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+          {showGuide ? 'Cerrar guia' : '❓ Guia'}
         </button>
       </div>
 
-      <div style={{ padding:'14px 16px 100px', maxWidth:500, margin:'0 auto' }}>
+      <div style={{ padding: '12px 12px 100px', maxWidth: 500, margin: '0 auto' }}>
+
+        {/* LIVE EMBED */}
+        {game.live_url && (
+          <div style={{ background: '#000', border: '1px solid rgba(230,190,0,0.2)', borderRadius: 14, overflow: 'hidden', marginBottom: 12 }}>
+            <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+              <iframe src={game.live_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }} allowFullScreen allow="autoplay; encrypted-media" />
+            </div>
+          </div>
+        )}
 
         {/* GUIA DIDACTICA */}
         {showGuide && (
-          <div style={{ background:'#111', border:`1px solid rgba(230,190,0,0.2)`, borderRadius:16, padding:16, marginBottom:14, position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-            <div style={{ color:C.gold, fontSize:13, fontWeight:900, marginBottom:12, textAlign:'center' }}>Como jugar Bingo</div>
+          <div style={{ background: '#111', border: `1px solid rgba(230,190,0,0.2)`, borderRadius: 16, padding: 16, marginBottom: 14, position: 'relative', overflow: 'hidden' }}>
+            <GoldLine />
+            <div style={{ color: C.gold, fontSize: 13, fontWeight: 900, marginBottom: 12, textAlign: 'center' }}>Como jugar Bingo</div>
             {[
-              ['🎟️','Compra tu carton','Cada carton cuesta '+fmt(game.carton_price)+'. Puedes tener hasta 6 cartones en la misma partida.'],
-              ['🔢','Escucha los numeros','El admin va cantando numeros. Cada numero cantado se muestra grande en pantalla.'],
-              ['✅','Marca en tu carton','Cuando el numero cantado aparezca en tu carton, tocalo para marcarlo.'],
-              ['🏆','Canta BINGO!','Completa una linea horizontal, vertical, diagonal, las 4 esquinas o el carton completo y presiona el boton BINGO!'],
-            ].map(([ic,t,d]) => (
-              <div key={t} style={{ display:'flex', gap:12, marginBottom:12, paddingBottom:12, borderBottom:'1px solid #1a1a1a' }}>
-                <span style={{ fontSize:22, flexShrink:0 }}>{ic}</span>
-                <div><div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:2 }}>{t}</div><div style={{ color:C.muted, fontSize:11 }}>{d}</div></div>
+              ['🎟️', 'Compra tu pack', `Cada pack de 6 cartones cuesta ${fmt(game.pack_price || 6000)}. Recibes 6 cartones aleatorios.`],
+              ['📺', 'Mira el live', 'El admin saca las balotas en vivo. Si no puedes ver el live, los numeros aparecen aqui en tiempo real.'],
+              ['✅', 'Marca tu carton', 'Con auto-marcar ON se marcan solos. Si prefieres, desactiva auto-marcar y toca cada numero tu mismo.'],
+              ['🏆', 'Canta BINGO!', 'Completa una linea, columna, diagonal, las 4 esquinas o carton lleno y presiona BINGO!'],
+            ].map(([ic, t, d]) => (
+              <div key={t} style={{ display: 'flex', gap: 12, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #1a1a1a' }}>
+                <span style={{ fontSize: 22, flexShrink: 0 }}>{ic}</span>
+                <div><div style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 2 }}>{t}</div><div style={{ color: C.muted, fontSize: 11 }}>{d}</div></div>
               </div>
             ))}
-            {/* Tipos de bingo */}
-            <div style={{ color:C.gold, fontSize:11, fontWeight:700, marginBottom:8 }}>Formas de ganar:</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-              {[['→','Linea horizontal','Premio basico'],['↓','Linea vertical','Premio basico'],['↗','Diagonal','Premio medio'],['⬛','Carton lleno','Premio MAXIMO!'],['◻️','4 Esquinas','Premio especial']].map(([ic,t,p]) => (
-                <div key={t} style={{ background:'#1a1a1a', borderRadius:9, padding:'8px 10px', display:'flex', alignItems:'center', gap:8 }}>
-                  <span style={{ fontSize:16, flexShrink:0 }}>{ic}</span>
-                  <div><div style={{ color:'#fff', fontSize:9, fontWeight:700 }}>{t}</div><div style={{ color:C.gold, fontSize:8 }}>{p}</div></div>
+            <div style={{ color: C.gold, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>Formas de ganar:</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {[['→', 'Linea horizontal'], ['↓', 'Linea vertical'], ['↗', 'Diagonal'], ['◻️', '4 Esquinas'], ['⬛', 'Carton lleno']].map(([ic, t]) => (
+                <div key={t} style={{ background: '#1a1a1a', borderRadius: 9, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{ic}</span>
+                  <div style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>{t}</div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* NUMERO ACTUAL + PREMIO */}
-        <div style={{ background:'#111', border:`1px solid rgba(230,190,0,0.2)`, borderRadius:16, padding:14, marginBottom:14, position:'relative', overflow:'hidden' }}>
-          <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-            <div>
-              <div style={{ color:C.muted, fontSize:9, textTransform:'uppercase' }}>Premio</div>
-              <div style={{ color:C.gold, fontSize:18, fontWeight:900, lineHeight:1 }}>{game.prize_description || fmt(game.prize_amount)}</div>
+        {/* BALOTA ACTUAL + ULTIMAS */}
+        <div style={{ background: '#111', border: `1px solid rgba(230,190,0,0.2)`, borderRadius: 16, padding: 14, marginBottom: 12, position: 'relative', overflow: 'hidden' }}>
+          <GoldLine />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {/* Balota grande redonda */}
+            <div style={{ width: 68, height: 68, background: currentNum ? `linear-gradient(135deg,${C.gold},${C.goldLight})` : '#1a1a1a', borderRadius: '50%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: currentNum ? 'none' : '2px dashed #2a2a2a' }}>
+              {currentNum ? (
+                <>
+                  <span style={{ fontSize: 10, fontWeight: 900, color: '#5a3e00', lineHeight: 1 }}>{getLetterForNum(currentNum)}</span>
+                  <span style={{ fontSize: 28, fontWeight: 900, color: '#000', lineHeight: 1 }}>{currentNum}</span>
+                </>
+              ) : (
+                <span style={{ color: '#333', fontSize: 12 }}>?</span>
+              )}
             </div>
-            <div style={{ textAlign:'center' }}>
-              <div style={{ color:C.muted, fontSize:9, marginBottom:4 }}>Numero actual</div>
-              <div style={{ width:52, height:52, background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, fontWeight:900, color:'#000' }}>
-                {currentNum || '?'}
+            {/* Info + ultimas balotas */}
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
+                {[...calledNums].slice(-5).map((n, i, arr) => (
+                  <div key={`${n}-${i}`} style={{ width: 30, height: 30, borderRadius: '50%', background: i === arr.length - 1 ? 'rgba(230,190,0,0.15)' : '#1a1a1a', border: `1px solid ${i === arr.length - 1 ? 'rgba(230,190,0,0.4)' : '#2a2a2a'}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 6, color: i === arr.length - 1 ? C.gold : '#444', lineHeight: 1 }}>{getLetterForNum(n)}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: i === arr.length - 1 ? C.gold : '#555', lineHeight: 1 }}>{n}</span>
+                  </div>
+                ))}
+                {calledNums.length === 0 && <span style={{ color: C.muted, fontSize: 11 }}>Esperando...</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ color: C.muted, fontSize: 10 }}>Cantados: <b style={{ color: C.gold }}>{calledNums.length}/75</b></span>
+                <span style={{ color: '#222' }}>|</span>
+                <span style={{ color: C.muted, fontSize: 10 }}>Auto: <b style={{ color: autoMark ? '#27AE60' : '#555' }}>{autoMark ? 'ON' : 'OFF'}</b></span>
               </div>
             </div>
-            <div style={{ textAlign:'right' }}>
-              <div style={{ color:C.muted, fontSize:9 }}>Cantados</div>
-              <div style={{ color:'#fff', fontSize:18, fontWeight:900 }}>{calledNums.length}</div>
-            </div>
-          </div>
-          {/* Ultimos 5 numeros */}
-          <div style={{ display:'flex', gap:5, justifyContent:'center' }}>
-            {[...calledNums].slice(-5).map((n,i,arr) => (
-              <div key={n} style={{ width:28, height:28, borderRadius:'50%', background:i===arr.length-1?`linear-gradient(135deg,${C.gold},${C.goldLight})`:'#1a1a1a', border:`1px solid ${i===arr.length-1?'transparent':'#2a2a2a'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, color:i===arr.length-1?'#000':'#555' }}>{n}</div>
-            ))}
-            {calledNums.length === 0 && <div style={{ color:C.muted, fontSize:11 }}>Esperando primer numero...</div>}
           </div>
         </div>
 
-        {/* MIS CARTONES */}
+        {/* TOGGLE AUTO-MARCAR + BOTONES */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button onClick={() => setAutoMark(!autoMark)} style={{ flex: 1, background: '#111', border: `1px solid ${autoMark ? 'rgba(39,174,96,0.3)' : '#2a2a2a'}`, borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontFamily: 'inherit' }}>
+            <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>Auto-marcar</span>
+            <Toggle on={autoMark} onToggle={() => setAutoMark(!autoMark)} />
+          </button>
+          <button onClick={() => setShowBoard(!showBoard)} style={{ background: '#111', border: '1px solid rgba(230,190,0,0.2)', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', fontFamily: 'inherit', color: C.gold, fontSize: 10, fontWeight: 700 }}>
+            {showBoard ? 'Ocultar' : 'Tablero 1-75'}
+          </button>
+          {myCartones.length > 0 && (
+            <button onClick={handlePrint} style={{ background: '#111', border: '1px solid rgba(230,190,0,0.2)', borderRadius: 10, padding: '8px 12px', cursor: 'pointer', fontFamily: 'inherit', color: C.gold, fontSize: 10, fontWeight: 700 }}>
+              🖨️
+            </button>
+          )}
+        </div>
+
+        {/* TABLERO MAESTRO 1-75 */}
+        {showBoard && (
+          <div style={{ background: '#111', border: '1px solid rgba(230,190,0,0.2)', borderRadius: 14, padding: 10, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 3, marginBottom: 4 }}>
+              {['B','I','N','G','O'].map(l => <div key={l} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius: 6, padding: 4, textAlign: 'center', fontSize: 11, fontWeight: 900, color: '#000' }}>{l}</div>)}
+            </div>
+            {Array.from({ length: 15 }, (_, row) => (
+              <div key={row} style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 3, marginBottom: 2 }}>
+                {Array.from({ length: 5 }, (_, col) => {
+                  const n = row + 1 + col * 15
+                  const isCalled = calledNums.includes(n)
+                  return (
+                    <div key={n} style={{ padding: '4px 0', borderRadius: 5, background: isCalled ? 'rgba(230,190,0,0.2)' : '#1a1a1a', border: `1px solid ${isCalled ? 'rgba(230,190,0,0.4)' : '#1a1a1a'}`, textAlign: 'center', fontSize: 9, fontWeight: isCalled ? 800 : 400, color: isCalled ? C.gold : '#333' }}>{n}</div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* GANADORES */}
+        {(winners.length > 0 || game.status === 'active') && (
+          <div style={{ background: '#111', border: `1px solid ${winners.length > 0 ? 'rgba(39,174,96,0.25)' : 'rgba(230,190,0,0.15)'}`, borderRadius: 14, padding: 12, marginBottom: 12, position: 'relative', overflow: 'hidden' }}>
+            {winners.length > 0 && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1.5, background: 'linear-gradient(90deg,transparent,#27AE60,transparent)' }} />}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 16 }}>🏆</span>
+                <span style={{ color: '#fff', fontSize: 12, fontWeight: 900 }}>Ganadores</span>
+              </div>
+              {winners.length > 0 && <span style={{ ...S.badge('green'), fontSize: 9 }}>{winners.length} premio{winners.length > 1 ? 's' : ''}</span>}
+            </div>
+            {winners.length === 0 ? (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: C.muted, fontSize: 11, marginBottom: 8 }}>Aun no hay ganadores en esta partida</div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {winTypesAvail.map(wt => (
+                    <span key={wt} style={{ background: 'rgba(230,190,0,0.06)', border: '1px dashed rgba(230,190,0,0.2)', borderRadius: 6, padding: '4px 10px', color: '#555', fontSize: 9 }}>
+                      {winTypeLabels[wt] || wt}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              winners.map((w, i) => (
+                <div key={i} style={{ background: 'rgba(230,190,0,0.06)', border: '1px solid rgba(230,190,0,0.15)', borderRadius: 10, padding: '10px 12px', marginBottom: i < winners.length - 1 ? 6 : 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18 }}>{medals[i] || '🎖️'}</span>
+                    <div>
+                      <div style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>{w.name || 'Jugador'}</div>
+                      <div style={{ color: C.muted, fontSize: 10 }}>Balota #{w.at_ball || '?'}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ ...S.badge('gold'), fontSize: 9 }}>{winTypeLabels[w.type] || w.type}</span>
+                    {w.prize && <div style={{ color: '#27AE60', fontSize: 10, fontWeight: 700, marginTop: 3 }}>{fmt(w.prize)}</div>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* COMPRAR PACK O MOSTRAR CARTONES */}
         {!user ? (
-          <div style={{ textAlign:'center', padding:'20px 0', marginBottom:14 }}>
-            <div style={{ color:C.muted, fontSize:13, marginBottom:12 }}>Ingresa para comprar cartones y jugar</div>
-            <button onClick={onLogin} style={{ ...S.btnGold, maxWidth:200, margin:'0 auto' }}>Entrar a jugar</button>
+          <div style={{ textAlign: 'center', padding: '20px 0', marginBottom: 14 }}>
+            <div style={{ color: C.muted, fontSize: 13, marginBottom: 12 }}>Ingresa para comprar tus cartones y jugar</div>
+            <button onClick={onLogin} style={{ ...S.btnGold, maxWidth: 200, margin: '0 auto' }}>Entrar a jugar</button>
+          </div>
+        ) : myCartones.length === 0 ? (
+          <div style={{ background: '#111', border: '1px dashed #2a2a2a', borderRadius: 14, padding: 24, textAlign: 'center', marginBottom: 14 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>🎟️</div>
+            <div style={{ color: '#fff', fontSize: 15, fontWeight: 900, marginBottom: 4 }}>Pack de 6 Cartones</div>
+            <div style={{ color: C.gold, fontSize: 22, fontWeight: 900, marginBottom: 4 }}>{fmt(game.pack_price || 6000)}</div>
+            <div style={{ color: C.muted, fontSize: 11, marginBottom: 16 }}>Recibes 6 cartones aleatorios para esta partida</div>
+            <button onClick={buyPack} disabled={buyingPack} style={{ ...S.btnGold, opacity: buyingPack ? .7 : 1 }}>
+              {buyingPack ? 'Generando cartones...' : '🎟️ Comprar Pack de 6 Cartones'}
+            </button>
           </div>
         ) : (
           <>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-              <div style={{ color:'#fff', fontSize:13, fontWeight:900 }}>Mis cartones ({myCartones.length}/6)</div>
-              {myCartones.length < 6 && (
-                <button onClick={buyCarton} disabled={buyingCarton} style={{ background:C.gold, border:'none', borderRadius:9, padding:'8px 14px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', fontFamily:'inherit', opacity:buyingCarton?.7:1 }}>
-                  {buyingCarton ? '...' : `+ Carton ${fmt(game.carton_price)}`}
-                </button>
-              )}
+            {/* Header cartones */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ color: '#fff', fontSize: 13, fontWeight: 900 }}>Mis 6 cartones</div>
+              <span style={{ ...S.badge('green'), fontSize: 9 }}>Pack completo</span>
             </div>
 
-            {myCartones.length === 0 && (
-              <div style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:14, padding:24, textAlign:'center', marginBottom:14 }}>
-                <div style={{ fontSize:32, marginBottom:8 }}>🎟️</div>
-                <div style={{ color:'#fff', fontSize:13, fontWeight:700, marginBottom:4 }}>No tienes cartones aun</div>
-                <div style={{ color:C.muted, fontSize:11, marginBottom:14 }}>Compra tu primer carton por {fmt(game.carton_price)}</div>
-                <button onClick={buyCarton} style={{ ...S.btnGold }}>Comprar carton</button>
+            {/* EXPANDED CARTON VIEW */}
+            {expandedCarton !== null && (
+              <div style={{ marginBottom: 12 }}>
+                {(() => {
+                  const carton = myCartones[expandedCarton]
+                  if (!carton) return null
+                  const nums = carton.numbers || []
+                  const marked = carton.marked || []
+                  const letters = ['B', 'I', 'N', 'G', 'O']
+                  return (
+                    <div style={{ background: '#111', border: `1px solid rgba(230,190,0,0.3)`, borderRadius: 14, padding: 12, position: 'relative', overflow: 'hidden' }}>
+                      <GoldLine />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div style={{ color: '#fff', fontSize: 13, fontWeight: 900 }}>Carton #{expandedCarton + 1}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ color: C.muted, fontSize: 10 }}>{marked.length} marcados</span>
+                          <button onClick={() => setExpandedCarton(null)} style={{ background: 'rgba(230,190,0,0.1)', border: '1px solid rgba(230,190,0,0.3)', borderRadius: 6, color: C.gold, fontSize: 9, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>Minimizar</button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 3, marginBottom: 3 }}>
+                        {letters.map(l => <div key={l} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius: 6, padding: 5, textAlign: 'center', fontSize: 13, fontWeight: 900, color: '#000' }}>{l}</div>)}
+                      </div>
+                      {Array.from({ length: 5 }, (_, row) => (
+                        <div key={row} style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 3, marginBottom: 3 }}>
+                          {nums.map((col, colIdx) => {
+                            const n = col[row]
+                            const isStar = n === null
+                            const isCalled = n !== null && calledNums.includes(n)
+                            const isMarked = n !== null ? marked.includes(n) : true
+                            return (
+                              <div key={colIdx} onClick={() => n && markNumber(carton.id, n)}
+                                style={{ aspectRatio: 1, borderRadius: 6, background: isStar ? `linear-gradient(135deg,${C.gold},${C.goldLight})` : isMarked && isCalled ? 'rgba(230,190,0,0.25)' : isCalled ? 'rgba(39,174,96,0.15)' : '#1a1a1a', border: `1px solid ${isStar ? 'transparent' : isMarked && isCalled ? 'rgba(230,190,0,0.5)' : isCalled ? 'rgba(39,174,96,0.4)' : '#2a2a2a'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: isStar ? '#000' : isMarked && isCalled ? C.gold : isCalled ? '#27AE60' : '#555', cursor: isCalled && !isStar ? 'pointer' : 'default' }}>
+                                {isStar ? '⭐' : n}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
             )}
 
-            {myCartones.map((carton, ci) => {
-              const nums = carton.numbers || []
-              const marked = carton.marked || []
-              const letters = ['B','I','N','G','O']
-              return (
-                <div key={carton.id} style={{ background:'#111', border:`1px solid rgba(230,190,0,0.2)`, borderRadius:16, padding:12, marginBottom:12, position:'relative', overflow:'hidden' }}>
-                  <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                    <div style={{ color:'#fff', fontSize:11, fontWeight:800 }}>Carton #{ci+1}</div>
-                    <div style={{ color:C.muted, fontSize:10 }}>{marked.length} marcados</div>
-                  </div>
-                  {/* Header BINGO */}
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>
-                    {letters.map(l => <div key={l} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:6, padding:'5px', textAlign:'center', fontSize:11, fontWeight:900, color:'#000' }}>{l}</div>)}
-                  </div>
-                  {/* Numeros 5x5 — transpuesto */}
-                  {Array.from({length:5},(_,row) => (
-                    <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>
-                      {nums.map((col, colIdx) => {
-                        const n = col[row]
-                        const isStar = n === null
-                        const isCalled = n !== null && calledNums.includes(n)
-                        const isMarked = n !== null ? marked.includes(n) : true
-                        return (
-                          <div key={colIdx} onClick={() => n && markNumber(carton.id, n)}
-                            style={{ aspectRatio:1, borderRadius:6, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.25)':isCalled?'rgba(39,174,96,0.15)':'#1a1a1a', border:`1px solid ${isStar?'transparent':isMarked&&isCalled?'rgba(230,190,0,0.5)':isCalled?'rgba(39,174,96,0.4)':'#2a2a2a'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:isStar?14:10, fontWeight:900, color:isStar?'#000':isMarked&&isCalled?C.gold:isCalled?'#27AE60':'#555', cursor:isCalled&&!isStar?'pointer':'default' }}>
-                            {isStar ? '⭐' : n}
-                          </div>
-                        )
-                      })}
+            {/* GRID 2x3 DE MINI CARTONES */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 12 }}>
+              {myCartones.map((carton, ci) => {
+                const nums = carton.numbers || []
+                const marked = carton.marked || []
+                const letters = ['B', 'I', 'N', 'G', 'O']
+                const isExpanded = expandedCarton === ci
+                return (
+                  <div key={carton.id} onClick={() => setExpandedCarton(isExpanded ? null : ci)}
+                    style={{ background: '#111', border: `1px solid ${isExpanded ? C.gold : 'rgba(230,190,0,0.2)'}`, borderRadius: 10, padding: 6, position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
+                    <GoldLine />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                      <span style={{ color: '#fff', fontSize: 9, fontWeight: 900 }}>#{ci + 1}</span>
+                      <span style={{ color: C.muted, fontSize: 8 }}>{marked.length} marc</span>
                     </div>
-                  ))}
-                </div>
-              )
-            })}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 2, marginBottom: 2 }}>
+                      {letters.map(l => <div key={l} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius: 3, padding: '2px 0', textAlign: 'center', fontSize: 7, fontWeight: 900, color: '#000' }}>{l}</div>)}
+                    </div>
+                    {Array.from({ length: 5 }, (_, row) => (
+                      <div key={row} style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 2, marginBottom: 1 }}>
+                        {nums.map((col, colIdx) => {
+                          const n = col[row]
+                          const isStar = n === null
+                          const isCalled = n !== null && calledNums.includes(n)
+                          const isMarked = n !== null ? marked.includes(n) : true
+                          return (
+                            <div key={colIdx} style={{ aspectRatio: 1, borderRadius: 3, background: isStar ? `linear-gradient(135deg,${C.gold},${C.goldLight})` : isMarked && isCalled ? 'rgba(230,190,0,0.25)' : isCalled ? 'rgba(39,174,96,0.15)' : '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, fontWeight: isMarked && isCalled ? 800 : 400, color: isStar ? '#000' : isMarked && isCalled ? C.gold : isCalled ? '#27AE60' : '#333' }}>
+                              {isStar ? '★' : n}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div style={{ textAlign: 'center', marginBottom: 10 }}>
+              <span style={{ color: '#333', fontSize: 10 }}>Toca un carton para verlo grande{!autoMark ? ' y marcar manualmente' : ''}</span>
+            </div>
 
             {/* BOTON BINGO */}
-            {myCartones.length > 0 && (
-              <button onClick={() => setBingoClaim(true)} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, border:'none', borderRadius:14, padding:16, color:'#000', fontSize:18, fontWeight:900, cursor:'pointer', width:'100%', fontFamily:'inherit', letterSpacing:2, marginTop:8 }}>
-                🎉 BINGO!
-              </button>
-            )}
+            <button onClick={() => setBingoClaim(true)} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, border: 'none', borderRadius: 14, padding: 16, color: '#000', fontSize: 18, fontWeight: 900, cursor: 'pointer', width: '100%', fontFamily: 'inherit', letterSpacing: 2 }}>
+              🎉 BINGO!
+            </button>
           </>
         )}
 
         {/* MODAL RECLAMAR BINGO */}
         {bingoClaim && (
-          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:300, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => setBingoClaim(false)}>
-            <div style={{ background:'#111', borderRadius:'22px 22px 0 0', padding:24, width:'100%', maxWidth:500, border:`1px solid rgba(230,190,0,0.3)`, borderBottom:'none', position:'relative', overflow:'hidden' }} onClick={e => e.stopPropagation()}>
-              <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-              <div style={{ width:40, height:4, background:'#2a2a2a', borderRadius:2, margin:'0 auto 16px' }}></div>
-              <div style={{ textAlign:'center', marginBottom:16 }}>
-                <div style={{ fontSize:40, marginBottom:6 }}>🎉</div>
-                <div style={{ color:'#fff', fontSize:18, fontWeight:900 }}>Reclamar BINGO!</div>
-                <div style={{ color:C.muted, fontSize:12, marginTop:4 }}>Selecciona que tipo de bingo lograste</div>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setBingoClaim(false)}>
+            <div style={{ background: '#111', borderRadius: '22px 22px 0 0', padding: 24, width: '100%', maxWidth: 500, border: `1px solid rgba(230,190,0,0.3)`, borderBottom: 'none', position: 'relative', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+              <GoldLine />
+              <div style={{ width: 40, height: 4, background: '#2a2a2a', borderRadius: 2, margin: '0 auto 16px' }} />
+              <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                <div style={{ fontSize: 40, marginBottom: 6 }}>🎉</div>
+                <div style={{ color: '#fff', fontSize: 18, fontWeight: 900 }}>Reclamar BINGO!</div>
+                <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>Selecciona que tipo de bingo lograste</div>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
-                {[['linea','→ Linea'],['vertical','↓ Vertical'],['diagonal','↗ Diagonal'],['esquinas','◻️ Esquinas'],['full','⬛ Carton lleno']].map(([type,label]) => (
-                  <button key={type} onClick={() => setWinType(type)} style={{ background:winType===type?`rgba(230,190,0,0.15)`:'#1a1a1a', border:`1px solid ${winType===type?C.gold:'#2a2a2a'}`, borderRadius:10, padding:'11px', color:winType===type?C.gold:'#888', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{label}</button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+                {winTypesAvail.map(type => (
+                  <button key={type} onClick={() => setWinType(type)} style={{ background: winType === type ? 'rgba(230,190,0,0.15)' : '#1a1a1a', border: `1px solid ${winType === type ? C.gold : '#2a2a2a'}`, borderRadius: 10, padding: 11, color: winType === type ? C.gold : '#888', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {winTypeLabels[type] || type}
+                  </button>
                 ))}
               </div>
-              <button onClick={claimBingo} disabled={!winType} style={{ ...S.btnGold, opacity:winType?1:.5, marginBottom:8 }}>Confirmar BINGO!</button>
-              <button onClick={() => setBingoClaim(false)} style={{ width:'100%', background:'transparent', border:'none', color:'#444', fontSize:12, cursor:'pointer', padding:8, fontFamily:'inherit' }}>Cancelar</button>
+              <button onClick={claimBingo} disabled={!winType} style={{ ...S.btnGold, opacity: winType ? 1 : .5, marginBottom: 8 }}>Confirmar BINGO!</button>
+              <button onClick={() => setBingoClaim(false)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#444', fontSize: 12, cursor: 'pointer', padding: 8, fontFamily: 'inherit' }}>Cancelar</button>
             </div>
           </div>
         )}
@@ -4256,143 +4463,434 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     </div>
   )
 }
-
-// ─── ADMIN BINGO PANEL ────────────────────────────────────────────────────────
+// ─── ADMIN BINGO PANEL — v64 con teclado manual, stats, reclamos ─────────────
 function AdminBingoPanel({ onBack }) {
   const [game, setGame] = useState(null)
-  const [form, setForm] = useState({ title:'Bingo La Casa', prize_description:'', prize_amount:120000, carton_price:2000, mode:'manual', auto_interval:15 })
+  const [form, setForm] = useState({ title: 'Bingo La Casa', prize_description: '', prize_amount: 120000, pack_price: 6000, mode: 'manual', auto_interval: 15, live_url: '', win_types: ['linea', 'vertical', 'diagonal', 'esquinas', 'full'] })
   const [creating, setCreating] = useState(false)
+  const [numInput, setNumInput] = useState('')
   const [calling, setCalling] = useState(false)
   const [autoTimer, setAutoTimer] = useState(null)
+  const [stats, setStats] = useState({ players: 0, packs: 0, revenue: 0 })
+  const [claims, setClaims] = useState([])
+  const gameRef = useRef(null)
 
   useEffect(() => {
     fetchGame()
-    return () => { if (autoTimer) clearInterval(autoTimer) }
+    const ch = supabase.channel('bingo-admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bingo_games' }, () => fetchGame())
+      .subscribe()
+    return () => {
+      supabase.removeChannel(ch)
+      if (autoTimer) clearInterval(autoTimer)
+    }
   }, [])
 
+  useEffect(() => {
+    if (game) { fetchStats(); fetchClaims() }
+  }, [game?.id, game?.status])
+
   async function fetchGame() {
-    const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
+    const { data } = await supabase.from('bingo_games').select('*').in('status', ['active', 'waiting', 'paused']).order('created_at', { ascending: false }).limit(1).single()
     setGame(data || null)
+    gameRef.current = data || null
+  }
+
+  async function fetchStats() {
+    if (!game) return
+    const { data: cartones } = await supabase.from('bingo_cartones').select('user_id').eq('game_id', game.id)
+    if (cartones) {
+      const uniquePlayers = [...new Set(cartones.map(c => c.user_id))]
+      const packs = Math.ceil(cartones.length / 6)
+      setStats({ players: uniquePlayers.length, packs, revenue: packs * (game.pack_price || 6000) })
+    }
+  }
+
+  async function fetchClaims() {
+    // Claims vienen del game.status === 'paused' + winner_user_id
+    if (!game || !game.winner_user_id) { setClaims([]); return }
+    const { data: profile } = await supabase.from('profiles').select('nombre, apellido, telefono').eq('id', game.winner_user_id).single()
+    setClaims([{
+      userId: game.winner_user_id,
+      name: profile ? `${profile.nombre || ''} ${profile.apellido || ''}`.trim() : 'Jugador',
+      phone: profile?.telefono || '',
+      winType: game.win_type || 'linea'
+    }])
   }
 
   async function createGame() {
     setCreating(true)
-    const { data, error } = await supabase.from('bingo_games').insert({ ...form, status:'waiting', called_numbers:[], created_by:null }).select().single()
+    const { data, error } = await supabase.from('bingo_games').insert({
+      title: form.title,
+      prize_description: form.prize_description,
+      prize_amount: form.prize_amount,
+      pack_price: form.pack_price,
+      mode: form.mode,
+      auto_interval: form.auto_interval,
+      live_url: form.live_url,
+      win_types: form.win_types,
+      winners: [],
+      status: 'waiting',
+      called_numbers: [],
+      created_by: null
+    }).select().single()
     if (!error) setGame(data)
     setCreating(false)
   }
 
   async function startGame() {
-    await supabase.from('bingo_games').update({ status:'active' }).eq('id', game.id)
+    await supabase.from('bingo_games').update({ status: 'active' }).eq('id', game.id)
     await fetchGame()
-    if (form.mode === 'auto') startAuto()
+    if (form.mode === 'auto' || game.mode === 'auto') startAuto()
   }
 
   function startAuto() {
     const iv = setInterval(async () => {
-      const { data } = await supabase.from('bingo_games').select('called_numbers').eq('id', game.id).single()
-      const called = data?.called_numbers || []
-      const remaining = Array.from({length:75},(_,i)=>i+1).filter(n=>!called.includes(n))
+      const g = gameRef.current
+      if (!g) { clearInterval(iv); return }
+      const { data } = await supabase.from('bingo_games').select('called_numbers, status').eq('id', g.id).single()
+      if (!data || data.status !== 'active') { clearInterval(iv); return }
+      const called = data.called_numbers || []
+      const remaining = Array.from({ length: 75 }, (_, i) => i + 1).filter(n => !called.includes(n))
       if (remaining.length === 0) { clearInterval(iv); return }
-      const next = remaining[Math.floor(Math.random()*remaining.length)]
-      await supabase.from('bingo_games').update({ called_numbers:[...called,next], current_number:next }).eq('id',game.id)
-    }, (form.auto_interval || 15) * 1000)
+      const next = remaining[Math.floor(Math.random() * remaining.length)]
+      await supabase.from('bingo_games').update({ called_numbers: [...called, next], current_number: next, updated_at: new Date().toISOString() }).eq('id', g.id)
+    }, ((game?.auto_interval || form.auto_interval) || 15) * 1000)
     setAutoTimer(iv)
   }
 
-  async function callNumber() {
-    if (!game) return
-    setCalling(true)
+  async function callManualNumber() {
+    if (!game || !numInput) return
+    const num = parseInt(numInput)
+    if (isNaN(num) || num < 1 || num > 75) { alert('Numero invalido. Debe ser entre 1 y 75.'); return }
     const called = game.called_numbers || []
-    const remaining = Array.from({length:75},(_,i)=>i+1).filter(n=>!called.includes(n))
-    if (remaining.length === 0) { alert('Ya se cantaron todos los numeros!'); setCalling(false); return }
-    const next = remaining[Math.floor(Math.random()*remaining.length)]
-    await supabase.from('bingo_games').update({ called_numbers:[...called,next], current_number:next, updated_at: new Date().toISOString() }).eq('id',game.id)
+    if (called.includes(num)) { alert(`El numero ${num} ya fue cantado!`); setNumInput(''); return }
+    setCalling(true)
+    await supabase.from('bingo_games').update({ called_numbers: [...called, num], current_number: num, updated_at: new Date().toISOString() }).eq('id', game.id)
+    setNumInput('')
     await fetchGame()
     setCalling(false)
   }
 
+  async function callRandomNumber() {
+    if (!game) return
+    setCalling(true)
+    const called = game.called_numbers || []
+    const remaining = Array.from({ length: 75 }, (_, i) => i + 1).filter(n => !called.includes(n))
+    if (remaining.length === 0) { alert('Ya se cantaron todos los numeros!'); setCalling(false); return }
+    const next = remaining[Math.floor(Math.random() * remaining.length)]
+    await supabase.from('bingo_games').update({ called_numbers: [...called, next], current_number: next, updated_at: new Date().toISOString() }).eq('id', game.id)
+    await fetchGame()
+    setCalling(false)
+  }
+
+  function handleNumpad(val) {
+    if (val === 'borrar') { setNumInput(''); return }
+    if (val === 'cantar') { callManualNumber(); return }
+    const next = numInput + val
+    if (parseInt(next) <= 75 && next.length <= 2) setNumInput(next)
+  }
+
+  async function approveWinner() {
+    if (!game || claims.length === 0) return
+    const claim = claims[0]
+    const winners = [...(game.winners || []), {
+      userId: claim.userId,
+      name: claim.name,
+      type: claim.winType,
+      at_ball: (game.called_numbers || []).length,
+      prize: 0,
+      time: new Date().toISOString()
+    }]
+    await supabase.from('bingo_games').update({ winners, winner_user_id: null, win_type: null, status: 'active' }).eq('id', game.id)
+    await fetchGame()
+  }
+
+  async function rejectWinner() {
+    if (!game) return
+    await supabase.from('bingo_games').update({ winner_user_id: null, win_type: null, status: 'active' }).eq('id', game.id)
+    await fetchGame()
+  }
+
   async function finishGame() {
-    if (!window.confirm('Finalizar partida?')) return
+    if (!window.confirm('Finalizar partida de bingo?')) return
     if (autoTimer) clearInterval(autoTimer)
-    await supabase.from('bingo_games').update({ status:'finished' }).eq('id',game.id)
+    await supabase.from('bingo_games').update({ status: 'finished' }).eq('id', game.id)
     setGame(null)
   }
 
+  function toggleWinType(type) {
+    setForm(p => ({
+      ...p,
+      win_types: p.win_types.includes(type) ? p.win_types.filter(t => t !== type) : [...p.win_types, type]
+    }))
+  }
+
+  function getLetterForNum(n) {
+    if (n <= 15) return 'B'
+    if (n <= 30) return 'I'
+    if (n <= 45) return 'N'
+    if (n <= 60) return 'G'
+    return 'O'
+  }
+
+  const calledNums = game?.called_numbers || []
+  const currentNum = game?.current_number
+  const winTypeLabels = { linea: '→ Linea', vertical: '↓ Vertical', diagonal: '↗ Diagonal', esquinas: '◻️ Esquinas', full: '⬛ Carton lleno' }
+
   return (
     <div style={S.content}>
-      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
-      <div style={{ ...S.card, marginBottom:14, position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-        <div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>Panel de Bingo</div>
+      <style>{CSS}</style>
+      <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, marginBottom: 16, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>← Volver</button>
+      <div style={{ ...S.card, marginBottom: 14, position: 'relative', overflow: 'hidden' }}>
+        <GoldLine />
+        <div style={{ color: C.gold, fontSize: 14, fontWeight: 900 }}>Panel de Bingo</div>
       </div>
 
       {!game ? (
-        <div>
-          <div style={{ color:'#fff', fontSize:13, fontWeight:700, marginBottom:14 }}>Crear nueva partida</div>
-          {[['Titulo','title','text'],['Descripcion del premio','prize_description','text'],['Valor del premio','prize_amount','number'],['Precio del carton','carton_price','number'],['Segundos entre numeros (auto)','auto_interval','number']].map(([l,k,t]) => (
-            <div key={k} style={{ marginBottom:10 }}>
-              <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>{l}</label>
-              <input type={t} value={form[k]} onChange={e=>setForm(p=>({...p,[k]:t==='number'?parseInt(e.target.value)||0:e.target.value}))} />
-            </div>
-          ))}
-          <div style={{ marginBottom:14 }}>
-            <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:8 }}>Modo de canto</label>
-            <div style={{ display:'flex', gap:8 }}>
-              {[['manual','Manual (admin canta)'],['auto','Automatico']].map(([v,l]) => (
-                <button key={v} onClick={()=>setForm(p=>({...p,mode:v}))} style={{ flex:1, border:`1px solid ${form.mode===v?C.gold:'rgba(230,190,0,0.2)'}`, background:form.mode===v?'rgba(230,190,0,0.1)':C.bg3, borderRadius:9, padding:10, color:form.mode===v?C.gold:C.muted, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
-              ))}
-            </div>
-          </div>
-          <button onClick={createGame} disabled={creating} style={{ ...S.btnGold }}>{creating?'Creando...':'Crear partida'}</button>
-        </div>
-      ) : (
-        <div>
-          <div style={{ background:'#111', border:`1px solid rgba(230,190,0,0.2)`, borderRadius:14, padding:14, marginBottom:14, position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-              <div>
-                <div style={{ color:'#fff', fontSize:14, fontWeight:900 }}>{game.title}</div>
-                <div style={{ color:C.muted, fontSize:11 }}>Premio: {game.prize_description || fmt(game.prize_amount)}</div>
-              </div>
-              <div style={{ background:game.status==='active'?'rgba(39,174,96,0.15)':'rgba(230,190,0,0.12)', border:`1px solid ${game.status==='active'?'rgba(39,174,96,0.3)':'rgba(230,190,0,0.25)'}`, borderRadius:999, padding:'3px 10px', color:game.status==='active'?'#27AE60':C.gold, fontSize:9, fontWeight:700 }}>
-                {game.status==='active'?'En vivo':game.status==='waiting'?'Esperando':'Pausado'}
-              </div>
-            </div>
-            {/* Numero actual */}
-            <div style={{ textAlign:'center', padding:'12px 0', marginBottom:10 }}>
-              <div style={{ color:C.muted, fontSize:10, marginBottom:6 }}>Ultimo numero cantado</div>
-              <div style={{ width:64, height:64, background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:14, display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, fontWeight:900, color:'#000', margin:'0 auto 8px' }}>
-                {game.current_number || '?'}
-              </div>
-              <div style={{ color:C.muted, fontSize:11 }}>Cantados: {(game.called_numbers||[]).length}/75</div>
-            </div>
-            {/* Acciones */}
-            {game.status === 'waiting' && (
-              <button onClick={startGame} style={{ ...S.btnGold, marginBottom:8 }}>Iniciar partida</button>
-            )}
-            {game.status === 'active' && game.mode === 'manual' && (
-              <button onClick={callNumber} disabled={calling} style={{ ...S.btnGold, marginBottom:8, opacity:calling?.7:1 }}>
-                {calling ? 'Cantando...' : '🎱 Cantar siguiente numero'}
-              </button>
-            )}
-            {game.status === 'active' && game.mode === 'auto' && (
-              <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:9, padding:'10px', textAlign:'center', marginBottom:8, color:'#27AE60', fontSize:11, fontWeight:700 }}>
-                Modo automatico activo — cantando cada {game.auto_interval}s
-              </div>
-            )}
-            <button onClick={finishGame} style={{ ...S.btnOutline, borderColor:'rgba(192,57,43,0.4)', color:'#E74C3C' }}>Finalizar partida</button>
+        /* ── CREAR PARTIDA ── */
+        <div style={{ ...S.card, position: 'relative', overflow: 'hidden' }}>
+          <GoldLine />
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 40, marginBottom: 6 }}>🎱</div>
+            <div style={{ color: '#fff', fontSize: 15, fontWeight: 900 }}>Crear nueva partida</div>
+            <div style={{ color: C.muted, fontSize: 11, marginTop: 4 }}>Configura los detalles del bingo</div>
           </div>
 
-          {/* Numeros cantados */}
-          <div style={{ ...S.card, marginBottom:14 }}>
-            <div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:10 }}>Numeros cantados ({(game.called_numbers||[]).length})</div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-              {(game.called_numbers||[]).map(n => (
-                <div key={n} style={{ width:30, height:30, borderRadius:8, background:`rgba(230,190,0,0.15)`, border:`1px solid rgba(230,190,0,0.3)`, display:'flex', alignItems:'center', justifyContent:'center', color:C.gold, fontSize:10, fontWeight:700 }}>{n}</div>
+          {[
+            ['Titulo del bingo', 'title', 'text'],
+            ['Descripcion del premio', 'prize_description', 'text'],
+          ].map(([l, k, t]) => (
+            <div key={k} style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>{l}</label>
+              <input type={t} value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} placeholder={k === 'prize_description' ? 'Ej: $120.000 en efectivo + bonos' : ''} />
+            </div>
+          ))}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>Valor premio</label>
+              <input type="number" value={form.prize_amount} onChange={e => setForm(p => ({ ...p, prize_amount: parseInt(e.target.value) || 0 }))} />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>Precio pack (6 cartones)</label>
+              <input type="number" value={form.pack_price} onChange={e => setForm(p => ({ ...p, pack_price: parseInt(e.target.value) || 0 }))} />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>Link del live (YouTube/IG/FB)</label>
+            <input type="text" value={form.live_url} onChange={e => setForm(p => ({ ...p, live_url: e.target.value }))} placeholder="https://youtube.com/live/..." />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 8 }}>Modo de canto</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['manual', 'Manual', 'Yo escribo el numero'], ['auto', 'Automatico', 'La app saca balotas']].map(([v, l, desc]) => (
+                <button key={v} onClick={() => setForm(p => ({ ...p, mode: v }))} style={{ flex: 1, border: `1px solid ${form.mode === v ? C.gold : 'rgba(230,190,0,0.2)'}`, background: form.mode === v ? 'rgba(230,190,0,0.1)' : C.bg3, borderRadius: 9, padding: 10, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}>
+                  <div style={{ color: form.mode === v ? C.gold : C.muted, fontSize: 12, fontWeight: 700 }}>{l}</div>
+                  <div style={{ color: form.mode === v ? '#666' : '#444', fontSize: 9, marginTop: 2 }}>{desc}</div>
+                </button>
               ))}
             </div>
           </div>
+
+          {form.mode === 'auto' && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 5 }}>Segundos entre balotas</label>
+              <input type="number" value={form.auto_interval} onChange={e => setForm(p => ({ ...p, auto_interval: parseInt(e.target.value) || 15 }))} />
+            </div>
+          )}
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 8 }}>Formas de ganar activas</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {Object.entries(winTypeLabels).map(([type, label]) => {
+                const active = form.win_types.includes(type)
+                return (
+                  <button key={type} onClick={() => toggleWinType(type)} style={{ background: active ? 'rgba(230,190,0,0.1)' : '#1a1a1a', border: `1px solid ${active ? 'rgba(230,190,0,0.3)' : '#2a2a2a'}`, borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontFamily: 'inherit', color: active ? C.gold : '#555', fontSize: 11, fontWeight: 700 }}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <button onClick={createGame} disabled={creating} style={{ ...S.btnGold, opacity: creating ? .7 : 1 }}>
+            {creating ? 'Creando...' : '🎱 Crear partida'}
+          </button>
+        </div>
+      ) : (
+        /* ── PARTIDA EXISTENTE ── */
+        <div>
+          {/* INFO + STATS */}
+          <div style={{ ...S.card, marginBottom: 12, position: 'relative', overflow: 'hidden' }}>
+            <GoldLine />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div>
+                <div style={{ color: '#fff', fontSize: 14, fontWeight: 900 }}>{game.title}</div>
+                <div style={{ color: C.muted, fontSize: 11 }}>Premio: {game.prize_description || fmt(game.prize_amount)}</div>
+              </div>
+              <div style={{ background: game.status === 'active' ? 'rgba(39,174,96,0.15)' : game.status === 'waiting' ? 'rgba(230,126,34,0.15)' : 'rgba(155,89,182,0.15)', border: `1px solid ${game.status === 'active' ? 'rgba(39,174,96,0.3)' : game.status === 'waiting' ? 'rgba(230,126,34,0.3)' : 'rgba(155,89,182,0.3)'}`, borderRadius: 999, padding: '3px 10px', color: game.status === 'active' ? '#27AE60' : game.status === 'waiting' ? '#E67E22' : '#C9A0E8', fontSize: 9, fontWeight: 700 }}>
+                {game.status === 'active' ? 'En vivo' : game.status === 'waiting' ? 'En espera' : 'Pausado'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ background: 'rgba(230,190,0,0.08)', borderRadius: 8, padding: '6px 8px', flex: 1, textAlign: 'center' }}>
+                <div style={{ color: C.muted, fontSize: 9 }}>Jugadores</div>
+                <div style={{ color: C.gold, fontSize: 18, fontWeight: 900 }}>{stats.players}</div>
+              </div>
+              <div style={{ background: 'rgba(230,190,0,0.08)', borderRadius: 8, padding: '6px 8px', flex: 1, textAlign: 'center' }}>
+                <div style={{ color: C.muted, fontSize: 9 }}>Packs</div>
+                <div style={{ color: C.gold, fontSize: 18, fontWeight: 900 }}>{stats.packs}</div>
+              </div>
+              <div style={{ background: 'rgba(39,174,96,0.08)', borderRadius: 8, padding: '6px 8px', flex: 1, textAlign: 'center' }}>
+                <div style={{ color: C.muted, fontSize: 9 }}>Recaudo</div>
+                <div style={{ color: '#27AE60', fontSize: 18, fontWeight: 900 }}>{fmt(stats.revenue)}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* BOTON INICIAR (si está en espera) */}
+          {game.status === 'waiting' && (
+            <button onClick={startGame} style={{ ...S.btnGold, background: 'linear-gradient(135deg,#27AE60,#2ECC71)', color: '#fff', marginBottom: 12, fontSize: 15, letterSpacing: 1 }}>
+              ▶ Iniciar partida EN VIVO
+            </button>
+          )}
+
+          {/* ZONA DE CANTO (si está activo) */}
+          {game.status === 'active' && (
+            <>
+              {/* Balota actual */}
+              <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                <div style={{ color: C.muted, fontSize: 10, marginBottom: 6 }}>Ultimo numero cantado</div>
+                <div style={{ width: 72, height: 72, background: currentNum ? `linear-gradient(135deg,${C.gold},${C.goldLight})` : '#1a1a1a', borderRadius: '50%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', border: currentNum ? 'none' : '2px dashed #2a2a2a' }}>
+                  {currentNum ? (
+                    <>
+                      <span style={{ fontSize: 10, fontWeight: 900, color: '#5a3e00', lineHeight: 1 }}>{getLetterForNum(currentNum)}</span>
+                      <span style={{ fontSize: 30, fontWeight: 900, color: '#000', lineHeight: 1 }}>{currentNum}</span>
+                    </>
+                  ) : <span style={{ color: '#333', fontSize: 14 }}>?</span>}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginBottom: 4 }}>
+                  {[...calledNums].slice(-5).map((n, i, arr) => (
+                    <div key={`${n}-${i}`} style={{ width: 28, height: 28, borderRadius: '50%', background: i === arr.length - 1 ? 'rgba(230,190,0,0.15)' : '#1a1a1a', border: `1px solid ${i === arr.length - 1 ? 'rgba(230,190,0,0.4)' : '#2a2a2a'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: i === arr.length - 1 ? C.gold : '#555' }}>{n}</div>
+                  ))}
+                </div>
+                <div style={{ color: C.muted, fontSize: 10 }}>Cantados: <b style={{ color: C.gold }}>{calledNums.length}/75</b></div>
+              </div>
+
+              {/* TECLADO MANUAL */}
+              {(game.mode === 'manual') && (
+                <div style={{ ...S.card, marginBottom: 12, position: 'relative', overflow: 'hidden' }}>
+                  <GoldLine />
+                  <div style={{ color: '#fff', fontSize: 12, fontWeight: 900, textAlign: 'center', marginBottom: 10 }}>Escribe la balota que sacaste</div>
+                  <div style={{ background: '#0a0a0a', border: `2px solid ${C.gold}`, borderRadius: 12, padding: 14, textAlign: 'center', marginBottom: 10 }}>
+                    <span style={{ fontSize: 32, fontWeight: 900, color: C.gold, letterSpacing: 4 }}>{numInput || '_'}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 5, marginBottom: 8 }}>
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'borrar', '0', 'cantar'].map(val => (
+                      <button key={val} onClick={() => handleNumpad(val)} disabled={val === 'cantar' && (calling || !numInput)}
+                        style={{
+                          background: val === 'cantar' ? `linear-gradient(135deg,${C.gold},${C.goldLight})` : val === 'borrar' ? 'rgba(192,57,43,0.15)' : '#1a1a1a',
+                          border: `1px solid ${val === 'cantar' ? 'transparent' : val === 'borrar' ? 'rgba(192,57,43,0.4)' : '#2a2a2a'}`,
+                          borderRadius: 10, padding: 14, textAlign: 'center',
+                          fontSize: val === 'cantar' || val === 'borrar' ? 13 : 18,
+                          fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                          color: val === 'cantar' ? '#000' : val === 'borrar' ? '#E74C3C' : '#fff',
+                          opacity: val === 'cantar' && (calling || !numInput) ? .5 : 1
+                        }}>
+                        {val === 'borrar' ? '⌫' : val === 'cantar' ? (calling ? '...' : '✓ Cantar') : val}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ color: '#444', fontSize: 9, textAlign: 'center' }}>Validos: 1-75 · No se repiten · Letra B-I-N-G-O se asigna automaticamente</div>
+                </div>
+              )}
+
+              {/* MODO AUTO */}
+              {game.mode === 'auto' && (
+                <div style={{ background: 'rgba(39,174,96,0.08)', border: '1px solid rgba(39,174,96,0.2)', borderRadius: 12, padding: 12, textAlign: 'center', marginBottom: 12 }}>
+                  <div style={{ color: '#27AE60', fontSize: 12, fontWeight: 700 }}>Modo automatico activo</div>
+                  <div style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>Cantando cada {game.auto_interval || 15}s</div>
+                  {!autoTimer && (
+                    <button onClick={startAuto} style={{ ...S.btnOutline, borderColor: 'rgba(39,174,96,0.4)', color: '#27AE60', marginTop: 8, fontSize: 12 }}>
+                      ▶ Reanudar auto-canto
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Boton random (disponible siempre como backup) */}
+              {game.mode === 'manual' && (
+                <button onClick={callRandomNumber} disabled={calling} style={{ ...S.btnOutline, marginBottom: 12, fontSize: 12, opacity: calling ? .7 : 1 }}>
+                  🎲 Cantar numero aleatorio (backup)
+                </button>
+              )}
+            </>
+          )}
+
+          {/* RECLAMOS DE BINGO */}
+          {claims.length > 0 && (
+            <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.25)', borderRadius: 14, padding: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 16 }}>🎉</span>
+                  <span style={{ color: '#C9A0E8', fontSize: 12, fontWeight: 900 }}>Reclamo de BINGO</span>
+                </div>
+                <span style={{ ...S.badge('purple'), fontSize: 9 }}>Verificar</span>
+              </div>
+              {claims.map((claim, i) => (
+                <div key={i} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ color: '#fff', fontSize: 13, fontWeight: 900 }}>{claim.name}</div>
+                      {claim.phone && <div style={{ color: C.muted, fontSize: 10 }}>Tel: {claim.phone}</div>}
+                    </div>
+                    <span style={{ ...S.badge('gold'), fontSize: 10 }}>{winTypeLabels[claim.winType] || claim.winType}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={approveWinner} style={{ flex: 1, background: 'rgba(39,174,96,0.15)', border: '1px solid rgba(39,174,96,0.3)', borderRadius: 10, padding: 10, color: '#27AE60', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      ✓ Aprobar
+                    </button>
+                    <button onClick={rejectWinner} style={{ flex: 1, background: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.3)', borderRadius: 10, padding: 10, color: '#E74C3C', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      ✗ Rechazar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* TABLERO NUMEROS CANTADOS */}
+          <div style={{ ...S.card, marginBottom: 12 }}>
+            <div style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 10 }}>Numeros cantados ({calledNums.length})</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {calledNums.length === 0 ? (
+                <div style={{ color: C.muted, fontSize: 11 }}>Aun no se ha cantado ningun numero</div>
+              ) : calledNums.map(n => (
+                <div key={n} style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(230,190,0,0.15)', border: '1px solid rgba(230,190,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.gold, fontSize: 10, fontWeight: 700 }}>{n}</div>
+              ))}
+            </div>
+          </div>
+
+          {/* GANADORES REGISTRADOS */}
+          {(game.winners || []).length > 0 && (
+            <div style={{ ...S.card, marginBottom: 12, borderColor: 'rgba(39,174,96,0.25)' }}>
+              <div style={{ color: '#27AE60', fontSize: 12, fontWeight: 700, marginBottom: 8 }}>🏆 Ganadores registrados</div>
+              {(game.winners || []).map((w, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: i < game.winners.length - 1 ? '1px solid #1a1a1a' : 'none' }}>
+                  <span style={{ color: '#fff', fontSize: 11 }}>{medals[i] || '🎖️'} {w.name}</span>
+                  <span style={{ color: C.gold, fontSize: 10, fontWeight: 700 }}>{winTypeLabels[w.type] || w.type}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* FINALIZAR */}
+          <button onClick={finishGame} style={{ ...S.btnOutline, borderColor: 'rgba(192,57,43,0.4)', color: '#E74C3C' }}>
+            Finalizar partida
+          </button>
         </div>
       )}
     </div>
