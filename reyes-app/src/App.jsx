@@ -3924,6 +3924,467 @@ function AdminSocietyPanel({ raffles, onBack }) {
   )
 }
 
+      <button onClick={save} disabled={saving} style={{ ...S.btnGold, opacity:saving?.7:1 }}>{saving?'Guardando...':'Registrar venta'}</button>
+    </div>
+  )
+}
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin, onRegister, onBack }) {
+  const [email, setEmail] = useState(''); const [pwd, setPwd] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('')
+  const submit = async () => {
+    if (!email || !pwd) { setError('Ingresa tu correo y contrasena'); return }
+    setLoading(true); setError('')
+    try { await onLogin(email, pwd) }
+    catch(e) { setError(e?.message?.includes('Invalid')||e?.message?.includes('invalid') ? 'Correo o contrasena incorrectos' : (e?.message || 'Error al ingresar')) }
+    finally { setLoading(false) }
+  }
+  return (
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', justifyContent:'center', padding:24 }}>
+      <style>{CSS}</style>
+      <div style={{ maxWidth:380, margin:'0 auto', width:'100%' }}>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:32 }}>
+          <div style={{ width:72, height:72, borderRadius:18, overflow:'hidden', marginBottom:16, border:`2px solid rgba(201,162,39,0.4)` }} className="house-float"><LogoSVG size={72} /></div>
+          <div style={{ fontSize:10, color:C.gold, fontWeight:700, letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>La Casa De Las Dinamicas</div>
+          <h1 style={{ color:'#fff', fontWeight:900, fontSize:24, marginBottom:6, textAlign:'center' }}>Bienvenido de vuelta</h1>
+          <p style={{ color:C.muted, fontSize:14, textAlign:'center' }}>Ingresa para ver tus dinamicas</p>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div><label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Correo electronico</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tuemail@correo.com" /></div>
+          <div><label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Contrasena</label><input type="password" value={pwd} onChange={e=>setPwd(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="••••••••" /></div>
+          {error && <div style={{ color:'#E74C3C', fontSize:13, textAlign:'center', padding:'8px 12px', background:'rgba(192,57,43,0.1)', borderRadius:8 }}>{error}</div>}
+          <button onClick={submit} disabled={loading} style={{ ...S.btnGold, opacity:loading?.7:1, marginTop:4 }}>{loading?'Ingresando...':'Ingresar a La Casa'}</button>
+        </div>
+        <p style={{ textAlign:'center', marginTop:24, color:'#555', fontSize:14 }}>No tienes cuenta? <button onClick={onRegister} style={{ background:'none', border:'none', color:C.gold, fontWeight:700, cursor:'pointer', fontSize:14, fontFamily:'inherit' }}>Registrate gratis</button></p>
+        <button onClick={onBack} style={{ background:'none', border:'none', color:'#333', cursor:'pointer', width:'100%', textAlign:'center', marginTop:12, fontSize:13, fontFamily:'inherit' }}>Explorar sin cuenta</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── REGISTER ─────────────────────────────────────────────────────────────────
+function RegisterScreen({ onRegister, onLogin, appConfig }) {
+  const [form, setForm] = useState({ name:'', phone:'', email:'', password:'', ref:'' }); const [loading, setLoading] = useState(false); const [error, setError] = useState('')
+  const submit = async () => {
+    if (!form.name||!form.email||!form.password) { setError('Completa todos los campos'); return }
+    if (form.password.length < 6) { setError('La contrasena debe tener minimo 6 caracteres'); return }
+    setLoading(true); setError('')
+    try { await onRegister(form.name, form.phone, form.email, form.password, form.ref) }
+    catch(e) { setError(e.message || 'Error al registrarse. Intenta de nuevo.') }
+    finally { setLoading(false) }
+  }
+  return (
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', justifyContent:'center', padding:24 }}>
+      <style>{CSS}</style>
+      <div style={{ maxWidth:380, margin:'0 auto', width:'100%', paddingBottom:24 }}>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:24 }}>
+          <div style={{ width:60, height:60, borderRadius:14, overflow:'hidden', marginBottom:10, border:`1px solid rgba(201,162,39,0.3)` }} className="house-float"><LogoSVG size={60} /></div>
+          <h1 style={{ color:'#fff', fontWeight:900, fontSize:22, marginBottom:5, textAlign:'center' }}>Unete a La Casa</h1>
+          <p style={{ color:C.muted, fontSize:14, textAlign:'center' }}>Registrate gratis y empieza a participar</p>
+        </div>
+        {appConfig?.showWelcomeBonus !== false && (
+          <div style={{ background:`linear-gradient(135deg,rgba(201,162,39,0.08),rgba(201,162,39,0.03))`, border:`1px solid rgba(201,162,39,0.2)`, borderRadius:14, padding:'14px 16px', marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
+            <span style={{ fontSize:24 }}>🎁</span>
+            <div><div style={{ color:C.gold, fontSize:13, fontWeight:800 }}>Bono de bienvenida!</div><div style={{ color:C.muted, fontSize:11, marginTop:2 }}>$500 en saldo + 1.000 puntos de fidelidad</div></div>
+          </div>
+        )}
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {[['Nombre completo','name','text','Carlos Rodriguez'],['WhatsApp / Celular','phone','tel','310 000 0000'],['Correo electronico','email','email','tuemail@correo.com'],['Contrasena','password','password','Minimo 6 caracteres']].map(([label,key,type,ph]) => (
+            <div key={key}><label style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>{label}</label><input type={type} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} placeholder={ph} /></div>
+          ))}
+          {error && <div style={{ color:'#E74C3C', fontSize:13, textAlign:'center', padding:'8px 12px', background:'rgba(192,57,43,0.1)', borderRadius:8 }}>{error}</div>}
+          <button onClick={submit} disabled={loading} style={{ ...S.btnGold, marginTop:6, opacity:loading?.7:1 }}>{loading?'Creando tu cuenta...':'Unirme a La Casa'}</button>
+        </div>
+        <p style={{ textAlign:'center', marginTop:20, color:'#555', fontSize:14 }}>Ya tienes cuenta? <button onClick={onLogin} style={{ background:'none', border:'none', color:C.gold, fontWeight:700, cursor:'pointer', fontSize:14, fontFamily:'inherit' }}>Ingresar</button></p>
+      </div>
+    </div>
+  )
+}
+
+// ─── TICKET TIMER — countdown basado en expiracion real ──────────────────────
+function TicketTimer({ ticket }) {
+  const [timeLeft, setTimeLeft] = useState('')
+  const [urgent, setUrgent] = useState(false)
+
+  useEffect(() => {
+    function calc() {
+      const expiry = ticket.expires_at
+        ? new Date(ticket.expires_at)
+        : ticket.raffles?.raffle_date
+          ? new Date(new Date(ticket.raffles.raffle_date).getTime() - 6 * 3600000)
+          : null
+      if (!expiry) { setTimeLeft(''); return }
+      const diff = expiry - Date.now()
+      if (diff <= 0) { setTimeLeft('Vencido'); setUrgent(true); return }
+      const days = Math.floor(diff / 86400000)
+      const hours = Math.floor((diff % 86400000) / 3600000)
+      const mins = Math.floor((diff % 3600000) / 60000)
+      setUrgent(diff < 12 * 3600000)
+      if (days > 0) setTimeLeft(`${days}d ${hours}h restantes`)
+      else if (hours > 0) setTimeLeft(`${hours}h ${mins}m restantes`)
+      else setTimeLeft(`${mins} min restantes`)
+    }
+    calc()
+    const iv = setInterval(calc, 60000)
+    return () => clearInterval(iv)
+  }, [ticket])
+
+  if (!timeLeft) return null
+  const color = urgent ? '#E74C3C' : '#E67E22'
+  const dateLabel = ticket.raffles?.raffle_date
+    ? `Sorteo: ${new Date(ticket.raffles.raffle_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}`
+    : ''
+
+  return (
+    <div style={{ background: urgent ? 'rgba(192,57,43,0.08)' : 'rgba(230,126,34,0.08)', border: `1px solid ${color}40`, borderRadius: 8, padding: '7px 9px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ width: 5, height: 5, background: color, borderRadius: '50%' }} className="pulse"></div>
+          <span style={{ color, fontSize: 9, fontWeight: 700 }}>{urgent ? 'Paga urgente!' : 'Confirma tu pago'}</span>
+        </div>
+        {dateLabel && <div style={{ color: '#555', fontSize: 8, marginTop: 1 }}>{dateLabel}</div>}
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ color, fontSize: 13, fontWeight: 900 }}>{timeLeft}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── SOCIETY PAGE — pagina completa del sistema de sociedad ──────────────────
+function SocietyPage({ user, profile, raffle, number, onBack, onLogin }) {
+  const [societyTicket, setSocietyTicket] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [joining, setJoining] = useState(false)
+
+  const halfPrice = Math.floor((raffle?.ticket_price || 0) / 2)
+  const pad = n => String(n).padStart(raffle?.number_range <= 100 ? 2 : 3, '0')
+
+  useEffect(() => {
+    fetchSocietyTicket()
+    const ch = supabase.channel(`society-${raffle?.id}-${number}`)
+      // society_tickets realtime removido (plan gratuito)
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [raffle?.id, number])
+
+  async function fetchSocietyTicket() {
+    if (!raffle?.id) return
+    const { data } = await supabase.from('society_tickets')
+      .select('*, socio1:socio1_id(full_name,city), socio2:socio2_id(full_name,city)')
+      .eq('raffle_id', raffle.id)
+      .eq('number', number)
+      .single()
+    setSocietyTicket(data || null)
+    setLoading(false)
+  }
+
+  async function joinSociety() {
+    if (!user) { onLogin(); return }
+    setJoining(true)
+    try {
+      if (!societyTicket) {
+        // Crear nueva sociedad como socio 1
+        const expiresAt = new Date(Date.now() + 48 * 3600000).toISOString()
+        const { error } = await supabase.from('society_tickets').insert({
+          raffle_id: raffle.id, number, socio1_id: user.id,
+          socio1_paid: false, socio1_amount: halfPrice,
+          status: 'waiting', expires_at: expiresAt
+        })
+        if (error) throw error
+        alert(`Numero #${pad(number)} reservado en sociedad! Tienes 48 horas para confirmar el pago de ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(halfPrice)}.`)
+      } else if (societyTicket.status === 'waiting' && !societyTicket.socio2_id) {
+        // Unirse como socio 2
+        if (societyTicket.socio1_id === user.id) { alert('Ya eres el primer socio de este numero!'); setJoining(false); return }
+        const { error } = await supabase.from('society_tickets').update({
+          socio2_id: user.id, socio2_paid: false,
+          socio2_amount: halfPrice, status: 'complete', updated_at: new Date().toISOString()
+        }).eq('id', societyTicket.id)
+        if (error) throw error
+        alert(`Te uniste a la sociedad del numero #${pad(number)}! Tienen el boleto completo. Confirma tu pago de ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(halfPrice)}.`)
+      }
+      await fetchSocietyTicket()
+    } catch(e) {
+      alert('Error al unirse: ' + e.message)
+    }
+    setJoining(false)
+  }
+
+  const status = societyTicket?.status
+  const isSocio1 = societyTicket?.socio1_id === user?.id
+  const isSocio2 = societyTicket?.socio2_id === user?.id
+  const alreadyIn = isSocio1 || isSocio2
+  const canJoin = !societyTicket || (status === 'waiting' && !societyTicket.socio2_id && !alreadyIn)
+  const fmt = v => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v)
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.bg }}>
+      <style>{CSS}</style>
+      <div style={{ background: 'linear-gradient(180deg,#0f0619 0%,#080808 100%)', padding: '16px 16px 0', borderBottom: '1px solid rgba(155,89,182,0.2)' }}>
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.purple, cursor: 'pointer', fontWeight: 700, fontSize: 14, padding: '0 0 14px', fontFamily: 'inherit' }}>← Volver</button>
+        <div style={{ textAlign: 'center', paddingBottom: 20 }}>
+          <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '2px solid #9B59B6', borderRadius: 20, padding: '16px 28px', marginBottom: 12 }} className="society-glow">
+            <div style={{ color: '#7b5cad', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Numero en Sociedad</div>
+            <div style={{ color: '#C9A0E8', fontSize: 52, fontWeight: 900, lineHeight: 1 }}>{pad(number)}</div>
+            <div style={{ color: '#9B59B6', fontSize: 11, fontWeight: 700, marginTop: 6 }}>👥 {raffle?.title}</div>
+          </div>
+          {/* Estado del numero */}
+          {loading ? (
+            <div style={{ color: C.muted, fontSize: 12 }}>Verificando disponibilidad...</div>
+          ) : (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, padding: '5px 14px', border: '1px solid', ...(
+              !societyTicket ? { background: 'rgba(155,89,182,0.12)', borderColor: 'rgba(155,89,182,0.3)', color: '#C9A0E8' } :
+              status === 'waiting' ? { background: 'rgba(230,126,34,0.12)', borderColor: 'rgba(230,126,34,0.3)', color: '#E67E22' } :
+              { background: 'rgba(39,174,96,0.12)', borderColor: 'rgba(39,174,96,0.3)', color: '#27AE60' }
+            )}}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} className="pulse"></div>
+              <span style={{ fontSize: 10, fontWeight: 700 }}>
+                {!societyTicket ? 'Disponible — 0/2 socios' :
+                 status === 'waiting' ? '1 socio unido — falta 1 mas!' :
+                 status === 'complete' ? 'Completo — 2/2 socios' : 'No disponible'}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={S.content}>
+        {/* Desglose precio */}
+        <div style={{ background: 'linear-gradient(135deg,rgba(155,89,182,0.08),rgba(155,89,182,0.03))', border: '1px solid rgba(155,89,182,0.2)', borderRadius: 16, padding: 16, marginBottom: 14 }}>
+          <div style={{ color: '#9B59B6', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', marginBottom: 12 }}>Desglose del costo</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ color: C.muted, fontSize: 13 }}>Valor real del boleto</span>
+            <span style={{ color: '#555', fontSize: 13, fontWeight: 700, textDecoration: 'line-through' }}>{fmt(raffle?.ticket_price || 0)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ color: '#C9A0E8', fontSize: 13, fontWeight: 700 }}>Tu pagas (50%)</span>
+            <span style={{ color: C.purple, fontSize: 24, fontWeight: 900 }}>{fmt(halfPrice)}</span>
+          </div>
+          <div style={{ background: 'rgba(39,174,96,0.08)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🏆</span>
+            <div>
+              <div style={{ color: '#27AE60', fontSize: 11, fontWeight: 700 }}>Si el numero gana, AMBOS reciben el premio completo</div>
+              <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{(Array.isArray(raffle?.prizes) ? raffle.prizes[0]?.amount : '') || 'Premio principal'}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Como funciona */}
+        <div style={{ ...S.card, marginBottom: 14 }}>
+          <GoldLine />
+          <div style={{ color: '#fff', fontSize: 13, fontWeight: 800, marginBottom: 12 }}>Como funciona la sociedad</div>
+          {[
+            ['👥', 'Dos personas compran el mismo numero', 'Cada una paga la mitad del precio del boleto'],
+            ['✅', 'El boleto queda completo entre los dos', 'Ambos socios quedan registrados en el sorteo'],
+            ['🏆', 'Si el numero gana, ambos ganan', 'El admin coordina la entrega del premio a cada socio'],
+            ['⏰', 'Tienes 48 horas para confirmar el pago', 'Si no pagas, el cupo se libera automaticamente'],
+          ].map(([icon, title, desc], i) => (
+            <div key={i} style={{ display: 'flex', gap: 12, marginBottom: i < 3 ? 12 : 0, paddingBottom: i < 3 ? 12 : 0, borderBottom: i < 3 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+              <div><div style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 2 }}>{title}</div><div style={{ color: C.muted, fontSize: 11 }}>{desc}</div></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Socio actual si existe */}
+        {societyTicket && societyTicket.status === 'waiting' && (
+          <div style={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: 14, marginBottom: 14 }}>
+            <div style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 }}>Primer socio (ya pago su parte)</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg,#3d1a6e,#6c3db5)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>👤</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                  {societyTicket.reveal_names && societyTicket.socio1?.full_name
+                    ? societyTicket.socio1.full_name.split(' ')[0] + ' — ' + (societyTicket.socio1?.city || 'Colombia')
+                    : 'Socio verificado'}
+                </div>
+                <div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>El admin puede revelar su identidad si lo decides</div>
+              </div>
+              <div style={{ background: 'rgba(39,174,96,0.12)', border: '1px solid rgba(39,174,96,0.25)', borderRadius: 999, padding: '3px 9px', color: '#27AE60', fontSize: 9, fontWeight: 700 }}>Pago confirmado</div>
+            </div>
+          </div>
+        )}
+
+        {/* Ya soy socio */}
+        {alreadyIn && (
+          <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.25)', borderRadius: 14, padding: 14, marginBottom: 14, textAlign: 'center' }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>👥</div>
+            <div style={{ color: '#C9A0E8', fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Ya eres socio de este numero!</div>
+            <div style={{ color: C.muted, fontSize: 12 }}>Ve a tu panel para ver el estado y confirmar el pago</div>
+          </div>
+        )}
+
+        {/* Boton principal */}
+        {!loading && canJoin && (
+          <button onClick={joinSociety} disabled={joining} style={{ ...S.btnPurple, opacity: joining ? .7 : 1, marginBottom: 8 }}>
+            <span>👥</span>
+            {joining ? 'Procesando...' : !societyTicket ? `Ser primer socio — ${fmt(halfPrice)}` : `Unirme como socio — ${fmt(halfPrice)}`}
+          </button>
+        )}
+        {!loading && !canJoin && !alreadyIn && (
+          <div style={{ background: 'rgba(39,174,96,0.08)', border: '1px solid rgba(39,174,96,0.2)', borderRadius: 12, padding: 14, textAlign: 'center' }}>
+            <div style={{ color: '#27AE60', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Este numero ya tiene 2 socios</div>
+            <div style={{ color: C.muted, fontSize: 11 }}>Revisa otros numeros disponibles en sociedad</div>
+          </div>
+        )}
+        <button onClick={onBack} style={{ ...S.btnOutline, marginTop: 8 }}>Ver otros numeros</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── PANEL DE SOCIEDAD EN ADMIN ───────────────────────────────────────────────
+function AdminSocietyPanel({ raffles, onBack }) {
+  const [societies, setSocieties] = useState([])
+  const [filter, setFilter] = useState('all')
+  const [selectedRaffle, setSelectedRaffle] = useState('all')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { fetchSocieties() }, [selectedRaffle])
+
+  async function fetchSocieties() {
+    setLoading(true)
+    let q = supabase.from('society_tickets')
+      .select('*, raffle:raffle_id(title,ticket_price), socio1:socio1_id(full_name,phone,city), socio2:socio2_id(full_name,phone,city)')
+      .order('created_at', { ascending: false })
+    if (selectedRaffle !== 'all') q = q.eq('raffle_id', selectedRaffle)
+    const { data } = await q
+    setSocieties(data || [])
+    setLoading(false)
+  }
+
+  async function revealNames(id) {
+    await supabase.from('society_tickets').update({ reveal_names: true }).eq('id', id)
+    fetchSocieties()
+  }
+  async function extendTime(id) {
+    const newExp = new Date(Date.now() + 24 * 3600000).toISOString()
+    await supabase.from('society_tickets').update({ expires_at: newExp }).eq('id', id)
+    fetchSocieties()
+    alert('Plazo extendido 24 horas')
+  }
+  async function cancelSociety(id) {
+    if (!window.confirm('Cancelar esta sociedad?')) return
+    await supabase.from('society_tickets').update({ status: 'cancelled' }).eq('id', id)
+    fetchSocieties()
+  }
+  async function confirmPayment(id, socioNum) {
+    const field = socioNum === 1 ? 'socio1_paid' : 'socio2_paid'
+    await supabase.from('society_tickets').update({ [field]: true }).eq('id', id)
+    fetchSocieties()
+  }
+
+  const fmt = v => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v)
+  const filtered = filter === 'all' ? societies : societies.filter(s => s.status === filter)
+  const waiting = societies.filter(s => s.status === 'waiting').length
+  const complete = societies.filter(s => s.status === 'complete').length
+
+  return (
+    <div style={S.content}>
+      <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: C.gold, cursor: 'pointer', fontWeight: 700, marginBottom: 16, fontSize: 14, padding: 0, fontFamily: 'inherit' }}>← Volver</button>
+      <div style={{ ...S.card, marginBottom: 14 }}>
+        <GoldLine />
+        <div style={{ color: '#fff', fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Gestion de Sociedades</div>
+        <div style={{ color: C.muted, fontSize: 11 }}>Administra todas las sociedades activas</div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+        {[[societies.length, 'Total', '#9B59B6'], [waiting, 'Sin socio', '#E67E22'], [complete, 'Completas', '#27AE60']].map(([v, l, c]) => (
+          <div key={l} style={{ background: C.card, border: `1px solid rgba(255,255,255,0.06)`, borderRadius: 12, padding: 10, textAlign: 'center' }}>
+            <div style={{ color: c, fontSize: 20, fontWeight: 900 }}>{v}</div>
+            <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: 5, marginBottom: 12, overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 4 }}>
+        {[['all', 'Todos'], ['waiting', 'Sin socio'], ['complete', 'Completas'], ['cancelled', 'Canceladas']].map(([v, l]) => (
+          <button key={v} onClick={() => setFilter(v)} style={{ flexShrink: 0, background: filter === v ? 'rgba(201,162,39,0.15)' : '#1a1a1a', border: `1px solid ${filter === v ? C.gold : 'rgba(255,255,255,0.06)'}`, borderRadius: 999, padding: '5px 12px', color: filter === v ? C.gold : C.muted, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{l}</button>
+        ))}
+      </div>
+
+      {loading && <div style={{ textAlign: 'center', padding: '30px 0', color: C.muted }}>Cargando...</div>}
+
+      {!loading && filtered.map(s => {
+        const halfPrice = Math.floor((s.raffle?.ticket_price || 0) / 2)
+        const pad = n => String(n).padStart(2, '0')
+        const statusColor = s.status === 'waiting' ? '#E67E22' : s.status === 'complete' ? '#27AE60' : '#555'
+        return (
+          <div key={s.id} style={{ background: C.card, border: `1px solid ${statusColor}40`, borderRadius: 14, padding: 14, marginBottom: 12, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1.5, background: `linear-gradient(90deg,transparent,${statusColor},transparent)` }}></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div>
+                <div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>{s.raffle?.title}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ background: 'linear-gradient(135deg,#2a0d4a,#3d1a6e)', border: '1.5px solid #9B59B6', borderRadius: 8, padding: '4px 10px', color: '#C9A0E8', fontSize: 18, fontWeight: 900 }}>#{pad(s.number)}</div>
+                  <div style={{ background: `${statusColor}15`, border: `1px solid ${statusColor}35`, borderRadius: 999, padding: '2px 8px', color: statusColor, fontSize: 8, fontWeight: 700 }}>
+                    {s.status === 'waiting' ? 'Sin segundo socio' : s.status === 'complete' ? 'Completa' : 'Cancelada'}
+                  </div>
+                </div>
+              </div>
+              {s.expires_at && s.status === 'waiting' && (
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: C.muted, fontSize: 8 }}>Vence</div>
+                  <div style={{ color: '#E74C3C', fontSize: 10, fontWeight: 700 }}>{new Date(s.expires_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Socios */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              {[{ socio: s.socio1, paid: s.socio1_paid, num: 1, label: 'Socio 1' }, { socio: s.socio2, paid: s.socio2_paid, num: 2, label: 'Socio 2' }].map(({ socio, paid, num, label }) => (
+                <div key={num} style={{ flex: 1, background: '#1a1a1a', borderRadius: 10, padding: '8px 10px' }}>
+                  <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
+                  {socio ? (
+                    <>
+                      <div style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>{socio.full_name}</div>
+                      <div style={{ color: C.muted, fontSize: 9, margin: '2px 0' }}>{socio.phone}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                        <span style={{ color: fmt(halfPrice), fontSize: 9 }}>{fmt(halfPrice)}</span>
+                        {paid
+                          ? <span style={{ background: 'rgba(39,174,96,0.15)', borderRadius: 999, padding: '1px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700 }}>Pagado</span>
+                          : <button onClick={() => confirmPayment(s.id, num)} style={{ background: 'rgba(39,174,96,0.1)', border: '1px solid rgba(39,174,96,0.25)', borderRadius: 6, padding: '2px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Confirmar</button>
+                        }
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ color: '#555', fontSize: 10, fontStyle: 'italic' }}>Sin socio aun</div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Acciones */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
+              {s.socio1?.phone && (
+                <button onClick={() => window.open('https://wa.me/'+(s.socio1.phone).replace(/\D/g,'')+'?text='+encodeURIComponent('Hola! Tu sociedad del numero #'+pad(s.number)+' en La Casa De Las Dinamicas'))} style={{ background: '#075E54', border: 'none', borderRadius: 8, padding: '7px', color: '#fff', fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>WA Socio 1</button>
+              )}
+              {!s.reveal_names && (
+                <button onClick={() => revealNames(s.id)} style={{ background: `rgba(201,162,39,0.1)`, border: `1px solid rgba(201,162,39,0.2)`, borderRadius: 8, padding: '7px', color: C.gold, fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Revelar nombres</button>
+              )}
+              {s.status === 'waiting' && (
+                <button onClick={() => extendTime(s.id)} style={{ background: `rgba(201,162,39,0.08)`, border: `1px solid rgba(201,162,39,0.18)`, borderRadius: 8, padding: '7px', color: C.gold, fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+24h</button>
+              )}
+              {s.status !== 'cancelled' && (
+                <button onClick={() => cancelSociety(s.id)} style={{ background: `rgba(192,57,43,0.1)`, border: `1px solid rgba(192,57,43,0.25)`, borderRadius: 8, padding: '7px', color: '#E74C3C', fontSize: 8, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+              )}
+            </div>
+          </div>
+        )
+      })}
+      {!loading && filtered.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: C.muted }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>👥</div>
+          <div>No hay sociedades {filter !== 'all' ? 'con este filtro' : 'aun'}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── WA PAYMENT BUTTON — mensaje prellenado ──────────────────────────────────
 function WAPayButton({ ticket, profile, appConfig, compact = false }) {
   const raffle = ticket.raffles || {}
@@ -4366,8 +4827,7 @@ function AdminBingoPanel({ onBack }) {
         prizes: form.prizes,
         winners: []
       })
-      // Insert WITHOUT .select().single() to avoid RLS hang
-      const { error } = await supabase.from('bingo_games').insert({
+      const insertData = {
         title: form.title,
         prize_description: configJson,
         prize_amount: totalPrize,
@@ -4376,18 +4836,29 @@ function AdminBingoPanel({ onBack }) {
         auto_interval: form.auto_interval,
         status: 'waiting',
         called_numbers: [],
-      })
-      if (error) {
-        alert('Error creando bingo: ' + error.message)
-        console.error('Bingo create error:', error)
+      }
+      // Timeout de 10 segundos para detectar hang de RLS
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 10000))
+      const insertPromise = supabase.from('bingo_games').insert(insertData)
+      let result
+      try {
+        result = await Promise.race([insertPromise, timeout])
+      } catch(e) {
+        if (e.message === 'TIMEOUT') {
+          alert('⚠️ La creacion se demoro mas de 10 segundos.\n\nEsto significa que Supabase esta bloqueando el INSERT por politicas RLS.\n\nVe a Supabase → Authentication → Policies → tabla bingo_games y agrega:\n- Policy name: allow_all_insert\n- FOR: INSERT\n- WITH CHECK: true\n\nO desactiva RLS temporalmente en bingo_games.')
+          setCreating(false)
+          return
+        }
+        throw e
+      }
+      if (result?.error) {
+        alert('Error: ' + result.error.message + '\n\nDetalles: ' + JSON.stringify(result.error))
         setCreating(false)
         return
       }
-      // Fetch the game separately
       await fetchGame()
     } catch(e) {
-      alert('Error: ' + e.message)
-      console.error(e)
+      alert('Error inesperado: ' + e.message)
     }
     setCreating(false)
   }
