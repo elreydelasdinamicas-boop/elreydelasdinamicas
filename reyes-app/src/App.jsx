@@ -1728,11 +1728,11 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
               {name[0]?.toUpperCase() || 'U'}
               <div style={{ position:'absolute', bottom:2, right:2, width:12, height:12, background:C.green, borderRadius:'50%', border:'2px solid #000' }} className="pulse"></div>
             </div>
-            <div>
+                        <div>
               <div style={{ color:'#fff', fontSize:17, fontWeight:900, lineHeight:1.2 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
               <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
                 <div style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'2px 9px' }}>
-                                    <span style={{ color:C.gold, fontSize:9 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
+                  <span style={{ color:C.gold, fontSize:9 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
                 </div>
                 {phone && <span style={{ color:'#555', fontSize:10 }}>{phone}</span>}
               </div>
@@ -3458,7 +3458,7 @@ function ManualSaleForm({ raffles, onSaved }) {
       <div>
         <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Estado del pago</label>
         <div style={{ display:'flex', gap:8 }}>
-          {[['paid','Pagado'],['reserved','Reservado']].map(([v,l]) => (
+                    {[['paid','Pagado'],['reserved','Reservado']].map(([v,l]) => (
             <button key={v} onClick={()=>setF(p=>({...p,status:v}))} style={{ flex:1, border:`1px solid ${f.status===v?C.gold:'rgba(201,162,39,0.2)'}`, background:f.status===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:f.status===v?C.gold:C.muted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
           ))}
         </div>
@@ -3466,7 +3466,7 @@ function ManualSaleForm({ raffles, onSaved }) {
       <button onClick={save} disabled={saving} style={{ ...S.btnGold, opacity:saving?.7:1 }}>{saving?'Guardando...':'Registrar venta'}</button>
     </div>
   )
-  }
+}
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
@@ -4810,32 +4810,22 @@ function AdminBingoPanel({ onBack }) {
   async function createGame() {
     setCreating(true)
     try {
-      const totalPrize = Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0)
       const cfgJson = buildConfigJson()
-      // Only use columns guaranteed to exist — everything else goes in prize_description
       const insertData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
-      // Try adding optional columns — ignore if they don't exist
-      try { insertData.prize_amount = totalPrize } catch(e) {}
-      try { insertData.carton_price = form.pack_price } catch(e) {}
-      try { insertData.mode = form.mode } catch(e) {}
-      try { insertData.auto_interval = form.auto_interval } catch(e) {}
-      console.log('Insert data:', JSON.stringify(insertData))
-      // First try with all columns
-      let { data, error } = await supabase.from('bingo_games').insert(insertData).select()
-      // If error mentions a column, retry without optional columns
-      if (error && (error.message||'').includes('column')) {
-        console.log('Retrying with minimal columns...')
-        const minData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
-        const r2 = await supabase.from('bingo_games').insert(minData).select()
-        data = r2.data; error = r2.error
+      alert('Intentando crear bingo... Si esto se queda pegado, revisa la consola del navegador (F12)')
+      console.log('🎱 INSERT data:', insertData)
+      const res = await supabase.from('bingo_games').insert(insertData)
+      console.log('🎱 INSERT response:', JSON.stringify(res))
+      if (res.error) {
+        alert('❌ Error de Supabase:\n' + res.error.message + '\n\nCode: ' + (res.error.code||'') + '\nDetails: ' + (res.error.details||'') + '\nHint: ' + (res.error.hint||''))
+      } else {
+        alert('✅ ¡Bingo creado exitosamente!')
       }
-      if (error) {
-        alert('Error: ' + error.message + (error.details ? '\n' + error.details : '') + (error.hint ? '\n' + error.hint : ''))
-        setCreating(false); return
-      }
-      alert('✅ Bingo creado!')
       await fetchGame()
-    } catch(e) { alert('Error: ' + e.message) }
+    } catch(e) {
+      alert('❌ Error JS: ' + e.message)
+      console.error('🎱 Error:', e)
+    }
     setCreating(false)
   }
 
