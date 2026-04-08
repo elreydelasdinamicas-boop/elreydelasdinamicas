@@ -1727,10 +1727,10 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <div style={{ width:52, height:52, background:'#111', borderRadius:'50%', border:'2px solid #E6BE00', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:900, color:C.gold, position:'relative', flexShrink:0 }}>
               {name[0]?.toUpperCase() || 'U'}
               <div style={{ position:'absolute', bottom:2, right:2, width:12, height:12, background:C.green, borderRadius:'50%', border:'2px solid #000' }} className="pulse"></div>
-                          </div>
+            </div>
             <div>
               <div style={{ color:'#fff', fontSize:17, fontWeight:900, lineHeight:1.2 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
-              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
                 <div style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'2px 9px' }}>
                   <span style={{ color:C.gold, fontSize:9 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
                 </div>
@@ -3456,13 +3456,13 @@ function ManualSaleForm({ raffles, onSaved }) {
         </div>
       ))}
       <div>
-                <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Estado del pago</label>
+        <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Estado del pago</label>
         <div style={{ display:'flex', gap:8 }}>
           {[['paid','Pagado'],['reserved','Reservado']].map(([v,l]) => (
             <button key={v} onClick={()=>setF(p=>({...p,status:v}))} style={{ flex:1, border:`1px solid ${f.status===v?C.gold:'rgba(201,162,39,0.2)'}`, background:f.status===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:f.status===v?C.gold:C.muted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
           ))}
         </div>
-      </div>
+              </div>
       <button onClick={save} disabled={saving} style={{ ...S.btnGold, opacity:saving?.7:1 }}>{saving?'Guardando...':'Registrar venta'}</button>
     </div>
   )
@@ -4353,15 +4353,24 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
           </div>
         )}
 
-        {/* PRIZES */}
-        <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.12)', borderRadius:10, padding:10, marginBottom:10 }}>
-          <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>🏆 Premios</span>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:4, justifyContent:'center', marginTop:6 }}>
-            {winTypes.map(wt=>(
-              <div key={wt} style={{ background:'rgba(230,190,0,0.08)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:6, padding:'3px 8px', fontSize:11, color:C.gold, fontWeight:700 }}>{WTIcon[wt]} {WTL[wt]} {prizes[wt]?fmt(prizes[wt]):''}</div>
-            ))}
+        {/* PRIZES — attractive design */}
+        <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:14, padding:14, marginBottom:10, position:'relative', overflow:'hidden' }}>
+          <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.6),transparent)' }} />
+          <div style={{ fontSize:22, marginBottom:4 }}>🏆</div>
+          <div style={{ color:'#fff', fontSize:16, fontWeight:900, marginBottom:10 }}>¡Premios en efectivo!</div>
+          {winTypes.map(wt=>(
+            <div key={wt} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:10, padding:'8px 12px', marginBottom:6 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ fontSize:16 }}>{WTIcon[wt]}</span>
+                <span style={{ color:'#fff', fontSize:13, fontWeight:700 }}>{WTL[wt]}</span>
+              </div>
+              <span style={{ color:C.gold, fontSize:15, fontWeight:900 }}>{prizes[wt]?fmt(prizes[wt]):'—'}</span>
+            </div>
+          ))}
+          <div style={{ background:'linear-gradient(135deg,rgba(39,174,96,0.1),rgba(39,174,96,0.05))', border:'1px solid rgba(39,174,96,0.3)', borderRadius:10, padding:'10px 12px', marginTop:8, textAlign:'center' }}>
+            <div style={{ color:'#888', fontSize:10, marginBottom:2 }}>TOTAL EN PREMIOS</div>
+            <div style={{ color:'#27AE60', fontSize:22, fontWeight:900 }}>{fmt(totalPrize)}</div>
           </div>
-          <div style={{ color:'#27AE60', fontSize:12, fontWeight:700, marginTop:6 }}>Total en premios: {fmt(totalPrize)}</div>
         </div>
 
         {/* HOW TO PLAY BUTTON */}
@@ -4743,9 +4752,10 @@ function AdminBingoPanel({ onBack }) {
   useEffect(() => {
     fetchGame()
     const ch = supabase.channel('bingo-admin-'+Date.now())
-      .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => fetchGame())
+      .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => { if (!pollPaused.current) fetchGame() })
       .subscribe()
-    const poll = setInterval(() => fetchGame(), 3000)
+    // Poll every 5s only when game exists (active), 15s when no game (create form)
+    const poll = setInterval(() => { if (!pollPaused.current && gameRef.current) fetchGame() }, 5000)
     return () => { supabase.removeChannel(ch); clearInterval(poll); if (autoTimer) clearInterval(autoTimer) }
   }, [])
 
