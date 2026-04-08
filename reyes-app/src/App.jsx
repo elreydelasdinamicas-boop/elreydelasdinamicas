@@ -4006,13 +4006,6 @@ function AdminSMSButton({ ticket, compact = false }) {
 }
 
 
-// ─── BINGO PAGE — v64 completo con 6 cartones, live, ganadores ───────────────
-function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
-  const [game, setGame] = useState(null)
-  const [myCartones, setMyCartones] = useState([])
-  const [showGuide, setShowGuide] = useState(false)
-  const [buyingPack, setBuyingPack] = useState(false)
-  const [bingoClaim, setBingoClaim] = useState(false)
 // ─── BINGO PAGE — v64c bulletproof, no new columns needed ───────────────────
 function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   const [game, setGame] = useState(null)
