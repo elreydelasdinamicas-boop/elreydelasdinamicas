@@ -1730,14 +1730,14 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             </div>
             <div>
               <div style={{ color:'#fff', fontSize:17, fontWeight:900, lineHeight:1.2 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
-                            <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
                 <div style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'2px 9px' }}>
                   <span style={{ color:C.gold, fontSize:9 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
                 </div>
                 {phone && <span style={{ color:'#555', fontSize:10 }}>{phone}</span>}
               </div>
             </div>
-          </div>
+                      </div>
           <div style={{ display:'flex', gap:7 }}>
             <button onClick={() => setShowEditModal(true)} style={{ width:36, height:36, background:'#111', border:'1px solid #2a2a2a', borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.gold} strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -3462,7 +3462,7 @@ function ManualSaleForm({ raffles, onSaved }) {
             <button key={v} onClick={()=>setF(p=>({...p,status:v}))} style={{ flex:1, border:`1px solid ${f.status===v?C.gold:'rgba(201,162,39,0.2)'}`, background:f.status===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:f.status===v?C.gold:C.muted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
           ))}
         </div>
-              </div>
+      </div>
       <button onClick={save} disabled={saving} style={{ ...S.btnGold, opacity:saving?.7:1 }}>{saving?'Guardando...':'Registrar venta'}</button>
     </div>
   )
@@ -3476,7 +3476,7 @@ function LoginScreen({ onLogin, onRegister, onBack }) {
     if (!email || !pwd) { setError('Ingresa tu correo y contrasena'); return }
     setLoading(true); setError('')
     try { await onLogin(email, pwd) }
-    catch(e) { setError(e?.message?.includes('Invalid')||e?.message?.includes('invalid') ? 'Correo o contrasena incorrectos' : (e?.message || 'Error al ingresar')) }
+        catch(e) { setError(e?.message?.includes('Invalid')||e?.message?.includes('invalid') ? 'Correo o contrasena incorrectos' : (e?.message || 'Error al ingresar')) }
     finally { setLoading(false) }
   }
   return (
@@ -4749,15 +4749,32 @@ function AdminBingoPanel({ onBack }) {
     }
   }
 
-  useEffect(() => {
-    fetchGame()
-    const ch = supabase.channel('bingo-admin-'+Date.now())
+  const channelRef = useRef(null)
+  const pollRef = useRef(null)
+
+  function startPolling() {
+    if (channelRef.current) return
+    channelRef.current = supabase.channel('bingo-admin-'+Date.now())
       .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => { if (!pollPaused.current) fetchGame() })
       .subscribe()
-    // Poll every 5s only when game exists (active), 15s when no game (create form)
-    const poll = setInterval(() => { if (!pollPaused.current && gameRef.current) fetchGame() }, 5000)
-    return () => { supabase.removeChannel(ch); clearInterval(poll); if (autoTimer) clearInterval(autoTimer) }
+    pollRef.current = setInterval(() => { if (!pollPaused.current) fetchGame() }, 5000)
+  }
+
+  function stopPolling() {
+    if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null }
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+  }
+
+  useEffect(() => {
+    fetchGame().then(() => { if (gameRef.current) startPolling() })
+    return () => { stopPolling(); if (autoTimer) clearInterval(autoTimer) }
   }, [])
+
+  // Start/stop polling based on game existence
+  useEffect(() => {
+    if (game) startPolling()
+    else stopPolling()
+  }, [!!game])
 
   useEffect(() => { if (game) fetchStats() }, [game?.id, game?.status])
 
@@ -4783,15 +4800,18 @@ function AdminBingoPanel({ onBack }) {
 
   async function fetchGame() {
     if (pollPaused.current) return
-    const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
-    const newData = data || null
-    setGame(prev => {
-      if (!prev && !newData) return prev
-      if (!prev || !newData) { gameRef.current = newData; return newData }
-      if (prev.id === newData.id && prev.updated_at === newData.updated_at && prev.status === newData.status && JSON.stringify(prev.called_numbers) === JSON.stringify(newData.called_numbers)) return prev
-      gameRef.current = newData
-      return newData
-    })
+    try {
+      const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
+      const d = data || null
+      gameRef.current = d
+      setGame(prev => {
+        if (!prev && !d) return prev
+        if (!prev && d) return d
+        if (prev && !d) return null
+        if (prev.id === d.id && prev.updated_at === d.updated_at && prev.status === d.status) return prev
+        return d
+      })
+    } catch(e) { /* ignore fetch errors during transitions */ }
   }
 
   async function fetchStats() {
@@ -4820,21 +4840,23 @@ function AdminBingoPanel({ onBack }) {
 
   async function createGame() {
     setCreating(true)
+    stopPolling()
     pollPaused.current = true
+    // Small delay to let any pending requests finish
+    await new Promise(r => setTimeout(r, 500))
     try {
       const cfgJson = buildConfigJson()
       const insertData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
       const { error } = await supabase.from('bingo_games').insert(insertData)
       if (error) {
-        alert('❌ Error: ' + error.message)
-      } else {
-        alert('✅ ¡Bingo creado!')
+        alert('❌ Error: ' + error.message + (error.hint ? '\nHint: '+error.hint : ''))
       }
     } catch(e) {
       alert('❌ Error: ' + e.message)
     }
     pollPaused.current = false
     await fetchGame()
+    if (gameRef.current) startPolling()
     setCreating(false)
   }
 
