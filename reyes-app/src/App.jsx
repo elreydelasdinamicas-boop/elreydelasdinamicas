@@ -1026,7 +1026,7 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
 
               {/* Header — tu numero */}
               <div style={{ display:'flex', alignItems:'center', gap:12, background:'rgba(52,152,219,0.08)', border:'1px solid rgba(52,152,219,0.2)', borderRadius:14, padding:14, marginBottom:14 }}>
-                <div style={{ width:52, height:52, background:'rgba(52,152,219,0.15)', border:'2px solid #3498DB', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                                <div style={{ width:52, height:52, background:'rgba(52,152,219,0.15)', border:'2px solid #3498DB', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                   <span style={{ color:'#5DADE2', fontSize:22, fontWeight:900 }}>{pad(selectedNum)}</span>
                 </div>
                 <div style={{ flex:1 }}>
@@ -2054,7 +2054,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
     ctx.fillText(raffle?.title || 'Sorteo', 400, 145)
     // Numbers
     ctx.fillStyle = '#E6BE00'
-    ctx.font = 'bold 48px system-ui'
+        ctx.font = 'bold 48px system-ui'
     ctx.fillText(allNums.map(n=>'#'+String(n).padStart(2,'0')).join('  '), 400, 230)
     // Divider
     ctx.strokeStyle = '#222'
@@ -3082,7 +3082,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
             <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Texto del mensaje</label>
             <textarea value={localConfig.bannerText||''} onChange={e=>setLocalConfig(p=>({...p,bannerText:e.target.value}))} rows={3} placeholder="🔥 ¡Hoy es tu día de suerte! · 💰 Premios reales cada semana" style={{ marginBottom:10 }} />
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-              <div>
+                            <div>
                 <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Color de fondo</label>
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                   <input type="color" value={localConfig.bannerBg||'#E6BE00'} onChange={e=>setLocalConfig(p=>({...p,bannerBg:e.target.value}))} style={{ width:40, height:32, border:`1px solid ${C.cardBorder}`, borderRadius:6, cursor:'pointer', padding:2, background:'transparent' }} />
@@ -4110,7 +4110,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     setClaimSending(true)
     const cfg = getConfig(game)
     const winners = (cfg.winners || []).map(w =>
-      w.userId === winnerEntry.userId && w.type === winnerEntry.type
+            w.userId === winnerEntry.userId && w.type === winnerEntry.type
         ? { ...w, claim: { phone: claimForm.phone, method: claimForm.method, account: claimForm.account, note: claimForm.note, claimedAt: new Date().toISOString(), paid: false } }
         : w
     )
@@ -4857,10 +4857,20 @@ function AdminBingoPanel({ onBack }) {
   }
 
   async function finishGame() {
-    if (!window.confirm('Finalizar partida?')) return
+    if (!window.confirm('¿Finalizar partida? Los jugadores verán la pantalla de ganadores.')) return
     if (autoTimer) clearInterval(autoTimer)
     await supabase.from('bingo_games').update({ status:'finished' }).eq('id', game.id)
     setGame(null)
+  }
+
+  async function deleteGame() {
+    if (!window.confirm('¿Eliminar este bingo? Se borrarán todos los cartones y datos.')) return
+    if (!window.confirm('⚠️ CONFIRMAR: Esta acción es permanente y no se puede deshacer.')) return
+    if (autoTimer) clearInterval(autoTimer)
+    await supabase.from('bingo_cartones').delete().eq('game_id', game.id)
+    await supabase.from('bingo_games').delete().eq('id', game.id)
+    setGame(null)
+    setEditing(false)
   }
 
   function toggleWinType(type) { setForm(p=>({...p, win_types:p.win_types.includes(type)?p.win_types.filter(t=>t!==type):[...p.win_types,type]})) }
@@ -5004,12 +5014,23 @@ function AdminBingoPanel({ onBack }) {
             </div>
           </div>
 
-          {/* EDIT BUTTON */}
-          <button onClick={saveGame} style={{ ...S.btnOutline, borderColor:'rgba(52,152,219,0.4)', color:'#3498DB', marginBottom:12, fontSize:12 }}>✏️ Guardar cambios del bingo</button>
+          {/* ACTION BUTTONS — always visible */}
+          <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+            <button onClick={finishGame} style={{ flex:1, background:'rgba(231,76,60,0.08)', border:'1px solid rgba(231,76,60,0.3)', borderRadius:10, padding:'10px', cursor:'pointer', fontFamily:'inherit', textAlign:'center' }}>
+              <div style={{ color:'#E74C3C', fontSize:12, fontWeight:700 }}>⏹ Finalizar</div>
+            </button>
+            <button onClick={deleteGame} style={{ flex:1, background:'rgba(192,57,43,0.06)', border:'1px solid rgba(192,57,43,0.2)', borderRadius:10, padding:'10px', cursor:'pointer', fontFamily:'inherit', textAlign:'center' }}>
+              <div style={{ color:'#C0392B', fontSize:12, fontWeight:700 }}>🗑 Eliminar</div>
+              <div style={{ color:'#888', fontSize:8, marginTop:1 }}>Borra todo</div>
+            </button>
+          </div>
 
           {/* EDITABLE FIELDS */}
           <div style={{ ...S.card, marginBottom:12, borderColor:'rgba(52,152,219,0.2)' }}>
-            <div style={{ color:'#3498DB', fontSize:11, fontWeight:700, marginBottom:8 }}>✏️ Editar</div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+              <div style={{ color:'#3498DB', fontSize:11, fontWeight:700 }}>✏️ Editar</div>
+              <button onClick={saveGame} style={{ background:'rgba(52,152,219,0.12)', border:'1px solid rgba(52,152,219,0.3)', borderRadius:8, padding:'5px 12px', color:'#3498DB', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>✓ Guardar</button>
+            </div>
             <FormField label="Título"><input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} /></FormField>
             <FormField label="Fecha y hora"><input type="datetime-local" value={form.scheduled_at} onChange={e=>setForm(p=>({...p,scheduled_at:e.target.value}))} style={{ width:'100%' }} /></FormField>
             <FormField label="Link del live">
@@ -5108,7 +5129,7 @@ function AdminBingoPanel({ onBack }) {
             </div>
           </div>
 
-          <button onClick={finishGame} style={{ ...S.btnOutline, borderColor:'rgba(192,57,43,0.4)', color:'#E74C3C' }}>Finalizar partida</button>
+
         </div>
       )}
     </div>
