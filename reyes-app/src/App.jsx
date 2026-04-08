@@ -4799,20 +4799,19 @@ function AdminBingoPanel({ onBack }) {
         carton_price: form.pack_price, mode: form.mode, auto_interval: form.auto_interval,
         status: 'waiting', called_numbers: [],
       }
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 10000))
-      const insertPromise = supabase.from('bingo_games').insert(insertData)
-      let result
-      try { result = await Promise.race([insertPromise, timeout]) }
-      catch(e) {
-        if (e.message === 'TIMEOUT') {
-          alert('⚠️ La creacion se demoro mas de 10 segundos.\n\nVe a Supabase → Policies → bingo_games y agrega INSERT policy con WITH CHECK: true')
-          setCreating(false); return
-        }
-        throw e
+      console.log('Inserting bingo_games:', JSON.stringify(insertData))
+      const { data, error } = await supabase.from('bingo_games').insert(insertData).select()
+      if (error) {
+        console.error('Supabase error:', error)
+        alert('Error al crear bingo:\n\n' + error.message + (error.details ? '\n' + error.details : '') + (error.hint ? '\nHint: ' + error.hint : '') + '\n\nCódigo: ' + (error.code||''))
+        setCreating(false); return
       }
-      if (result?.error) { alert('Error: ' + result.error.message); setCreating(false); return }
+      console.log('Bingo creado:', data)
       await fetchGame()
-    } catch(e) { alert('Error: ' + e.message) }
+    } catch(e) {
+      console.error('Error inesperado:', e)
+      alert('Error inesperado: ' + e.message)
+    }
     setCreating(false)
   }
 
