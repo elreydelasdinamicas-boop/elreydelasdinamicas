@@ -4017,15 +4017,19 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   const [showBoard, setShowBoard] = useState(false)
   const [winToast, setWinToast] = useState(null)
   const [showPrizeInfo, setShowPrizeInfo] = useState(null)
+  const [claimForm, setClaimForm] = useState({ phone:'', method:'', account:'', note:'' })
+  const [claimSending, setClaimSending] = useState(false)
 
   function getConfig(g) { try { return JSON.parse(g?.prize_description||'{}') } catch { return {} } }
 
   useEffect(() => {
     fetchGame()
-    const ch = supabase.channel('bingo-live')
+    const ch = supabase.channel('bingo-live-'+Date.now())
       .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => fetchGame())
       .subscribe()
-    return () => supabase.removeChannel(ch)
+    // Backup polling cada 3 segundos por si el realtime falla
+    const poll = setInterval(() => fetchGame(), 3000)
+    return () => { supabase.removeChannel(ch); clearInterval(poll) }
   }, [])
 
   useEffect(() => { if (user && game) fetchMyCartones() }, [user, game?.id])
@@ -4061,7 +4065,8 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       const n = nums[col]?.[row]; return n === null || markedSet.has(n)
     }))
     for (const wt of winTypes) {
-      if (wonTypes.includes(wt)) continue
+      // Multiple winners allowed per type - check if THIS user already won this type
+      if (winners.some(w => w.type === wt && w.userId === user.id)) continue
       let won = false
       if (wt === 'linea') { for (let r=0;r<5;r++) if (grid[r].every(Boolean)) { won=true; break } }
       else if (wt === 'vertical') { for (let c=0;c<5;c++) if (Array.from({length:5},(_,r)=>grid[r][c]).every(Boolean)) { won=true; break } }
@@ -4085,6 +4090,21 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id)
     setWinToast(`🎉 ¡BINGO! Ganaste ${WTL[winType]||winType}${prize ? ' — '+fmt(prize) : ''}!`)
     setTimeout(() => setWinToast(null), 8000)
+  }
+
+  async function submitClaim(winnerEntry) {
+    if (!claimForm.phone || !claimForm.method) { alert('Ingresa tu teléfono y método de pago'); return }
+    setClaimSending(true)
+    const cfg = getConfig(game)
+    const winners = (cfg.winners || []).map(w =>
+      w.userId === winnerEntry.userId && w.type === winnerEntry.type
+        ? { ...w, claim: { phone: claimForm.phone, method: claimForm.method, account: claimForm.account, note: claimForm.note, claimedAt: new Date().toISOString(), paid: false } }
+        : w
+    )
+    const newCfg = { ...cfg, winners }
+    await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id)
+    setClaimSending(false)
+    setClaimForm({ phone:'', method:'', account:'', note:'' })
   }
 
   async function fetchGame() {
@@ -4301,9 +4321,11 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
               </div>
             </div>
             <div style={{ color:C.muted, fontSize:11, lineHeight:1.4 }}>{WTDesc[showPrizeInfo]}</div>
-            {wonTypes.includes(showPrizeInfo) && (
+            {winners.filter(x=>x.type===showPrizeInfo).length > 0 && (
               <div style={{ background:'rgba(39,174,96,0.1)', borderRadius:8, padding:8, marginTop:8 }}>
-                <span style={{ color:'#27AE60', fontSize:11, fontWeight:700 }}>✅ Ganado por: {winners.find(x=>x.type===showPrizeInfo)?.name || 'Jugador'}</span>
+                {winners.filter(x=>x.type===showPrizeInfo).map((w,i) => (
+                  <div key={i} style={{ color:'#27AE60', fontSize:11, fontWeight:700, marginBottom:i<winners.filter(x=>x.type===showPrizeInfo).length-1?4:0 }}>✅ Ganador {i+1}: {w.name || 'Jugador'}</div>
+                ))}
               </div>
             )}
           </div>
@@ -4321,7 +4343,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
           <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:14, padding:10, marginBottom:12 }}>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:4 }}>{['B','I','N','G','O'].map(l=><div key={l} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:6, padding:4, textAlign:'center', fontSize:11, fontWeight:900, color:'#000' }}>{l}</div>)}</div>
             {Array.from({length:15},(_,row)=>(
-              <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:2 }}>{Array.from({length:5},(_,col)=>{ const n=row+1+col*15; const ic=calledNums.includes(n); return <div key={n} style={{ padding:'4px 0', borderRadius:5, background:ic?'rgba(230,190,0,0.2)':'#1a1a1a', textAlign:'center', fontSize:9, fontWeight:ic?800:400, color:ic?C.gold:'#333' }}>{n}</div> })}</div>
+              <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:2 }}>{Array.from({length:5},(_,col)=>{ const n=row+1+col*15; const ic=calledNums.includes(n); return <div key={n} style={{ padding:'4px 0', borderRadius:5, background:ic?'rgba(230,190,0,0.2)':'#1a1a1a', textAlign:'center', fontSize:9, fontWeight:ic?800:400, color:ic?C.gold:'#888' }}>{n}</div> })}</div>
             ))}
           </div>
         )}
@@ -4350,7 +4372,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}><span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>Cartón #{expandedCarton+1}</span><button onClick={()=>setExpandedCarton(null)} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:6, color:C.gold, fontSize:9, padding:'3px 8px', cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>Minimizar</button></div>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>{letters.map(l=><div key={l} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:6, padding:5, textAlign:'center', fontSize:13, fontWeight:900, color:'#000' }}>{l}</div>)}</div>
                   {Array.from({length:5},(_,row)=>(
-                    <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>{nums.map((col,ci)=>{ const n=col[row],isStar=n===null,isCalled=n!==null&&calledNums.includes(n),isMarked=n!==null?marked.includes(n):true; return <div key={ci} onClick={()=>n&&markNumber(ct.id,n)} style={{ aspectRatio:1, borderRadius:6, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.25)':isCalled?'rgba(39,174,96,0.15)':'#1a1a1a', border:`1px solid ${isStar?'transparent':isMarked&&isCalled?'rgba(230,190,0,0.5)':isCalled?'rgba(39,174,96,0.4)':'#2a2a2a'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:900, color:isStar?'#000':isMarked&&isCalled?C.gold:isCalled?'#27AE60':'#555', cursor:isCalled&&!isStar?'pointer':'default' }}>{isStar?'⭐':n}</div> })}</div>
+                    <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>{nums.map((col,ci)=>{ const n=col[row],isStar=n===null,isCalled=n!==null&&calledNums.includes(n),isMarked=n!==null?marked.includes(n):true; return <div key={ci} onClick={()=>n&&markNumber(ct.id,n)} style={{ aspectRatio:1, borderRadius:6, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.25)':isCalled?'rgba(39,174,96,0.15)':'#1a1a1a', border:`1px solid ${isStar?'transparent':isMarked&&isCalled?'rgba(230,190,0,0.5)':isCalled?'rgba(39,174,96,0.4)':'#2a2a2a'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:900, color:isStar?'#000':isMarked&&isCalled?C.gold:isCalled?'#27AE60':'#fff', cursor:isCalled&&!isStar?'pointer':'default' }}>{isStar?'⭐':n}</div> })}</div>
                   ))}
                 </div>
               )
@@ -4366,14 +4388,82 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}><span style={{ color:'#fff', fontSize:9, fontWeight:900 }}>#{ci+1}</span><span style={{ color:C.muted, fontSize:8 }}>{marked.length}m</span></div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:2, marginBottom:2 }}>{letters.map(l=><div key={l} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:3, padding:'2px 0', textAlign:'center', fontSize:7, fontWeight:900, color:'#000' }}>{l}</div>)}</div>
                     {Array.from({length:5},(_,row)=>(
-                      <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:2, marginBottom:1 }}>{nums.map((col,ci2)=>{ const n=col[row],isStar=n===null,isCalled=n!==null&&calledNums.includes(n),isMarked=n!==null?marked.includes(n):true; return <div key={ci2} style={{ aspectRatio:1, borderRadius:3, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.25)':isCalled?'rgba(39,174,96,0.15)':'#1a1a1a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:isMarked&&isCalled?800:400, color:isStar?'#000':isMarked&&isCalled?C.gold:isCalled?'#27AE60':'#333' }}>{isStar?'★':n}</div> })}</div>
+                      <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:2, marginBottom:1 }}>{nums.map((col,ci2)=>{ const n=col[row],isStar=n===null,isCalled=n!==null&&calledNums.includes(n),isMarked=n!==null?marked.includes(n):true; return <div key={ci2} style={{ aspectRatio:1, borderRadius:3, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.25)':isCalled?'rgba(39,174,96,0.15)':'#1a1a1a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:isMarked&&isCalled?800:400, color:isStar?'#000':isMarked&&isCalled?C.gold:isCalled?'#27AE60':'#fff' }}>{isStar?'★':n}</div> })}</div>
                     ))}
                   </div>
                 )
               })}
             </div>
-            <div style={{ textAlign:'center', marginBottom:10 }}><span style={{ color:'#333', fontSize:10 }}>Toca un cartón para verlo grande · BINGO se verifica automáticamente</span></div>
+            <div style={{ textAlign:'center', marginBottom:10 }}><span style={{ color:'#666', fontSize:10 }}>Toca un cartón para verlo grande · BINGO se verifica automáticamente</span></div>
           </>
+        )}
+
+        {/* GANADORES DE ESTA PARTIDA */}
+        {winners.length > 0 && (
+          <div style={{ background:'#111', border:'1px solid rgba(39,174,96,0.25)', borderRadius:14, padding:12, marginBottom:14, position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:'linear-gradient(90deg,transparent,#27AE60,transparent)' }} />
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6 }}><span style={{ fontSize:18 }}>🏆</span><span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>Ganadores</span></div>
+              <span style={{ background:'rgba(39,174,96,0.15)', border:'1px solid rgba(39,174,96,0.3)', borderRadius:999, padding:'2px 8px', color:'#27AE60', fontSize:9, fontWeight:700 }}>{winners.length} premio{winners.length>1?'s':''}</span>
+            </div>
+            {winners.map((w,i) => {
+              const isMe = user && w.userId === user.id
+              const hasClaim = !!w.claim
+              return (
+              <div key={i} style={{ background:'rgba(230,190,0,0.04)', border:'1px solid rgba(230,190,0,0.12)', borderRadius:10, padding:'10px 12px', marginBottom:6 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: isMe && !hasClaim ? 10 : 0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <span style={{ fontSize:20 }}>{medals[i]||'🎖️'}</span>
+                    <div>
+                      <div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>{w.name||'Jugador'}</div>
+                      <div style={{ color:C.muted, fontSize:10 }}>Cartón #{w.cartonNum} · Balota #{w.at_ball}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ color:C.gold, fontSize:10, fontWeight:700 }}>{WTIcon[w.type]} {WTL[w.type]}</div>
+                    {w.prize>0 && <div style={{ color:'#27AE60', fontSize:11, fontWeight:700 }}>{fmt(w.prize)}</div>}
+                  </div>
+                </div>
+                {isMe && !hasClaim && (
+                  <div style={{ background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:10, padding:10, marginTop:8 }}>
+                    <div style={{ color:'#fff', fontSize:11, fontWeight:700, marginBottom:6 }}>Reclama tu premio</div>
+                    <div style={{ color:C.muted, fontSize:10, marginBottom:8 }}>Envía tus datos para coordinar la entrega</div>
+                    <div style={{ marginBottom:6 }}>
+                      <label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:.8, display:'block', marginBottom:4 }}>WhatsApp / Teléfono *</label>
+                      <input type="tel" value={claimForm.phone} onChange={e=>setClaimForm(p=>({...p,phone:e.target.value}))} placeholder="Ej: 301 234 5678" style={{ width:'100%', background:'#0a0a0a', border:'1px solid #2a2a2a', borderRadius:8, padding:'8px 10px', color:'#fff', fontSize:12, fontFamily:'inherit', boxSizing:'border-box' }} />
+                    </div>
+                    <div style={{ marginBottom:6 }}>
+                      <label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:.8, display:'block', marginBottom:4 }}>Método de pago *</label>
+                      <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                        {['Nequi','Daviplata','Bancolombia','Efectivo'].map(m=>(
+                          <button key={m} onClick={()=>setClaimForm(p=>({...p,method:m}))} style={{ background:claimForm.method===m?'rgba(230,190,0,0.12)':'#1a1a1a', border:`1px solid ${claimForm.method===m?'rgba(230,190,0,0.4)':'#2a2a2a'}`, borderRadius:8, padding:'5px 10px', fontSize:10, color:claimForm.method===m?C.gold:'#888', fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{m}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom:6 }}>
+                      <label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:.8, display:'block', marginBottom:4 }}>Número de cuenta / celular</label>
+                      <input type="text" value={claimForm.account} onChange={e=>setClaimForm(p=>({...p,account:e.target.value}))} placeholder="Ej: 301 234 5678" style={{ width:'100%', background:'#0a0a0a', border:'1px solid #2a2a2a', borderRadius:8, padding:'8px 10px', color:'#fff', fontSize:12, fontFamily:'inherit', boxSizing:'border-box' }} />
+                    </div>
+                    <div style={{ marginBottom:8 }}>
+                      <label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:.8, display:'block', marginBottom:4 }}>Nota adicional (opcional)</label>
+                      <input type="text" value={claimForm.note} onChange={e=>setClaimForm(p=>({...p,note:e.target.value}))} placeholder="Horario preferido, otra info..." style={{ width:'100%', background:'#0a0a0a', border:'1px solid #2a2a2a', borderRadius:8, padding:'8px 10px', color:'#fff', fontSize:12, fontFamily:'inherit', boxSizing:'border-box' }} />
+                    </div>
+                    <button onClick={()=>submitClaim(w)} disabled={claimSending} style={{ width:'100%', background:'linear-gradient(135deg,#27AE60,#2ECC71)', border:'none', borderRadius:10, padding:'10px', color:'#fff', fontSize:12, fontWeight:900, cursor:'pointer', fontFamily:'inherit', opacity:claimSending?.7:1 }}>{claimSending?'Enviando...':'✅ Enviar reclamo de premio'}</button>
+                  </div>
+                )}
+                {isMe && hasClaim && (
+                  <div style={{ background:'rgba(230,190,0,0.04)', border:'1px solid rgba(230,190,0,0.12)', borderRadius:8, padding:'8px 10px', marginTop:8, display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{ fontSize:14 }}>✅</span>
+                    <div>
+                      <div style={{ color:'#27AE60', fontSize:11, fontWeight:700 }}>Reclamo enviado</div>
+                      <div style={{ color:C.muted, fontSize:9 }}>Estado: <span style={{ color:w.claim.paid?'#27AE60':'#E67E22', fontWeight:700 }}>{w.claim.paid?'✅ Pagado':'⏳ Pendiente de pago'}</span></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              )
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -4396,12 +4486,24 @@ function AdminBingoPanel({ onBack }) {
 
   function getConfig(g) { try { return JSON.parse(g?.prize_description||'{}') } catch { return {} } }
 
+  async function markWinnerPaid(winnerIdx) {
+    if (!game) return
+    const cfg = getConfig(game)
+    const winners = [...(cfg.winners||[])]
+    if (winners[winnerIdx]) {
+      winners[winnerIdx] = { ...winners[winnerIdx], claim: { ...(winners[winnerIdx].claim||{}), paid: true, paidAt: new Date().toISOString() } }
+      const newCfg = { ...cfg, winners }
+      await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id)
+    }
+  }
+
   useEffect(() => {
     fetchGame()
-    const ch = supabase.channel('bingo-admin')
+    const ch = supabase.channel('bingo-admin-'+Date.now())
       .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => fetchGame())
       .subscribe()
-    return () => { supabase.removeChannel(ch); if (autoTimer) clearInterval(autoTimer) }
+    const poll = setInterval(() => fetchGame(), 3000)
+    return () => { supabase.removeChannel(ch); clearInterval(poll); if (autoTimer) clearInterval(autoTimer) }
   }, [])
 
   useEffect(() => { if (game) fetchStats() }, [game?.id, game?.status])
@@ -4664,9 +4766,29 @@ function AdminBingoPanel({ onBack }) {
             <div style={{ ...S.card, marginBottom:12, borderColor:'rgba(39,174,96,0.25)' }}>
               <div style={{ color:'#27AE60', fontSize:12, fontWeight:700, marginBottom:8 }}>🏆 Ganadores (auto-verificados)</div>
               {winners.map((w,i)=>(
-                <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:i<winners.length-1?'1px solid #1a1a1a':'none' }}>
-                  <div><span style={{ color:'#fff', fontSize:12, fontWeight:700 }}>{medals[i]||'🎖️'} {w.name}</span><div style={{ color:C.muted, fontSize:9 }}>Carton #{w.cartonNum} · Balota #{w.at_ball}</div></div>
-                  <div style={{ textAlign:'right' }}><span style={{ ...S.badge('gold'), fontSize:9 }}>{WTL[w.type]||w.type}</span>{w.prize>0 && <div style={{ color:'#27AE60', fontSize:10, fontWeight:700, marginTop:2 }}>{fmt(w.prize)}</div>}</div>
+                <div key={i} style={{ background:'#0d0d0d', border:`1px solid ${w.claim?.paid?'rgba(39,174,96,0.25)':'rgba(230,190,0,0.15)'}`, borderRadius:10, padding:10, marginBottom:i<winners.length-1?8:0 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:w.claim?6:0 }}>
+                    <div><span style={{ color:'#fff', fontSize:12, fontWeight:700 }}>{medals[i]||'🎖️'} {w.name}</span><div style={{ color:C.muted, fontSize:9 }}>Cartón #{w.cartonNum} · Balota #{w.at_ball}</div></div>
+                    <div style={{ textAlign:'right' }}><span style={{ ...S.badge(w.claim?.paid?'green':'gold'), fontSize:9 }}>{w.claim?.paid?'✅ Pagado':WTL[w.type]||w.type}</span>{w.prize>0 && <div style={{ color:'#27AE60', fontSize:10, fontWeight:700, marginTop:2 }}>{fmt(w.prize)}</div>}</div>
+                  </div>
+                  {w.claim && (
+                    <div style={{ background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.15)', borderRadius:8, padding:8, marginBottom:6 }}>
+                      <div style={{ fontSize:9, color:C.muted, textTransform:'uppercase', letterSpacing:.8, fontWeight:700, marginBottom:4 }}>Datos de contacto</div>
+                      <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
+                        <div><span style={{ color:C.muted, fontSize:10 }}>Tel: </span><span style={{ color:'#fff', fontSize:10, fontWeight:600 }}>{w.claim.phone}</span></div>
+                        <div><span style={{ color:C.muted, fontSize:10 }}>Pago: </span><span style={{ color:C.gold, fontSize:10, fontWeight:600 }}>{w.claim.method}</span></div>
+                        {w.claim.account && <div><span style={{ color:C.muted, fontSize:10 }}>Cuenta: </span><span style={{ color:'#fff', fontSize:10, fontWeight:600 }}>{w.claim.account}</span></div>}
+                      </div>
+                      {w.claim.note && <div style={{ color:C.muted, fontSize:9, marginTop:4 }}>Nota: "{w.claim.note}"</div>}
+                      {w.claim.paid && w.claim.paidAt && <div style={{ color:'#27AE60', fontSize:9, marginTop:4, fontWeight:600 }}>Pagado el {new Date(w.claim.paidAt).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'})} · {new Date(w.claim.paidAt).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</div>}
+                    </div>
+                  )}
+                  {!w.claim?.paid && (
+                    <div style={{ display:'flex', gap:6 }}>
+                      <div style={{ flex:1, background:'rgba(231,76,60,0.08)', border:'1px solid rgba(231,76,60,0.2)', borderRadius:8, padding:7, textAlign:'center', fontSize:10, color:'#E67E22', fontWeight:700 }}>{w.claim?'⏳ Pendiente':'Sin reclamo'}</div>
+                      <button onClick={()=>markWinnerPaid(i)} style={{ flex:1, background:'rgba(39,174,96,0.12)', border:'1px solid rgba(39,174,96,0.3)', borderRadius:8, padding:7, textAlign:'center', fontSize:10, color:'#27AE60', fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>✓ Marcar pagado</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
