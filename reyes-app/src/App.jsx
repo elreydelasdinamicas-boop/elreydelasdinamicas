@@ -4357,32 +4357,37 @@ function AdminBingoPanel({ onBack }) {
 
   async function createGame() {
     setCreating(true)
-    const totalPrize = Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0)
-    const configJson = JSON.stringify({
-      pack_price: form.pack_price,
-      live_url: form.live_url,
-      win_types: form.win_types,
-      prizes: form.prizes,
-      winners: []
-    })
-    // Use ONLY original columns — no new columns needed
-    const { data, error } = await supabase.from('bingo_games').insert({
-      title: form.title,
-      prize_description: configJson,
-      prize_amount: totalPrize,
-      carton_price: form.pack_price,
-      mode: form.mode,
-      auto_interval: form.auto_interval,
-      status: 'waiting',
-      called_numbers: [],
-      created_by: null
-    }).select().single()
-
-    if (error) {
-      alert('Error: ' + error.message)
-      console.error('Bingo create error:', error)
-    } else {
-      setGame(data)
+    try {
+      const totalPrize = Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0)
+      const configJson = JSON.stringify({
+        pack_price: form.pack_price,
+        live_url: form.live_url,
+        win_types: form.win_types,
+        prizes: form.prizes,
+        winners: []
+      })
+      // Insert WITHOUT .select().single() to avoid RLS hang
+      const { error } = await supabase.from('bingo_games').insert({
+        title: form.title,
+        prize_description: configJson,
+        prize_amount: totalPrize,
+        carton_price: form.pack_price,
+        mode: form.mode,
+        auto_interval: form.auto_interval,
+        status: 'waiting',
+        called_numbers: [],
+      })
+      if (error) {
+        alert('Error creando bingo: ' + error.message)
+        console.error('Bingo create error:', error)
+        setCreating(false)
+        return
+      }
+      // Fetch the game separately
+      await fetchGame()
+    } catch(e) {
+      alert('Error: ' + e.message)
+      console.error(e)
     }
     setCreating(false)
   }
@@ -4474,7 +4479,15 @@ function AdminBingoPanel({ onBack }) {
             <div><label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Seg. entre balotas (auto)</label><input type="number" value={form.auto_interval} onChange={e=>setForm(p=>({...p,auto_interval:parseInt(e.target.value)||15}))} /></div>
           </div>
 
-          <div style={{ marginBottom:12 }}><label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Link del live (YouTube/IG/FB)</label><input value={form.live_url} onChange={e=>setForm(p=>({...p,live_url:e.target.value}))} placeholder="https://youtube.com/watch?v=..." /></div>
+          <div style={{ marginBottom:12 }}><label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Link del live (YouTube/IG/FB)</label><input value={form.live_url} onChange={e=>setForm(p=>({...p,live_url:e.target.value}))} placeholder="https://youtube.com/watch?v=..." />
+            {form.live_url && form.live_url.includes('youtu') && (
+              <div style={{ marginTop:8, background:'#000', borderRadius:10, overflow:'hidden', border:'1px solid #1a1a1a' }}>
+                <div style={{ position:'relative', paddingBottom:'56.25%', height:0 }}>
+                  <iframe src={form.live_url.replace('youtube.com/watch?v=','youtube.com/embed/').replace('youtu.be/','youtube.com/embed/').replace('youtube.com/live/','youtube.com/embed/')} style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', border:'none' }} allowFullScreen />
+                </div>
+              </div>
+            )}
+          </div>
 
           <div style={{ marginBottom:14 }}>
             <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:8 }}>Modo de canto</label>
