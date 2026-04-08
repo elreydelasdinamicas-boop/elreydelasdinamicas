@@ -4019,6 +4019,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   const [showPrizeInfo, setShowPrizeInfo] = useState(null)
   const [claimForm, setClaimForm] = useState({ phone:'', method:'', account:'', note:'' })
   const [claimSending, setClaimSending] = useState(false)
+  const [countdown, setCountdown] = useState(null)
 
   function getConfig(g) { try { return JSON.parse(g?.prize_description||'{}') } catch { return {} } }
 
@@ -4027,12 +4028,26 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     const ch = supabase.channel('bingo-live-'+Date.now())
       .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => fetchGame())
       .subscribe()
-    // Backup polling cada 3 segundos por si el realtime falla
     const poll = setInterval(() => fetchGame(), 3000)
     return () => { supabase.removeChannel(ch); clearInterval(poll) }
   }, [])
 
   useEffect(() => { if (user && game) fetchMyCartones() }, [user, game?.id])
+
+  // Countdown timer for waiting games
+  useEffect(() => {
+    if (!game || game.status !== 'waiting') { setCountdown(null); return }
+    const cfg = getConfig(game)
+    if (!cfg.scheduled_at) { setCountdown(null); return }
+    function calc() {
+      const diff = new Date(cfg.scheduled_at).getTime() - Date.now()
+      if (diff <= 0) { setCountdown({ d:0, h:0, m:0, s:0 }); return }
+      setCountdown({ d: Math.floor(diff/86400000), h: Math.floor((diff%86400000)/3600000), m: Math.floor((diff%3600000)/60000), s: Math.floor((diff%60000)/1000) })
+    }
+    calc()
+    const iv = setInterval(calc, 1000)
+    return () => clearInterval(iv)
+  }, [game?.id, game?.status])
 
   useEffect(() => {
     if (!game || !user || myCartones.length === 0) return
@@ -4058,14 +4073,12 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     const cfg = getConfig(game)
     const winTypes = cfg.win_types || ['linea','vertical','diagonal','esquinas','full']
     const winners = cfg.winners || []
-    const wonTypes = winners.map(w => w.type)
     const nums = carton.numbers || []
     const markedSet = new Set(marked)
     const grid = Array.from({length:5}, (_,row) => Array.from({length:5}, (_,col) => {
       const n = nums[col]?.[row]; return n === null || markedSet.has(n)
     }))
     for (const wt of winTypes) {
-      // Multiple winners allowed per type - check if THIS user already won this type
       if (winners.some(w => w.type === wt && w.userId === user.id)) continue
       let won = false
       if (wt === 'linea') { for (let r=0;r<5;r++) if (grid[r].every(Boolean)) { won=true; break } }
@@ -4108,8 +4121,12 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   }
 
   async function fetchGame() {
+    // First try active/waiting/paused
     const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
-    setGame(data || null)
+    if (data) { setGame(data); return }
+    // If none, try finished (show until a new one is created)
+    const { data: fin } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1).single()
+    setGame(fin || null)
   }
 
   async function fetchMyCartones() {
@@ -4128,10 +4145,13 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 
   async function buyPack() {
     if (!user) { onLogin(); return }
-    if (myCartones.length >= 6) { alert('¡Ya tienes tu pack de 6 cartones!'); return }
+    const cfg = getConfig(game)
+    const cPerPack = cfg.cartones_per_pack || 6
+    const maxPer = cfg.max_per_person || cPerPack
+    if (myCartones.length >= maxPer) { alert(`¡Ya tienes el máximo de ${maxPer} cartones!`); return }
     setBuyingPack(true)
-    const cartones = Array.from({length:6},(_,i) => ({
-      game_id: game.id, user_id: user.id, numbers: generateCarton(), marked: [], carton_number: i+1, paid: false
+    const cartones = Array.from({length:cPerPack},(_,i) => ({
+      game_id: game.id, user_id: user.id, numbers: generateCarton(), marked: [], carton_number: myCartones.length+i+1, paid: false
     }))
     const { error } = await supabase.from('bingo_cartones').insert(cartones)
     if (error) alert('Error: ' + error.message)
@@ -4183,6 +4203,13 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     w.document.close()
   }
 
+  function handleShare() {
+    const ref = profile?.referral_code || ''
+    const url = `https://lacasadelasdinamicas.com?ref=${ref}&from=bingo`
+    const text = `🎱 ¡Juega Bingo en La Casa De Las Dinámicas! Premios en efectivo 💰\n${url}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
   const calledNums = game?.called_numbers || []
   const currentNum = game?.current_number
   const cfg = getConfig(game)
@@ -4201,7 +4228,17 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     esquinas: 'Marca los 4 números de las esquinas del cartón (arriba-izq, arriba-der, abajo-izq, abajo-der).',
     full: 'Marca TODOS los 25 números de tu cartón. Es el premio mayor.'
   }
+  const cPerPack = cfg.cartones_per_pack || 6
+  const isFree = !!cfg.free_bingo
+  const allWon = winTypes.length > 0 && winTypes.every(wt => wonTypes.includes(wt))
+  const isFinished = game?.status === 'finished'
+  const isWaiting = game?.status === 'waiting'
+  const totalPrize = Object.entries(prizes).filter(([k])=>winTypes.includes(k)).reduce((s,[_,v])=>s+v,0)
+  const fakePercent = cfg.fake_percent || 0
+  const payMethods = cfg.pay_methods || { whatsapp: true }
+  const pointsPrice = cfg.points_price || 0
 
+  // ── NO GAME AT ALL ──
   if (!game) return (
     <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, gap:16 }}>
       <style>{CSS}</style>
@@ -4212,6 +4249,190 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     </div>
   )
 
+  // ── FINISHED SCREEN ──
+  if (isFinished || allWon) return (
+    <div style={{ background:C.bg, minHeight:'100vh' }}>
+      <style>{CSS}</style>
+      <div style={{ background:C.bg2, padding:'11px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #1a1a1a' }}>
+        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>← Volver</button>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}><div style={{ width:8, height:8, background:'#888', borderRadius:'50%' }} /><span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>{game.title||'Bingo La Casa'}</span></div>
+        <span style={{ color:'#888', fontSize:10 }}>Finalizado</span>
+      </div>
+      <div style={{ padding:'20px 12px', maxWidth:500, margin:'0 auto', textAlign:'center' }}>
+        <div style={{ fontSize:48, marginBottom:8 }}>🏆</div>
+        <div style={{ color:'#fff', fontSize:20, fontWeight:900, marginBottom:4 }}>Bingo finalizado</div>
+        <div style={{ color:C.muted, fontSize:12, marginBottom:16 }}>Todos los premios fueron entregados</div>
+
+        {winners.length > 0 && (
+          <div style={{ background:'#111', border:'1px solid rgba(39,174,96,0.25)', borderRadius:14, padding:12, marginBottom:12, position:'relative', overflow:'hidden', textAlign:'left' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#27AE60,transparent)' }} />
+            <div style={{ color:'#27AE60', fontSize:12, fontWeight:700, marginBottom:10 }}>🏆 Ganadores</div>
+            {winners.map((w,i) => (
+              <div key={i} style={{ background:'rgba(230,190,0,0.04)', border:'1px solid rgba(230,190,0,0.12)', borderRadius:10, padding:'10px 12px', marginBottom:6, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontSize:18 }}>{medals[i]||'🎖️'}</span>
+                  <div><div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>{w.name||'Jugador'}</div><div style={{ color:C.muted, fontSize:9 }}>Cartón #{w.cartonNum} · Balota #{w.at_ball}</div></div>
+                </div>
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ color:C.gold, fontSize:10, fontWeight:700 }}>{WTIcon[w.type]} {WTL[w.type]}</div>
+                  {w.prize>0 && <div style={{ color:'#27AE60', fontSize:13, fontWeight:900 }}>{fmt(w.prize)}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:12, padding:14, marginBottom:12 }}>
+          <div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>Total repartido: {fmt(totalPrize)}</div>
+          <div style={{ color:C.muted, fontSize:11, marginTop:2 }}>Gracias por participar · Pronto habrá nuevo bingo</div>
+        </div>
+
+        <button onClick={onBack} style={{ ...S.btnGold, maxWidth:300, margin:'0 auto' }}>← Volver al inicio</button>
+      </div>
+    </div>
+  )
+
+  // ── WAITING / LOBBY SCREEN ──
+  if (isWaiting) {
+    const embedUrl = getEmbedUrl(liveUrl)
+    return (
+    <div style={{ background:C.bg, minHeight:'100vh' }}>
+      <style>{CSS}</style>
+      <div style={{ background:C.bg2, padding:'11px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #1a1a1a', position:'sticky', top:0, zIndex:40 }}>
+        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>← Volver</button>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}><div style={{ width:8, height:8, background:'#E67E22', borderRadius:'50%' }} className="pulse" /><span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>{game.title||'Bingo La Casa'}</span></div>
+        <button onClick={()=>setShowGuide(!showGuide)} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:8, color:C.gold, fontSize:10, fontWeight:700, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit' }}>{showGuide?'Cerrar':'❓'}</button>
+      </div>
+      <div style={{ padding:'16px 12px 100px', maxWidth:500, margin:'0 auto', textAlign:'center' }}>
+        <div style={{ fontSize:40, marginBottom:4 }}>🎱</div>
+        <div style={{ color:'#fff', fontSize:18, fontWeight:900 }}>{game.title||'Bingo La Casa'}</div>
+        <div style={{ color:C.gold, fontSize:11, fontWeight:700, marginBottom:12 }}>Sala de espera</div>
+
+        {/* COUNTDOWN */}
+        {countdown && cfg.scheduled_at && (
+          <div style={{ background:'#1a0f00', border:'1.5px solid rgba(230,190,0,0.4)', borderRadius:14, padding:16, marginBottom:10, position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.8),transparent)' }} />
+            <div style={{ position:'absolute', bottom:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.3),transparent)' }} />
+            <div style={{ color:C.gold, fontSize:9, textTransform:'uppercase', letterSpacing:2, fontWeight:700, marginBottom:8 }}>⏱ Inicia en</div>
+            <div style={{ display:'flex', justifyContent:'center', gap:8, marginBottom:10 }}>
+              {[['d','Días'],['h','Horas'],['m','Min']].map(([k,label])=>(
+                <div key={k} style={{ background:'#0a0800', border:'1.5px solid rgba(230,190,0,0.5)', borderRadius:10, padding:'8px 14px', minWidth:54 }}>
+                  <div style={{ color:C.gold, fontSize:26, fontWeight:900, lineHeight:1 }}>{String(countdown[k]).padStart(2,'0')}</div>
+                  <div style={{ color:'rgba(230,190,0,0.5)', fontSize:8, marginTop:3, textTransform:'uppercase', letterSpacing:1 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ color:'#fff', fontSize:13, fontWeight:700 }}>{new Date(cfg.scheduled_at).toLocaleDateString('es-CO',{weekday:'short',day:'numeric',month:'short'})} · <span style={{ color:C.gold, fontSize:15 }}>{new Date(cfg.scheduled_at).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</span></div>
+          </div>
+        )}
+
+        {/* PROGRESS BAR */}
+        {fakePercent > 0 && (
+          <div style={{ background:'#111', border:'1px solid rgba(39,174,96,0.2)', borderRadius:12, padding:10, marginBottom:10 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+              <span style={{ color:'#fff', fontSize:11, fontWeight:700 }}>Jugadores inscritos</span>
+              <span style={{ color:'#27AE60', fontSize:11, fontWeight:700 }}>{fakePercent}%</span>
+            </div>
+            <div style={{ background:'#0a0a0a', borderRadius:6, height:8, overflow:'hidden' }}>
+              <div style={{ background:'linear-gradient(90deg,#27AE60,#2ECC71)', height:'100%', width:`${Math.min(fakePercent,100)}%`, borderRadius:6 }} />
+            </div>
+            {fakePercent >= 60 && <div style={{ color:'#E67E22', fontSize:10, fontWeight:700, marginTop:4 }}>⚠ Quedan pocos cupos</div>}
+          </div>
+        )}
+
+        {/* PRIZES */}
+        <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.12)', borderRadius:10, padding:10, marginBottom:10 }}>
+          <span style={{ color:'#fff', fontSize:11, fontWeight:900 }}>🏆 Premios</span>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:4, justifyContent:'center', marginTop:6 }}>
+            {winTypes.map(wt=>(
+              <div key={wt} style={{ background:'rgba(230,190,0,0.08)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:6, padding:'3px 8px', fontSize:11, color:C.gold, fontWeight:700 }}>{WTIcon[wt]} {WTL[wt]} {prizes[wt]?fmt(prizes[wt]):''}</div>
+            ))}
+          </div>
+          <div style={{ color:'#27AE60', fontSize:12, fontWeight:700, marginTop:6 }}>Total en premios: {fmt(totalPrize)}</div>
+        </div>
+
+        {/* HOW TO PLAY BUTTON */}
+        <button onClick={()=>setShowGuide(!showGuide)} style={{ width:'100%', background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:10, marginBottom:10, cursor:'pointer', fontFamily:'inherit' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            <span style={{ fontSize:16 }}>❓</span>
+            <span style={{ color:C.gold, fontSize:13, fontWeight:900 }}>¿Cómo se juega?</span>
+          </div>
+          <div style={{ color:C.muted, fontSize:10, marginTop:3 }}>Aprende las reglas y mira ejemplos de cómo ganar cada premio</div>
+        </button>
+
+        {/* HOW TO PLAY EXPANDED */}
+        {showGuide && (
+          <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:16, padding:16, marginBottom:14, position:'relative', overflow:'hidden', textAlign:'left' }}>
+            <GoldLine />
+            <div style={{ color:C.gold, fontSize:14, fontWeight:900, marginBottom:14, textAlign:'center' }}>¿Cómo jugar Bingo?</div>
+            <div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:8 }}>Paso a paso:</div>
+            {[
+              ['🎟️','Compra tu pack',`Cada pack tiene ${cPerPack} cartones${isFree?' (GRATIS)':` por ${fmt(packPrice)}`}. Cada cartón tiene 25 números aleatorios en 5 columnas (B-I-N-G-O).`],
+              ['📺','Mira la transmisión en vivo','El administrador saca las balotas en vivo por YouTube/Instagram. Los números aparecen aquí en tiempo real.'],
+              ['✅','Tus cartones se marcan solos','Con "Auto-marcar" activado, cuando sale un número que está en tu cartón, se marca automáticamente en dorado.'],
+              ['🏆','¡Gana premios!','El sistema verifica automáticamente si completaste alguna figura. Si ganas, te aparece una notificación y reclamas tu premio.'],
+            ].map(([ic,t,d])=>(
+              <div key={t} style={{ display:'flex', gap:12, marginBottom:14, paddingBottom:14, borderBottom:'1px solid #1a1a1a' }}>
+                <span style={{ fontSize:24, flexShrink:0 }}>{ic}</span>
+                <div><div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:3 }}>{t}</div><div style={{ color:C.muted, fontSize:11, lineHeight:1.4 }}>{d}</div></div>
+              </div>
+            ))}
+            <div style={{ color:C.gold, fontSize:12, fontWeight:700, marginBottom:10 }}>Figuras ganadoras:</div>
+            {winTypes.map(wt => (
+              <div key={wt} style={{ background:'#1a1a1a', borderRadius:10, padding:10, marginBottom:8, display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:18, flexShrink:0 }}>{WTIcon[wt]}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ color:'#fff', fontSize:11, fontWeight:700 }}>{WTL[wt]}</div>
+                  <div style={{ color:C.muted, fontSize:10, lineHeight:1.3, marginTop:2 }}>{WTDesc[wt]}</div>
+                </div>
+                <div style={{ color:C.gold, fontSize:11, fontWeight:700, flexShrink:0 }}>{prizes[wt]?fmt(prizes[wt]):'—'}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* BUY PACK */}
+        {!user ? (
+          <div style={{ padding:'20px 0' }}><div style={{ color:C.muted, fontSize:13, marginBottom:12 }}>Inicia sesión para jugar</div><button onClick={onLogin} style={{ ...S.btnGold, maxWidth:200, margin:'0 auto' }}>Entrar a jugar</button></div>
+        ) : myCartones.length === 0 ? (
+          <div style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:14, padding:20, marginBottom:10 }}>
+            <div style={{ fontSize:28, marginBottom:4 }}>🎟️</div>
+            <div style={{ color:'#fff', fontSize:15, fontWeight:900, marginBottom:2 }}>Pack de {cPerPack} cartones</div>
+            <div style={{ color:C.gold, fontSize:22, fontWeight:900, marginBottom:10 }}>{isFree?'GRATIS':fmt(packPrice)}</div>
+            {isFree ? (
+              <button onClick={buyPack} disabled={buyingPack} style={{ ...S.btnGold, width:'100%', opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':'🎟️ Obtener cartones gratis'}</button>
+            ) : (
+              <>
+                <button onClick={buyPack} disabled={buyingPack} style={{ ...S.btnGold, width:'100%', marginBottom:6, opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':'Pagar por WhatsApp'}</button>
+                {payMethods.points && pointsPrice > 0 && (
+                  <button onClick={buyPack} disabled={buyingPack} style={{ width:'100%', background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:10, padding:'8px', color:C.gold, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Pagar con Puntos · {fmt(pointsPrice)} pts</button>
+                )}
+              </>
+            )}
+          </div>
+        ) : (
+          <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:12, padding:12, marginBottom:10 }}>
+            <div style={{ color:'#27AE60', fontSize:14, fontWeight:900, marginBottom:2 }}>✅ ¡Tienes {myCartones.length} cartones!</div>
+            <div style={{ color:C.muted, fontSize:11 }}>Cuando inicie el bingo, tus cartones se activarán automáticamente</div>
+          </div>
+        )}
+
+        {/* SHARE FOR FREE CARTON */}
+        <div style={{ background:'linear-gradient(135deg,rgba(39,174,96,0.08),rgba(39,174,96,0.02))', border:'1px solid rgba(39,174,96,0.3)', borderRadius:14, padding:14, marginBottom:10 }}>
+          <div style={{ fontSize:22, marginBottom:4 }}>🎁</div>
+          <div style={{ color:'#27AE60', fontSize:14, fontWeight:900, marginBottom:2 }}>¡Cartón GRATIS!</div>
+          <div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:8 }}>Comparte con 10 amigos por WhatsApp</div>
+          <button onClick={handleShare} style={{ width:'100%', background:'#27AE60', border:'none', borderRadius:10, padding:'10px', color:'#fff', fontSize:12, fontWeight:900, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+            Compartir por WhatsApp
+          </button>
+          <div style={{ color:C.muted, fontSize:9, marginTop:6 }}>Cada amigo que abra tu link cuenta. Al llegar a 10 recibes un cartón extra gratis.</div>
+        </div>
+      </div>
+    </div>
+  )}
+
+  // ── ACTIVE GAME (original flow) ──
   const embedUrl = getEmbedUrl(liveUrl)
 
   return (
@@ -4234,41 +4455,33 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
         {/* LIVE EMBED */}
         {embedUrl && <div style={{ background:'#000', border:'1px solid rgba(230,190,0,0.2)', borderRadius:14, overflow:'hidden', marginBottom:12 }}><div style={{ position:'relative', paddingBottom:'56.25%', height:0 }}><iframe src={embedUrl} style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', border:'none' }} allowFullScreen allow="autoplay; encrypted-media" /></div></div>}
 
-        {/* COMO JUGAR — panel expandible */}
+        {/* COMO JUGAR */}
         {showGuide && (
           <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:16, padding:16, marginBottom:14, position:'relative', overflow:'hidden' }}>
             <GoldLine />
             <div style={{ color:C.gold, fontSize:14, fontWeight:900, marginBottom:14, textAlign:'center' }}>¿Cómo jugar Bingo?</div>
-
             <div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:8 }}>Paso a paso:</div>
             {[
-              ['🎟️','Compra tu pack',`Cada pack tiene 6 cartones por ${fmt(packPrice)}. Cada cartón tiene 25 números aleatorios organizados en 5 columnas (B-I-N-G-O).`],
-              ['📺','Mira la transmisión en vivo','El administrador saca las balotas en vivo por YouTube/Instagram. Los números aparecen aquí en tiempo real aunque no puedas ver el live.'],
-              ['✅','Tus cartones se marcan solos','Con "Auto-marcar" activado, cuando sale un número que está en tu cartón, se marca automáticamente en dorado. También puedes marcar manualmente tocando el número.'],
-              ['🏆','¡Gana premios!','El sistema verifica automáticamente si completaste alguna figura. Si ganas, te aparece una notificación y el admin confirma tu premio.'],
+              ['🎟️','Compra tu pack',`Cada pack tiene ${cPerPack} cartones${isFree?' (GRATIS)':` por ${fmt(packPrice)}`}. Cada cartón tiene 25 números aleatorios en 5 columnas (B-I-N-G-O).`],
+              ['📺','Mira la transmisión en vivo','El administrador saca las balotas en vivo por YouTube/Instagram. Los números aparecen aquí en tiempo real.'],
+              ['✅','Tus cartones se marcan solos','Con "Auto-marcar" activado, cuando sale un número que está en tu cartón, se marca automáticamente en dorado.'],
+              ['🏆','¡Gana premios!','El sistema verifica automáticamente si completaste alguna figura. Si ganas, te aparece una notificación y reclamas tu premio.'],
             ].map(([ic,t,d])=>(
               <div key={t} style={{ display:'flex', gap:12, marginBottom:14, paddingBottom:14, borderBottom:'1px solid #1a1a1a' }}>
                 <span style={{ fontSize:24, flexShrink:0 }}>{ic}</span>
                 <div><div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:3 }}>{t}</div><div style={{ color:C.muted, fontSize:11, lineHeight:1.4 }}>{d}</div></div>
               </div>
             ))}
-
             <div style={{ color:C.gold, fontSize:12, fontWeight:700, marginBottom:10 }}>Figuras ganadoras:</div>
             {winTypes.map(wt => (
               <div key={wt} style={{ background:'#1a1a1a', borderRadius:10, padding:10, marginBottom:8, display:'flex', alignItems:'center', gap:10 }}>
                 <span style={{ fontSize:18, flexShrink:0 }}>{WTIcon[wt]}</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ color:'#fff', fontSize:11, fontWeight:700 }}>{WTL[wt]}</div>
-                  <div style={{ color:C.muted, fontSize:10, lineHeight:1.3, marginTop:2 }}>{WTDesc[wt]}</div>
-                </div>
+                <div style={{ flex:1 }}><div style={{ color:'#fff', fontSize:11, fontWeight:700 }}>{WTL[wt]}</div><div style={{ color:C.muted, fontSize:10, lineHeight:1.3, marginTop:2 }}>{WTDesc[wt]}</div></div>
                 <div style={{ color:C.gold, fontSize:11, fontWeight:700, flexShrink:0 }}>{prizes[wt]?fmt(prizes[wt]):'—'}</div>
               </div>
             ))}
-
             <div style={{ background:'rgba(230,190,0,0.06)', borderRadius:9, padding:10, marginTop:8 }}>
-              <div style={{ color:C.muted, fontSize:10, lineHeight:1.4 }}>
-                <b style={{ color:'#fff' }}>¿Qué es la estrella ⭐?</b> El centro del cartón (columna N, fila 3) es un espacio libre que cuenta como marcado automáticamente.
-              </div>
+              <div style={{ color:C.muted, fontSize:10, lineHeight:1.4 }}><b style={{ color:'#fff' }}>¿Qué es la estrella ⭐?</b> El centro del cartón (columna N, fila 3) es un espacio libre que cuenta como marcado automáticamente.</div>
             </div>
           </div>
         )}
@@ -4295,12 +4508,11 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
           </div>
         </div>
 
-        {/* PREMIOS COMPACTOS — clickeables */}
+        {/* PREMIOS COMPACTOS */}
         <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.12)', borderRadius:10, padding:'8px 10px', marginBottom:10, display:'flex', gap:4, flexWrap:'wrap', alignItems:'center' }}>
           <span style={{ color:'#fff', fontSize:10, fontWeight:900, marginRight:2 }}>🏆</span>
           {winTypes.map(wt => {
             const isWon = wonTypes.includes(wt)
-            const winner = winners.find(x=>x.type===wt)
             return (
               <button key={wt} onClick={()=>setShowPrizeInfo(showPrizeInfo===wt?null:wt)} style={{ background:isWon?'rgba(39,174,96,0.15)':'rgba(230,190,0,0.08)', border:`1px solid ${isWon?'rgba(39,174,96,0.3)':'rgba(230,190,0,0.2)'}`, borderRadius:6, padding:'3px 8px', fontSize:9, color:isWon?'#27AE60':C.gold, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:3 }}>
                 {isWon && '✅'}{WTIcon[wt]} {WTL[wt]} {prizes[wt]?fmt(prizes[wt]):''}
@@ -4354,14 +4566,14 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
         ) : myCartones.length===0 ? (
           <div style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:14, padding:24, textAlign:'center', marginBottom:14 }}>
             <div style={{ fontSize:32, marginBottom:8 }}>🎟️</div>
-            <div style={{ color:'#fff', fontSize:15, fontWeight:900, marginBottom:4 }}>Pack de 6 Cartones</div>
-            <div style={{ color:C.gold, fontSize:22, fontWeight:900, marginBottom:4 }}>{fmt(packPrice)}</div>
-            <div style={{ color:C.muted, fontSize:11, marginBottom:16 }}>6 cartones aleatorios para esta partida</div>
-            <button onClick={buyPack} disabled={buyingPack} style={{ ...S.btnGold, opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':'🎟️ Comprar Pack'}</button>
+            <div style={{ color:'#fff', fontSize:15, fontWeight:900, marginBottom:4 }}>Pack de {cPerPack} Cartones</div>
+            <div style={{ color:C.gold, fontSize:22, fontWeight:900, marginBottom:4 }}>{isFree?'GRATIS':fmt(packPrice)}</div>
+            <div style={{ color:C.muted, fontSize:11, marginBottom:16 }}>{cPerPack} cartones aleatorios para esta partida</div>
+            <button onClick={buyPack} disabled={buyingPack} style={{ ...S.btnGold, opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':(isFree?'🎟️ Obtener cartones gratis':'🎟️ Comprar Pack')}</button>
           </div>
         ) : (
           <>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}><span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>Mis 6 cartones</span><span style={{ ...S.badge('green'), fontSize:9 }}>Auto-verificación</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}><span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>Mis {myCartones.length} cartones</span><span style={{ ...S.badge('green'), fontSize:9 }}>Auto-verificación</span></div>
 
             {/* EXPANDED */}
             {expandedCarton!==null && (()=>{
@@ -4469,19 +4681,25 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     </div>
   )
 }
+
+
 // ─── ADMIN BINGO PANEL — v64c bulletproof, config in prize_description ────────
 function AdminBingoPanel({ onBack }) {
   const [game, setGame] = useState(null)
   const [form, setForm] = useState({
     title: 'Bingo La Casa', pack_price: 6000, mode: 'manual', auto_interval: 15, live_url: '',
     win_types: ['linea', 'vertical', 'diagonal', 'esquinas', 'full'],
-    prizes: { linea: 30000, vertical: 30000, diagonal: 40000, esquinas: 40000, full: 50000 }
+    prizes: { linea: 30000, vertical: 30000, diagonal: 40000, esquinas: 40000, full: 50000 },
+    scheduled_at: '', cartones_per_pack: 6, max_per_person: 6, free_bingo: false,
+    fake_percent: 0, points_price: 0,
+    pay_methods: { whatsapp: true, points: false, dinero: false }
   })
   const [creating, setCreating] = useState(false)
   const [numInput, setNumInput] = useState('')
   const [calling, setCalling] = useState(false)
   const [autoTimer, setAutoTimer] = useState(null)
   const [stats, setStats] = useState({ players:0, packs:0, revenue:0 })
+  const [editing, setEditing] = useState(false)
   const gameRef = useRef(null)
 
   function getConfig(g) { try { return JSON.parse(g?.prize_description||'{}') } catch { return {} } }
@@ -4508,6 +4726,23 @@ function AdminBingoPanel({ onBack }) {
 
   useEffect(() => { if (game) fetchStats() }, [game?.id, game?.status])
 
+  // Load game config into form for editing
+  useEffect(() => {
+    if (game && !editing) {
+      const cfg = getConfig(game)
+      setForm(p => ({
+        ...p, title: game.title || p.title, pack_price: cfg.pack_price || game.carton_price || p.pack_price,
+        mode: game.mode || p.mode, auto_interval: game.auto_interval || p.auto_interval,
+        live_url: cfg.live_url || '', win_types: cfg.win_types || p.win_types, prizes: cfg.prizes || p.prizes,
+        scheduled_at: cfg.scheduled_at || '', cartones_per_pack: cfg.cartones_per_pack || 6,
+        max_per_person: cfg.max_per_person || 6, free_bingo: !!cfg.free_bingo,
+        fake_percent: cfg.fake_percent || 0, points_price: cfg.points_price || 0,
+        pay_methods: cfg.pay_methods || { whatsapp: true, points: false, dinero: false }
+      }))
+      setEditing(true)
+    }
+  }, [game?.id])
+
   async function fetchGame() {
     const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
     setGame(data || null)
@@ -4519,57 +4754,58 @@ function AdminBingoPanel({ onBack }) {
     const { data: cartones } = await supabase.from('bingo_cartones').select('user_id').eq('game_id', game.id)
     if (cartones) {
       const players = [...new Set(cartones.map(c => c.user_id))].length
-      const packs = Math.ceil(cartones.length / 6)
+      const packs = Math.ceil(cartones.length / (form.cartones_per_pack || 6))
       const cfg = getConfig(game)
       setStats({ players, packs, revenue: packs * (cfg.pack_price || game.carton_price || 6000) })
     }
+  }
+
+  function buildConfigJson() {
+    return JSON.stringify({
+      pack_price: form.pack_price, live_url: form.live_url, win_types: form.win_types,
+      prizes: form.prizes, winners: game ? (getConfig(game).winners || []) : [],
+      scheduled_at: form.scheduled_at, cartones_per_pack: form.cartones_per_pack,
+      max_per_person: form.max_per_person, free_bingo: form.free_bingo,
+      fake_percent: form.fake_percent, points_price: form.points_price,
+      pay_methods: form.pay_methods
+    })
   }
 
   async function createGame() {
     setCreating(true)
     try {
       const totalPrize = Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0)
-      const configJson = JSON.stringify({
-        pack_price: form.pack_price,
-        live_url: form.live_url,
-        win_types: form.win_types,
-        prizes: form.prizes,
-        winners: []
-      })
       const insertData = {
-        title: form.title,
-        prize_description: configJson,
-        prize_amount: totalPrize,
-        carton_price: form.pack_price,
-        mode: form.mode,
-        auto_interval: form.auto_interval,
-        status: 'waiting',
-        called_numbers: [],
+        title: form.title, prize_description: buildConfigJson(), prize_amount: totalPrize,
+        carton_price: form.pack_price, mode: form.mode, auto_interval: form.auto_interval,
+        status: 'waiting', called_numbers: [],
       }
-      // Timeout de 10 segundos para detectar hang de RLS
       const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 10000))
       const insertPromise = supabase.from('bingo_games').insert(insertData)
       let result
-      try {
-        result = await Promise.race([insertPromise, timeout])
-      } catch(e) {
+      try { result = await Promise.race([insertPromise, timeout]) }
+      catch(e) {
         if (e.message === 'TIMEOUT') {
-          alert('⚠️ La creacion se demoro mas de 10 segundos.\n\nEsto significa que Supabase esta bloqueando el INSERT por politicas RLS.\n\nVe a Supabase → Authentication → Policies → tabla bingo_games y agrega:\n- Policy name: allow_all_insert\n- FOR: INSERT\n- WITH CHECK: true\n\nO desactiva RLS temporalmente en bingo_games.')
-          setCreating(false)
-          return
+          alert('⚠️ La creacion se demoro mas de 10 segundos.\n\nVe a Supabase → Policies → bingo_games y agrega INSERT policy con WITH CHECK: true')
+          setCreating(false); return
         }
         throw e
       }
-      if (result?.error) {
-        alert('Error: ' + result.error.message + '\n\nDetalles: ' + JSON.stringify(result.error))
-        setCreating(false)
-        return
-      }
+      if (result?.error) { alert('Error: ' + result.error.message); setCreating(false); return }
       await fetchGame()
-    } catch(e) {
-      alert('Error inesperado: ' + e.message)
-    }
+    } catch(e) { alert('Error: ' + e.message) }
     setCreating(false)
+  }
+
+  async function saveGame() {
+    if (!game) return
+    const totalPrize = Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0)
+    await supabase.from('bingo_games').update({
+      title: form.title, prize_description: buildConfigJson(), prize_amount: totalPrize,
+      mode: form.mode, auto_interval: form.auto_interval
+    }).eq('id', game.id)
+    alert('✅ Bingo actualizado')
+    await fetchGame()
   }
 
   async function startGame() {
@@ -4593,17 +4829,14 @@ function AdminBingoPanel({ onBack }) {
     setAutoTimer(iv)
   }
 
-  async function callManualNumber() {
-    if (!game||!numInput) return
-    const num = parseInt(numInput)
-    if (isNaN(num)||num<1||num>75) { alert('Numero invalido (1-75)'); return }
-    const called = game.called_numbers || []
-    if (called.includes(num)) { alert(`El ${num} ya fue cantado!`); setNumInput(''); return }
+  async function callNumber(num) {
+    if (!game) return
     setCalling(true)
+    const called = game.called_numbers||[]
+    if (called.includes(num)) { setCalling(false); return }
     await supabase.from('bingo_games').update({ called_numbers:[...called,num], current_number:num, updated_at:new Date().toISOString() }).eq('id', game.id)
-    setNumInput('')
-    await fetchGame()
     setCalling(false)
+    setNumInput('')
   }
 
   async function callRandomNumber() {
@@ -4611,16 +4844,14 @@ function AdminBingoPanel({ onBack }) {
     setCalling(true)
     const called = game.called_numbers||[]
     const rem = Array.from({length:75},(_,i)=>i+1).filter(n=>!called.includes(n))
-    if (rem.length===0) { alert('Todos cantados!'); setCalling(false); return }
+    if (rem.length===0) { setCalling(false); return }
     const next = rem[Math.floor(Math.random()*rem.length)]
-    await supabase.from('bingo_games').update({ called_numbers:[...called,next], current_number:next, updated_at:new Date().toISOString() }).eq('id', game.id)
-    await fetchGame()
-    setCalling(false)
+    await callNumber(next)
   }
 
   function handleNumpad(val) {
-    if (val==='borrar') { setNumInput(''); return }
-    if (val==='cantar') { callManualNumber(); return }
+    if (val === 'borrar') { setNumInput(''); return }
+    if (val === 'cantar') { if (numInput) callNumber(parseInt(numInput)); return }
     const next = numInput + val
     if (parseInt(next)<=75 && next.length<=2) setNumInput(next)
   }
@@ -4639,70 +4870,122 @@ function AdminBingoPanel({ onBack }) {
   const currentNum = game?.current_number
   const cfg = getConfig(game)
   const winners = cfg.winners || []
-  const WTL = { linea:'→ Linea', vertical:'↓ Vertical', diagonal:'↗ Diagonal', esquinas:'◻️ Esquinas', full:'⬛ Carton lleno' }
+  const WTL = { linea:'Línea', vertical:'Vertical', diagonal:'Diagonal', esquinas:'Esquinas', full:'Cartón lleno' }
+  const medals = ['🥇','🥈','🥉','🏅','⭐']
+
+  const FormField = ({label,children}) => <div style={{ marginBottom:12 }}><label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>{label}</label>{children}</div>
 
   return (
-    <div style={S.content}>
+    <div style={{ background:C.bg, minHeight:'100vh' }}>
       <style>{CSS}</style>
-      <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
-      <div style={{ ...S.card, marginBottom:14, position:'relative', overflow:'hidden' }}><GoldLine /><div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>Panel de Bingo</div></div>
+      <div style={{ background:C.bg2, padding:'11px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #1a1a1a' }}>
+        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>← Volver</button>
+        <span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>🎱 Panel Bingo</span>
+        <span style={{ width:40 }} />
+      </div>
+      <div style={{ padding:16, maxWidth:500, margin:'0 auto' }}>
 
       {!game ? (
-        <div style={{ ...S.card, position:'relative', overflow:'hidden' }}>
-          <GoldLine />
-          <div style={{ textAlign:'center', marginBottom:16 }}><div style={{ fontSize:40, marginBottom:6 }}>🎱</div><div style={{ color:'#fff', fontSize:15, fontWeight:900 }}>Crear nueva partida</div></div>
+        <div>
+          <div style={{ ...S.card, padding:16, marginBottom:12, position:'relative', overflow:'hidden' }}>
+            <GoldLine />
+            <div style={{ color:'#fff', fontSize:14, fontWeight:900, marginBottom:14, textAlign:'center' }}>Crear nueva partida</div>
 
-          <div style={{ marginBottom:12 }}><label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Titulo</label><input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} /></div>
+            <FormField label="Título"><input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} /></FormField>
 
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-            <div><label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Precio pack (6 cartones)</label><input type="number" value={form.pack_price} onChange={e=>setForm(p=>({...p,pack_price:parseInt(e.target.value)||0}))} /></div>
-            <div><label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Seg. entre balotas (auto)</label><input type="number" value={form.auto_interval} onChange={e=>setForm(p=>({...p,auto_interval:parseInt(e.target.value)||15}))} /></div>
-          </div>
+            <FormField label="Fecha y hora del bingo">
+              <input type="datetime-local" value={form.scheduled_at} onChange={e=>setForm(p=>({...p,scheduled_at:e.target.value}))} style={{ width:'100%' }} />
+            </FormField>
 
-          <div style={{ marginBottom:12 }}><label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Link del live (YouTube/IG/FB)</label><input value={form.live_url} onChange={e=>setForm(p=>({...p,live_url:e.target.value}))} placeholder="https://youtube.com/watch?v=..." />
-            {form.live_url && form.live_url.includes('youtu') && (
-              <div style={{ marginTop:8, background:'#000', borderRadius:10, overflow:'hidden', border:'1px solid #1a1a1a' }}>
-                <div style={{ position:'relative', paddingBottom:'56.25%', height:0 }}>
-                  <iframe src={form.live_url.replace('youtube.com/watch?v=','youtube.com/embed/').replace('youtu.be/','youtube.com/embed/').replace('youtube.com/live/','youtube.com/embed/')} style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', border:'none' }} allowFullScreen />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginBottom:14 }}>
-            <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:8 }}>Modo de canto</label>
-            <div style={{ display:'flex', gap:8 }}>
-              {[['manual','Manual','Yo escribo'],['auto','Automatico','La app saca']].map(([v,l,d])=>(
-                <button key={v} onClick={()=>setForm(p=>({...p,mode:v}))} style={{ flex:1, border:`1px solid ${form.mode===v?C.gold:'rgba(230,190,0,0.2)'}`, background:form.mode===v?'rgba(230,190,0,0.1)':C.bg3, borderRadius:9, padding:10, cursor:'pointer', fontFamily:'inherit', textAlign:'center' }}>
-                  <div style={{ color:form.mode===v?C.gold:C.muted, fontSize:12, fontWeight:700 }}>{l}</div><div style={{ color:form.mode===v?'#666':'#444', fontSize:9, marginTop:2 }}>{d}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* PREMIOS POR JUGADA */}
-          <div style={{ marginBottom:16 }}>
-            <label style={{ fontSize:10, fontWeight:700, color:C.gold, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:8 }}>💰 Premios por jugada</label>
-            {Object.entries(WTL).map(([type,label]) => {
-              const active = form.win_types.includes(type)
-              return (
-                <div key={type} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                  <button onClick={()=>toggleWinType(type)} style={{ width:36, height:36, borderRadius:8, background:active?'rgba(230,190,0,0.15)':'#1a1a1a', border:`1px solid ${active?'rgba(230,190,0,0.4)':'#2a2a2a'}`, color:active?C.gold:'#555', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>{active?'✓':'—'}</button>
-                  <span style={{ color:active?'#fff':'#555', fontSize:11, fontWeight:700, minWidth:90 }}>{label}</span>
-                  <div style={{ flex:1, position:'relative' }}>
-                    <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'#555', fontSize:12, pointerEvents:'none' }}>$</span>
-                    <input type="number" value={form.prizes[type]||0} onChange={e=>setForm(p=>({...p,prizes:{...p.prizes,[type]:parseInt(e.target.value)||0}}))}
-                      style={{ width:'100%', opacity:active?1:.3, paddingLeft:26 }} disabled={!active} />
+            <FormField label="Link del live (YouTube/IG/FB)">
+              <input value={form.live_url} onChange={e=>setForm(p=>({...p,live_url:e.target.value}))} placeholder="https://youtube.com/watch?v=..." />
+              {form.live_url && form.live_url.includes('youtu') && (
+                <div style={{ marginTop:6, background:'#000', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, overflow:'hidden' }}>
+                  <div style={{ position:'relative', paddingBottom:'56.25%', height:0 }}>
+                    <iframe src={form.live_url.replace('youtube.com/watch?v=','youtube.com/embed/').replace('youtu.be/','youtube.com/embed/').replace('youtube.com/live/','youtube.com/embed/')} style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', border:'none' }} allowFullScreen />
                   </div>
                 </div>
-              )
-            })}
-            <div style={{ background:'rgba(230,190,0,0.06)', borderRadius:9, padding:'8px 12px', marginTop:8 }}>
-              <span style={{ color:C.gold, fontSize:11, fontWeight:700 }}>Total premios: {fmt(Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0))}</span>
-            </div>
-          </div>
+              )}
+            </FormField>
 
-          <button onClick={createGame} disabled={creating} style={{ ...S.btnGold, opacity:creating?.7:1 }}>{creating?'Creando...':'🎱 Crear partida'}</button>
+            {/* PRECIO Y CARTONES */}
+            <div style={{ background:'rgba(230,190,0,0.04)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:12, padding:12, marginBottom:12 }}>
+              <div style={{ color:C.gold, fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>Precio y cartones</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                <div><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:4 }}>Precio del pack</label><input type="number" value={form.pack_price} onChange={e=>setForm(p=>({...p,pack_price:parseInt(e.target.value)||0}))} /></div>
+                <div><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:4 }}>Cartones por pack</label><input type="number" value={form.cartones_per_pack} onChange={e=>setForm(p=>({...p,cartones_per_pack:parseInt(e.target.value)||6}))} /></div>
+              </div>
+              <div style={{ marginBottom:8 }}><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:4 }}>Máx. cartones por persona</label><input type="number" value={form.max_per_person} onChange={e=>setForm(p=>({...p,max_per_person:parseInt(e.target.value)||6}))} /></div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:8, padding:'8px 10px', cursor:'pointer' }} onClick={()=>setForm(p=>({...p,free_bingo:!p.free_bingo}))}>
+                <div><div style={{ color:'#27AE60', fontSize:12, fontWeight:700 }}>Bingo gratis</div><div style={{ color:C.muted, fontSize:9 }}>Los cartones no tienen costo</div></div>
+                <Toggle on={form.free_bingo} onToggle={()=>setForm(p=>({...p,free_bingo:!p.free_bingo}))} />
+              </div>
+            </div>
+
+            {/* MÉTODOS DE PAGO */}
+            <div style={{ background:'rgba(52,152,219,0.04)', border:'1px solid rgba(52,152,219,0.15)', borderRadius:12, padding:12, marginBottom:12 }}>
+              <div style={{ color:'#3498DB', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>Métodos de pago</div>
+              <div style={{ background:'#0a0a0a', border:'1px solid rgba(39,174,96,0.3)', borderRadius:8, padding:'8px 10px', marginBottom:6, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={{ color:'#fff', fontSize:12, fontWeight:600 }}>WhatsApp</span>
+                <span style={{ color:'#27AE60', fontSize:9, fontWeight:700 }}>SIEMPRE ACTIVO</span>
+              </div>
+              <div style={{ background:'#0a0a0a', border:`1px solid ${form.pay_methods.points?'rgba(230,190,0,0.3)':'#2a2a2a'}`, borderRadius:8, padding:'8px 10px', marginBottom:6, display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }} onClick={()=>setForm(p=>({...p,pay_methods:{...p.pay_methods,points:!p.pay_methods.points}}))}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <Toggle on={form.pay_methods.points} onToggle={()=>setForm(p=>({...p,pay_methods:{...p.pay_methods,points:!p.pay_methods.points}}))} />
+                  <span style={{ color:form.pay_methods.points?'#fff':'#888', fontSize:12, fontWeight:600 }}>Puntos</span>
+                </div>
+                {form.pay_methods.points && <input type="number" value={form.points_price} onChange={e=>{e.stopPropagation();setForm(p=>({...p,points_price:parseInt(e.target.value)||0}))}} onClick={e=>e.stopPropagation()} placeholder="Precio pts" style={{ width:80, textAlign:'right' }} />}
+              </div>
+              <div style={{ background:'#0a0a0a', border:`1px solid ${form.pay_methods.dinero?'rgba(93,173,226,0.3)':'#2a2a2a'}`, borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }} onClick={()=>setForm(p=>({...p,pay_methods:{...p.pay_methods,dinero:!p.pay_methods.dinero}}))}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <Toggle on={form.pay_methods.dinero} onToggle={()=>setForm(p=>({...p,pay_methods:{...p.pay_methods,dinero:!p.pay_methods.dinero}}))} />
+                  <span style={{ color:form.pay_methods.dinero?'#fff':'#888', fontSize:12, fontWeight:600 }}>Mi Dinero (saldo)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* SALA DE ESPERA */}
+            <div style={{ background:'rgba(230,126,34,0.04)', border:'1px solid rgba(230,126,34,0.15)', borderRadius:12, padding:12, marginBottom:12 }}>
+              <div style={{ color:'#E67E22', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>Sala de espera</div>
+              <div><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:4 }}>% de inscritos a mostrar</label>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}><input type="number" value={form.fake_percent} onChange={e=>setForm(p=>({...p,fake_percent:parseInt(e.target.value)||0}))} style={{ flex:1 }} /><span style={{ color:C.muted, fontSize:12, fontWeight:700 }}>%</span></div>
+              <div style={{ color:C.muted, fontSize:9, marginTop:4 }}>Se muestra en la barra de progreso para animar a comprar</div></div>
+            </div>
+
+            {/* MODO */}
+            <FormField label="Modo de balotas">
+              <div style={{ display:'flex', gap:8 }}>
+                {[['manual','Manual','Tú escribes cada balota'],['auto','Automático','Sale una cada X seg']].map(([v,l,d])=>(
+                  <button key={v} onClick={()=>setForm(p=>({...p,mode:v}))} style={{ flex:1, border:`1px solid ${form.mode===v?C.gold:'rgba(230,190,0,0.2)'}`, background:form.mode===v?'rgba(230,190,0,0.1)':C.bg3, borderRadius:9, padding:10, cursor:'pointer', fontFamily:'inherit', textAlign:'center' }}>
+                    <div style={{ color:form.mode===v?C.gold:C.muted, fontSize:12, fontWeight:700 }}>{l}</div><div style={{ color:form.mode===v?'#666':'#444', fontSize:9, marginTop:2 }}>{d}</div>
+                  </button>
+                ))}
+              </div>
+            </FormField>
+            {form.mode==='auto' && <FormField label="Seg. entre balotas"><input type="number" value={form.auto_interval} onChange={e=>setForm(p=>({...p,auto_interval:parseInt(e.target.value)||15}))} /></FormField>}
+
+            {/* PREMIOS */}
+            <FormField label="Premios">
+              {[['linea','Línea','→'],['vertical','Vertical','↓'],['diagonal','Diagonal','↗'],['esquinas','Esquinas','◻️'],['full','Cartón lleno','⬛']].map(([type,label,icon])=>{
+                const active = form.win_types.includes(type)
+                return (
+                  <div key={type} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                    <button onClick={()=>toggleWinType(type)} style={{ width:28, height:28, borderRadius:6, border:`1px solid ${active?C.gold:'#2a2a2a'}`, background:active?'rgba(230,190,0,0.15)':'#1a1a1a', cursor:'pointer', color:active?C.gold:'#555', fontSize:12, fontWeight:700, fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center' }}>{active?'✓':''}</button>
+                    <span style={{ color:active?'#fff':'#555', fontSize:11, fontWeight:600, minWidth:80 }}>{icon} {label}</span>
+                    <div style={{ flex:1, position:'relative' }}>
+                      <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'#555', fontSize:12, pointerEvents:'none' }}>$</span>
+                      <input type="number" value={form.prizes[type]||0} onChange={e=>setForm(p=>({...p,prizes:{...p.prizes,[type]:parseInt(e.target.value)||0}}))} style={{ width:'100%', opacity:active?1:.3, paddingLeft:26 }} disabled={!active} />
+                    </div>
+                  </div>
+                )
+              })}
+              <div style={{ background:'rgba(230,190,0,0.06)', borderRadius:9, padding:'8px 12px', marginTop:8 }}>
+                <span style={{ color:C.gold, fontSize:11, fontWeight:700 }}>Total premios: {fmt(Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0))}</span>
+              </div>
+            </FormField>
+
+            <button onClick={createGame} disabled={creating} style={{ ...S.btnGold, opacity:creating?.7:1 }}>{creating?'Creando...':'🎱 Crear partida'}</button>
+          </div>
         </div>
       ) : (
         <div>
@@ -4719,6 +5002,29 @@ function AdminBingoPanel({ onBack }) {
                 <div key={l} style={{ background:'rgba(230,190,0,0.06)', borderRadius:8, padding:'6px 8px', flex:1, textAlign:'center' }}><div style={{ color:C.muted, fontSize:9 }}>{l}</div><div style={{ color:c, fontSize:16, fontWeight:900 }}>{v}</div></div>
               ))}
             </div>
+          </div>
+
+          {/* EDIT BUTTON */}
+          <button onClick={saveGame} style={{ ...S.btnOutline, borderColor:'rgba(52,152,219,0.4)', color:'#3498DB', marginBottom:12, fontSize:12 }}>✏️ Guardar cambios del bingo</button>
+
+          {/* EDITABLE FIELDS */}
+          <div style={{ ...S.card, marginBottom:12, borderColor:'rgba(52,152,219,0.2)' }}>
+            <div style={{ color:'#3498DB', fontSize:11, fontWeight:700, marginBottom:8 }}>✏️ Editar</div>
+            <FormField label="Título"><input value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))} /></FormField>
+            <FormField label="Fecha y hora"><input type="datetime-local" value={form.scheduled_at} onChange={e=>setForm(p=>({...p,scheduled_at:e.target.value}))} style={{ width:'100%' }} /></FormField>
+            <FormField label="Link del live">
+              <input value={form.live_url} onChange={e=>setForm(p=>({...p,live_url:e.target.value}))} placeholder="https://youtube.com/watch?v=..." />
+              {form.live_url && form.live_url.includes('youtu') && (
+                <div style={{ marginTop:6, background:'#000', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, overflow:'hidden' }}>
+                  <div style={{ position:'relative', paddingBottom:'56.25%', height:0 }}>
+                    <iframe src={form.live_url.replace('youtube.com/watch?v=','youtube.com/embed/').replace('youtu.be/','youtube.com/embed/').replace('youtube.com/live/','youtube.com/embed/')} style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', border:'none' }} allowFullScreen />
+                  </div>
+                </div>
+              )}
+            </FormField>
+            <FormField label="% inscritos (sala espera)">
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}><input type="number" value={form.fake_percent} onChange={e=>setForm(p=>({...p,fake_percent:parseInt(e.target.value)||0}))} style={{ flex:1 }} /><span style={{ color:C.muted }}>%</span></div>
+            </FormField>
           </div>
 
           {game.status==='waiting' && <button onClick={startGame} style={{ ...S.btnGold, background:'linear-gradient(135deg,#27AE60,#2ECC71)', color:'#fff', marginBottom:12, fontSize:15 }}>▶ Iniciar EN VIVO</button>}
@@ -4806,5 +5112,6 @@ function AdminBingoPanel({ onBack }) {
         </div>
       )}
     </div>
+  </div>
   )
 }
