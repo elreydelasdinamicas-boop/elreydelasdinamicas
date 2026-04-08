@@ -1026,7 +1026,7 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
 
               {/* Header — tu numero */}
               <div style={{ display:'flex', alignItems:'center', gap:12, background:'rgba(52,152,219,0.08)', border:'1px solid rgba(52,152,219,0.2)', borderRadius:14, padding:14, marginBottom:14 }}>
-                                <div style={{ width:52, height:52, background:'rgba(52,152,219,0.15)', border:'2px solid #3498DB', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <div style={{ width:52, height:52, background:'rgba(52,152,219,0.15)', border:'2px solid #3498DB', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                   <span style={{ color:'#5DADE2', fontSize:22, fontWeight:900 }}>{pad(selectedNum)}</span>
                 </div>
                 <div style={{ flex:1 }}>
@@ -1722,7 +1722,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
 
       {/* ── HEADER NEGRO ── */}
       <div style={{ background:'#000', padding:'16px 16px 14px', borderBottom:'1px solid #111' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ width:52, height:52, background:'#111', borderRadius:'50%', border:'2px solid #E6BE00', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:900, color:C.gold, position:'relative', flexShrink:0 }}>
               {name[0]?.toUpperCase() || 'U'}
@@ -2054,7 +2054,7 @@ function RaffleTicketGroup({ group, status, profile, appConfig, onRefresh, onSup
     ctx.fillText(raffle?.title || 'Sorteo', 400, 145)
     // Numbers
     ctx.fillStyle = '#E6BE00'
-        ctx.font = 'bold 48px system-ui'
+    ctx.font = 'bold 48px system-ui'
     ctx.fillText(allNums.map(n=>'#'+String(n).padStart(2,'0')).join('  '), 400, 230)
     // Divider
     ctx.strokeStyle = '#222'
@@ -3082,7 +3082,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
             <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Texto del mensaje</label>
             <textarea value={localConfig.bannerText||''} onChange={e=>setLocalConfig(p=>({...p,bannerText:e.target.value}))} rows={3} placeholder="🔥 ¡Hoy es tu día de suerte! · 💰 Premios reales cada semana" style={{ marginBottom:10 }} />
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-                            <div>
+              <div>
                 <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:6 }}>Color de fondo</label>
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                   <input type="color" value={localConfig.bannerBg||'#E6BE00'} onChange={e=>setLocalConfig(p=>({...p,bannerBg:e.target.value}))} style={{ width:40, height:32, border:`1px solid ${C.cardBorder}`, borderRadius:6, cursor:'pointer', padding:2, background:'transparent' }} />
@@ -3446,7 +3446,7 @@ function ManualSaleForm({ raffles, onSaved }) {
         <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Dinamica</label>
         <select value={f.raffleId} onChange={e=>setF(p=>({...p,raffleId:e.target.value}))} style={{ background:'#1a1a1a', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:10, padding:'11px 14px', color:f.raffleId?'#fff':'#444', fontSize:14, outline:'none', width:'100%', fontFamily:'inherit' }}>
           <option value="">Selecciona una dinamica</option>
-          {raffles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+                    {raffles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
         </select>
       </div>
       {[['Nombre del participante','name','text','Carlos Rodriguez'],['Telefono / WhatsApp','phone','tel','310 000 0000'],['Numeros separados por coma','numbers','text','07, 23, 45']].map(([label,key,type,ph]) => (
@@ -4080,6 +4080,8 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     }))
     for (const wt of winTypes) {
       if (winners.some(w => w.type === wt && w.userId === user.id)) continue
+      const maxWPT = cfg.max_winners_per_type || 1
+      if (winners.filter(w => w.type === wt).length >= maxWPT) continue
       let won = false
       if (wt === 'linea') { for (let r=0;r<5;r++) if (grid[r].every(Boolean)) { won=true; break } }
       else if (wt === 'vertical') { for (let c=0;c<5;c++) if (Array.from({length:5},(_,r)=>grid[r][c]).every(Boolean)) { won=true; break } }
@@ -4110,7 +4112,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     setClaimSending(true)
     const cfg = getConfig(game)
     const winners = (cfg.winners || []).map(w =>
-            w.userId === winnerEntry.userId && w.type === winnerEntry.type
+      w.userId === winnerEntry.userId && w.type === winnerEntry.type
         ? { ...w, claim: { phone: claimForm.phone, method: claimForm.method, account: claimForm.account, note: claimForm.note, claimedAt: new Date().toISOString(), paid: false } }
         : w
     )
@@ -4143,14 +4145,14 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     })
   }
 
-  async function buyPack() {
+  async function buyPack(packOpt) {
     if (!user) { onLogin(); return }
     const cfg = getConfig(game)
-    const cPerPack = cfg.cartones_per_pack || 6
-    const maxPer = cfg.max_per_person || cPerPack
-    if (myCartones.length >= maxPer) { alert(`¡Ya tienes el máximo de ${maxPer} cartones!`); return }
+    const numCartones = packOpt?.cartones || cfg.cartones_per_pack || 6
+    const maxPer = cfg.max_per_person || 12
+    if (myCartones.length + numCartones > maxPer) { alert(`¡Máximo ${maxPer} cartones por persona! Ya tienes ${myCartones.length}.`); return }
     setBuyingPack(true)
-    const cartones = Array.from({length:cPerPack},(_,i) => ({
+    const cartones = Array.from({length:numCartones},(_,i) => ({
       game_id: game.id, user_id: user.id, numbers: generateCarton(), marked: [], carton_number: myCartones.length+i+1, paid: false
     }))
     const { error } = await supabase.from('bingo_cartones').insert(cartones)
@@ -4228,7 +4230,8 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     esquinas: 'Marca los 4 números de las esquinas del cartón (arriba-izq, arriba-der, abajo-izq, abajo-der).',
     full: 'Marca TODOS los 25 números de tu cartón. Es el premio mayor.'
   }
-  const cPerPack = cfg.cartones_per_pack || 6
+  const gamePacks = cfg.packs || [{ name:'Pack '+(cfg.cartones_per_pack||6), cartones:cfg.cartones_per_pack||6, price:cfg.pack_price||packPrice }]
+  const cPerPack = gamePacks[0]?.cartones || cfg.cartones_per_pack || 6
   const isFree = !!cfg.free_bingo
   const allWon = winTypes.length > 0 && winTypes.every(wt => wonTypes.includes(wt))
   const isFinished = game?.status === 'finished'
@@ -4394,27 +4397,33 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
         {/* BUY PACK */}
         {!user ? (
           <div style={{ padding:'20px 0' }}><div style={{ color:C.muted, fontSize:13, marginBottom:12 }}>Inicia sesión para jugar</div><button onClick={onLogin} style={{ ...S.btnGold, maxWidth:200, margin:'0 auto' }}>Entrar a jugar</button></div>
-        ) : myCartones.length === 0 ? (
-          <div style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:14, padding:20, marginBottom:10 }}>
-            <div style={{ fontSize:28, marginBottom:4 }}>🎟️</div>
-            <div style={{ color:'#fff', fontSize:15, fontWeight:900, marginBottom:2 }}>Pack de {cPerPack} cartones</div>
-            <div style={{ color:C.gold, fontSize:22, fontWeight:900, marginBottom:10 }}>{isFree?'GRATIS':fmt(packPrice)}</div>
-            {isFree ? (
-              <button onClick={buyPack} disabled={buyingPack} style={{ ...S.btnGold, width:'100%', opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':'🎟️ Obtener cartones gratis'}</button>
-            ) : (
-              <>
-                <button onClick={buyPack} disabled={buyingPack} style={{ ...S.btnGold, width:'100%', marginBottom:6, opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':'Pagar por WhatsApp'}</button>
-                {payMethods.points && pointsPrice > 0 && (
-                  <button onClick={buyPack} disabled={buyingPack} style={{ width:'100%', background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:10, padding:'8px', color:C.gold, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Pagar con Puntos · {fmt(pointsPrice)} pts</button>
-                )}
-              </>
-            )}
-          </div>
         ) : (
-          <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:12, padding:12, marginBottom:10 }}>
-            <div style={{ color:'#27AE60', fontSize:14, fontWeight:900, marginBottom:2 }}>✅ ¡Tienes {myCartones.length} cartones!</div>
-            <div style={{ color:C.muted, fontSize:11 }}>Cuando inicie el bingo, tus cartones se activarán automáticamente</div>
-          </div>
+          <>
+            {myCartones.length > 0 && (
+              <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:12, padding:12, marginBottom:10 }}>
+                <div style={{ color:'#27AE60', fontSize:14, fontWeight:900, marginBottom:2 }}>✅ ¡Tienes {myCartones.length} cartones!</div>
+                <div style={{ color:C.muted, fontSize:11 }}>Cuando inicie el bingo, tus cartones se activarán automáticamente</div>
+              </div>
+            )}
+            {gamePacks.map((pack,pi)=>(
+              <div key={pi} style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:14, padding:16, marginBottom:8, textAlign:'center' }}>
+                <div style={{ color:'#fff', fontSize:14, fontWeight:900, marginBottom:2 }}>{pack.name || `Pack de ${pack.cartones}`}</div>
+                <div style={{ color:C.muted, fontSize:11, marginBottom:4 }}>{pack.cartones} cartones</div>
+                <div style={{ color:C.gold, fontSize:20, fontWeight:900, marginBottom:8 }}>{isFree?'GRATIS':fmt(pack.price)}</div>
+                {isFree ? (
+                  <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ ...S.btnGold, width:'100%', opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':'🎟️ Obtener gratis'}</button>
+                ) : (
+                  <>
+                    <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ ...S.btnGold, width:'100%', marginBottom:6, opacity:buyingPack?.7:1, fontSize:12 }}>{buyingPack?'Generando...':'Comprar por WhatsApp'}</button>
+                    {payMethods.points && pointsPrice > 0 && (
+                      <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ width:'100%', background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:10, padding:'7px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Puntos · {fmt(pointsPrice)} pts</button>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+            {myCartones.length > 0 && <div style={{ color:C.muted, fontSize:10, textAlign:'center', marginBottom:6 }}>Máx. {cfg.max_per_person||12} cartones · Tienes {myCartones.length}</div>}
+          </>
         )}
 
         {/* SHARE FOR FREE CARTON */}
@@ -4564,12 +4573,15 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
         {!user ? (
           <div style={{ textAlign:'center', padding:'20px 0' }}><div style={{ color:C.muted, fontSize:13, marginBottom:12 }}>Inicia sesión para jugar</div><button onClick={onLogin} style={{ ...S.btnGold, maxWidth:200, margin:'0 auto' }}>Entrar a jugar</button></div>
         ) : myCartones.length===0 ? (
-          <div style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:14, padding:24, textAlign:'center', marginBottom:14 }}>
-            <div style={{ fontSize:32, marginBottom:8 }}>🎟️</div>
-            <div style={{ color:'#fff', fontSize:15, fontWeight:900, marginBottom:4 }}>Pack de {cPerPack} Cartones</div>
-            <div style={{ color:C.gold, fontSize:22, fontWeight:900, marginBottom:4 }}>{isFree?'GRATIS':fmt(packPrice)}</div>
-            <div style={{ color:C.muted, fontSize:11, marginBottom:16 }}>{cPerPack} cartones aleatorios para esta partida</div>
-            <button onClick={buyPack} disabled={buyingPack} style={{ ...S.btnGold, opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':(isFree?'🎟️ Obtener cartones gratis':'🎟️ Comprar Pack')}</button>
+          <div style={{ marginBottom:14 }}>
+            {gamePacks.map((pack,pi)=>(
+              <div key={pi} style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:14, padding:16, textAlign:'center', marginBottom:8 }}>
+                <div style={{ color:'#fff', fontSize:14, fontWeight:900, marginBottom:2 }}>{pack.name || `Pack de ${pack.cartones}`}</div>
+                <div style={{ color:C.muted, fontSize:11, marginBottom:2 }}>{pack.cartones} cartones</div>
+                <div style={{ color:C.gold, fontSize:20, fontWeight:900, marginBottom:8 }}>{isFree?'GRATIS':fmt(pack.price)}</div>
+                <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ ...S.btnGold, opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':(isFree?'🎟️ Obtener gratis':'🎟️ Comprar')}</button>
+              </div>
+            ))}
           </div>
         ) : (
           <>
@@ -4690,9 +4702,11 @@ function AdminBingoPanel({ onBack }) {
     title: 'Bingo La Casa', pack_price: 6000, mode: 'manual', auto_interval: 15, live_url: '',
     win_types: ['linea', 'vertical', 'diagonal', 'esquinas', 'full'],
     prizes: { linea: 30000, vertical: 30000, diagonal: 40000, esquinas: 40000, full: 50000 },
-    scheduled_at: '', cartones_per_pack: 6, max_per_person: 6, free_bingo: false,
+    scheduled_at: '', cartones_per_pack: 6, max_per_person: 12, free_bingo: false,
     fake_percent: 0, points_price: 0,
-    pay_methods: { whatsapp: true, points: false, dinero: false }
+    pay_methods: { whatsapp: true, points: false, dinero: false },
+    max_winners_per_type: 1,
+    packs: [{ name:'Pack 6', cartones:6, price:6000 }]
   })
   const [creating, setCreating] = useState(false)
   const [numInput, setNumInput] = useState('')
@@ -4726,20 +4740,23 @@ function AdminBingoPanel({ onBack }) {
 
   useEffect(() => { if (game) fetchStats() }, [game?.id, game?.status])
 
-  // Load game config into form for editing
+  // Load game config into form for editing — only once per game id
+  const loadedGameRef = useRef(null)
   useEffect(() => {
-    if (game && !editing) {
+    if (game && loadedGameRef.current !== game.id) {
+      loadedGameRef.current = game.id
       const cfg = getConfig(game)
       setForm(p => ({
         ...p, title: game.title || p.title, pack_price: cfg.pack_price || game.carton_price || p.pack_price,
         mode: game.mode || p.mode, auto_interval: game.auto_interval || p.auto_interval,
         live_url: cfg.live_url || '', win_types: cfg.win_types || p.win_types, prizes: cfg.prizes || p.prizes,
         scheduled_at: cfg.scheduled_at || '', cartones_per_pack: cfg.cartones_per_pack || 6,
-        max_per_person: cfg.max_per_person || 6, free_bingo: !!cfg.free_bingo,
+        max_per_person: cfg.max_per_person || 12, free_bingo: !!cfg.free_bingo,
         fake_percent: cfg.fake_percent || 0, points_price: cfg.points_price || 0,
-        pay_methods: cfg.pay_methods || { whatsapp: true, points: false, dinero: false }
+        pay_methods: cfg.pay_methods || { whatsapp: true, points: false, dinero: false },
+        max_winners_per_type: cfg.max_winners_per_type || 1,
+        packs: cfg.packs || [{ name:'Pack '+(cfg.cartones_per_pack||6), cartones:cfg.cartones_per_pack||6, price:cfg.pack_price||6000 }]
       }))
-      setEditing(true)
     }
   }, [game?.id])
 
@@ -4767,7 +4784,9 @@ function AdminBingoPanel({ onBack }) {
       scheduled_at: form.scheduled_at, cartones_per_pack: form.cartones_per_pack,
       max_per_person: form.max_per_person, free_bingo: form.free_bingo,
       fake_percent: form.fake_percent, points_price: form.points_price,
-      pay_methods: form.pay_methods
+      pay_methods: form.pay_methods,
+      max_winners_per_type: form.max_winners_per_type,
+      packs: form.packs
     })
   }
 
@@ -4893,7 +4912,7 @@ function AdminBingoPanel({ onBack }) {
         <span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>🎱 Panel Bingo</span>
         <span style={{ width:40 }} />
       </div>
-      <div style={{ padding:16, maxWidth:500, margin:'0 auto' }}>
+      <div style={{ padding:'16px 16px 120px', maxWidth:500, margin:'0 auto' }}>
 
       {!game ? (
         <div>
@@ -4918,17 +4937,29 @@ function AdminBingoPanel({ onBack }) {
               )}
             </FormField>
 
-            {/* PRECIO Y CARTONES */}
+            {/* PACKS Y CARTONES */}
             <div style={{ background:'rgba(230,190,0,0.04)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:12, padding:12, marginBottom:12 }}>
-              <div style={{ color:C.gold, fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>Precio y cartones</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
-                <div><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:4 }}>Precio del pack</label><input type="number" value={form.pack_price} onChange={e=>setForm(p=>({...p,pack_price:parseInt(e.target.value)||0}))} /></div>
-                <div><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:4 }}>Cartones por pack</label><input type="number" value={form.cartones_per_pack} onChange={e=>setForm(p=>({...p,cartones_per_pack:parseInt(e.target.value)||6}))} /></div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                <div style={{ color:C.gold, fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:1 }}>Packs de cartones</div>
+                <button onClick={()=>setForm(p=>({...p,packs:[...p.packs,{name:'Pack '+(p.packs.length+1),cartones:6,price:6000}]}))} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:6, padding:'3px 10px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>+ Agregar pack</button>
               </div>
-              <div style={{ marginBottom:8 }}><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:4 }}>Máx. cartones por persona</label><input type="number" value={form.max_per_person} onChange={e=>setForm(p=>({...p,max_per_person:parseInt(e.target.value)||6}))} /></div>
+              {form.packs.map((pack,pi)=>(
+                <div key={pi} style={{ background:'#0a0a0a', border:'1px solid #2a2a2a', borderRadius:10, padding:10, marginBottom:8, position:'relative' }}>
+                  {form.packs.length > 1 && <button onClick={()=>setForm(p=>({...p,packs:p.packs.filter((_,j)=>j!==pi)}))} style={{ position:'absolute', top:6, right:8, background:'transparent', border:'none', color:'#E74C3C', fontSize:12, cursor:'pointer', fontFamily:'inherit', padding:2 }}>✕</button>}
+                  <div style={{ marginBottom:6 }}><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:3 }}>Nombre del pack</label><input value={pack.name} onChange={e=>{const v=e.target.value;setForm(p=>({...p,packs:p.packs.map((pk,j)=>j===pi?{...pk,name:v}:pk)}))}} placeholder="Ej: Pack Básico" /></div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                    <div><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:3 }}>Cartones</label><input type="number" value={pack.cartones} onChange={e=>{const v=parseInt(e.target.value)||1;setForm(p=>({...p,packs:p.packs.map((pk,j)=>j===pi?{...pk,cartones:v}:pk)}))}} min="1" /></div>
+                    <div><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:3 }}>Precio $</label><input type="number" value={pack.price} onChange={e=>{const v=parseInt(e.target.value)||0;setForm(p=>({...p,packs:p.packs.map((pk,j)=>j===pi?{...pk,price:v}:pk)}))}} /></div>
+                  </div>
+                </div>
+              ))}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8, marginTop:8 }}>
+                <div><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:4 }}>Máx. cartones por persona</label><input type="number" value={form.max_per_person} onChange={e=>setForm(p=>({...p,max_per_person:parseInt(e.target.value)||12}))} /></div>
+                <div><label style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:'uppercase', display:'block', marginBottom:4 }}>Ganadores por premio</label><input type="number" value={form.max_winners_per_type} onChange={e=>setForm(p=>({...p,max_winners_per_type:parseInt(e.target.value)||1}))} min="1" /></div>
+              </div>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:8, padding:'8px 10px', cursor:'pointer' }} onClick={()=>setForm(p=>({...p,free_bingo:!p.free_bingo}))}>
                 <div><div style={{ color:'#27AE60', fontSize:12, fontWeight:700 }}>Bingo gratis</div><div style={{ color:C.muted, fontSize:9 }}>Los cartones no tienen costo</div></div>
-                <Toggle on={form.free_bingo} onToggle={()=>setForm(p=>({...p,free_bingo:!p.free_bingo}))} />
+                <Toggle on={form.free_bingo} />
               </div>
             </div>
 
@@ -4939,16 +4970,16 @@ function AdminBingoPanel({ onBack }) {
                 <span style={{ color:'#fff', fontSize:12, fontWeight:600 }}>WhatsApp</span>
                 <span style={{ color:'#27AE60', fontSize:9, fontWeight:700 }}>SIEMPRE ACTIVO</span>
               </div>
-              <div style={{ background:'#0a0a0a', border:`1px solid ${form.pay_methods.points?'rgba(230,190,0,0.3)':'#2a2a2a'}`, borderRadius:8, padding:'8px 10px', marginBottom:6, display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }} onClick={()=>setForm(p=>({...p,pay_methods:{...p.pay_methods,points:!p.pay_methods.points}}))}>
-                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <Toggle on={form.pay_methods.points} onToggle={()=>setForm(p=>({...p,pay_methods:{...p.pay_methods,points:!p.pay_methods.points}}))} />
+              <div style={{ background:'#0a0a0a', border:`1px solid ${form.pay_methods.points?'rgba(230,190,0,0.3)':'#2a2a2a'}`, borderRadius:8, padding:'8px 10px', marginBottom:6, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }} onClick={()=>setForm(p=>({...p,pay_methods:{...p.pay_methods,points:!p.pay_methods.points}}))}>
+                  <Toggle on={form.pay_methods.points} />
                   <span style={{ color:form.pay_methods.points?'#fff':'#888', fontSize:12, fontWeight:600 }}>Puntos</span>
                 </div>
-                {form.pay_methods.points && <input type="number" value={form.points_price} onChange={e=>{e.stopPropagation();setForm(p=>({...p,points_price:parseInt(e.target.value)||0}))}} onClick={e=>e.stopPropagation()} placeholder="Precio pts" style={{ width:80, textAlign:'right' }} />}
+                {form.pay_methods.points && <input type="number" value={form.points_price} onChange={e=>setForm(p=>({...p,points_price:parseInt(e.target.value)||0}))} placeholder="Precio pts" style={{ width:80, textAlign:'right' }} onClick={e=>e.stopPropagation()} />}
               </div>
               <div style={{ background:'#0a0a0a', border:`1px solid ${form.pay_methods.dinero?'rgba(93,173,226,0.3)':'#2a2a2a'}`, borderRadius:8, padding:'8px 10px', display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }} onClick={()=>setForm(p=>({...p,pay_methods:{...p.pay_methods,dinero:!p.pay_methods.dinero}}))}>
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <Toggle on={form.pay_methods.dinero} onToggle={()=>setForm(p=>({...p,pay_methods:{...p.pay_methods,dinero:!p.pay_methods.dinero}}))} />
+                  <Toggle on={form.pay_methods.dinero} />
                   <span style={{ color:form.pay_methods.dinero?'#fff':'#888', fontSize:12, fontWeight:600 }}>Mi Dinero (saldo)</span>
                 </div>
               </div>
