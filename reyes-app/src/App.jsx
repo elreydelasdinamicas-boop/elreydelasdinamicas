@@ -1727,8 +1727,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <div style={{ width:52, height:52, background:'#111', borderRadius:'50%', border:'2px solid #E6BE00', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:900, color:C.gold, position:'relative', flexShrink:0 }}>
               {name[0]?.toUpperCase() || 'U'}
               <div style={{ position:'absolute', bottom:2, right:2, width:12, height:12, background:C.green, borderRadius:'50%', border:'2px solid #000' }} className="pulse"></div>
-            </div>
-                        <div>
+                          </div>
+            <div>
               <div style={{ color:'#fff', fontSize:17, fontWeight:900, lineHeight:1.2 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
               <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
                 <div style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'2px 9px' }}>
@@ -3456,9 +3456,9 @@ function ManualSaleForm({ raffles, onSaved }) {
         </div>
       ))}
       <div>
-        <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Estado del pago</label>
+                <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Estado del pago</label>
         <div style={{ display:'flex', gap:8 }}>
-                    {[['paid','Pagado'],['reserved','Reservado']].map(([v,l]) => (
+          {[['paid','Pagado'],['reserved','Reservado']].map(([v,l]) => (
             <button key={v} onClick={()=>setF(p=>({...p,status:v}))} style={{ flex:1, border:`1px solid ${f.status===v?C.gold:'rgba(201,162,39,0.2)'}`, background:f.status===v?'rgba(201,162,39,0.15)':C.bg3, borderRadius:9, padding:'9px', textAlign:'center', color:f.status===v?C.gold:C.muted, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{l}</button>
           ))}
         </div>
@@ -4725,6 +4725,7 @@ function AdminBingoPanel({ onBack }) {
   const [stats, setStats] = useState({ players:0, packs:0, revenue:0 })
   const [editing, setEditing] = useState(false)
   const gameRef = useRef(null)
+  const pollPaused = useRef(false)
 
   function getConfig(g) { try { return JSON.parse(g?.prize_description||'{}') } catch { return {} } }
 
@@ -4771,9 +4772,9 @@ function AdminBingoPanel({ onBack }) {
   }, [game?.id])
 
   async function fetchGame() {
+    if (pollPaused.current) return
     const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
     const newData = data || null
-    // Only update state if something actually changed to prevent re-renders
     setGame(prev => {
       if (!prev && !newData) return prev
       if (!prev || !newData) { gameRef.current = newData; return newData }
@@ -4809,40 +4810,31 @@ function AdminBingoPanel({ onBack }) {
 
   async function createGame() {
     setCreating(true)
+    pollPaused.current = true
     try {
       const cfgJson = buildConfigJson()
       const insertData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
-      alert('Intentando crear bingo... Si esto se queda pegado, revisa la consola del navegador (F12)')
-      console.log('🎱 INSERT data:', insertData)
-      const res = await supabase.from('bingo_games').insert(insertData)
-      console.log('🎱 INSERT response:', JSON.stringify(res))
-      if (res.error) {
-        alert('❌ Error de Supabase:\n' + res.error.message + '\n\nCode: ' + (res.error.code||'') + '\nDetails: ' + (res.error.details||'') + '\nHint: ' + (res.error.hint||''))
+      const { error } = await supabase.from('bingo_games').insert(insertData)
+      if (error) {
+        alert('❌ Error: ' + error.message)
       } else {
-        alert('✅ ¡Bingo creado exitosamente!')
+        alert('✅ ¡Bingo creado!')
       }
-      await fetchGame()
     } catch(e) {
-      alert('❌ Error JS: ' + e.message)
-      console.error('🎱 Error:', e)
+      alert('❌ Error: ' + e.message)
     }
+    pollPaused.current = false
+    await fetchGame()
     setCreating(false)
   }
 
   async function saveGame() {
     if (!game) return
-    const totalPrize = Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0)
-    const updateData = { title: form.title, prize_description: buildConfigJson() }
-    // Try optional columns
-    try { updateData.prize_amount = totalPrize } catch(e) {}
-    try { updateData.mode = form.mode } catch(e) {}
-    try { updateData.auto_interval = form.auto_interval } catch(e) {}
-    const { error } = await supabase.from('bingo_games').update(updateData).eq('id', game.id)
-    if (error) {
-      // Retry with minimal
-      await supabase.from('bingo_games').update({ title: form.title, prize_description: buildConfigJson() }).eq('id', game.id)
-    }
-    alert('✅ Bingo actualizado')
+    pollPaused.current = true
+    const { error } = await supabase.from('bingo_games').update({ title: form.title, prize_description: buildConfigJson() }).eq('id', game.id)
+    pollPaused.current = false
+    if (error) alert('❌ Error: ' + error.message)
+    else alert('✅ Bingo actualizado')
     await fetchGame()
   }
 
@@ -4897,7 +4889,9 @@ function AdminBingoPanel({ onBack }) {
   async function finishGame() {
     if (!window.confirm('¿Finalizar partida? Los jugadores verán la pantalla de ganadores.')) return
     if (autoTimer) clearInterval(autoTimer)
+    pollPaused.current = true
     await supabase.from('bingo_games').update({ status:'finished' }).eq('id', game.id)
+    pollPaused.current = false
     setGame(null)
   }
 
@@ -4905,10 +4899,11 @@ function AdminBingoPanel({ onBack }) {
     if (!window.confirm('¿Eliminar este bingo? Se borrarán todos los cartones y datos.')) return
     if (!window.confirm('⚠️ CONFIRMAR: Esta acción es permanente y no se puede deshacer.')) return
     if (autoTimer) clearInterval(autoTimer)
+    pollPaused.current = true
     await supabase.from('bingo_cartones').delete().eq('game_id', game.id)
     await supabase.from('bingo_games').delete().eq('id', game.id)
+    pollPaused.current = false
     setGame(null)
-    setEditing(false)
   }
 
   function toggleWinType(type) { setForm(p=>({...p, win_types:p.win_types.includes(type)?p.win_types.filter(t=>t!==type):[...p.win_types,type]})) }
