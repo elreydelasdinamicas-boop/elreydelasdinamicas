@@ -1722,7 +1722,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
 
       {/* ── HEADER NEGRO ── */}
       <div style={{ background:'#000', padding:'16px 16px 14px', borderBottom:'1px solid #111' }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ width:52, height:52, background:'#111', borderRadius:'50%', border:'2px solid #E6BE00', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, fontWeight:900, color:C.gold, position:'relative', flexShrink:0 }}>
               {name[0]?.toUpperCase() || 'U'}
@@ -1732,7 +1732,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
               <div style={{ color:'#fff', fontSize:17, fontWeight:900, lineHeight:1.2 }}>Hola, <span style={{ color:C.gold }}>{name.split(' ')[0]}</span></div>
               <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:5 }}>
                 <div style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'2px 9px' }}>
-                  <span style={{ color:C.gold, fontSize:9 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
+                                    <span style={{ color:C.gold, fontSize:9 }}>{isAdmin ? 'Administrador' : 'Jugador'}</span>
                 </div>
                 {phone && <span style={{ color:'#555', fontSize:10 }}>{phone}</span>}
               </div>
@@ -3446,7 +3446,7 @@ function ManualSaleForm({ raffles, onSaved }) {
         <label style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1, display:'block', marginBottom:5 }}>Dinamica</label>
         <select value={f.raffleId} onChange={e=>setF(p=>({...p,raffleId:e.target.value}))} style={{ background:'#1a1a1a', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:10, padding:'11px 14px', color:f.raffleId?'#fff':'#444', fontSize:14, outline:'none', width:'100%', fontFamily:'inherit' }}>
           <option value="">Selecciona una dinamica</option>
-                    {raffles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+          {raffles.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
         </select>
       </div>
       {[['Nombre del participante','name','text','Carlos Rodriguez'],['Telefono / WhatsApp','phone','tel','310 000 0000'],['Numeros separados por coma','numbers','text','07, 23, 45']].map(([label,key,type,ph]) => (
@@ -3466,7 +3466,7 @@ function ManualSaleForm({ raffles, onSaved }) {
       <button onClick={save} disabled={saving} style={{ ...S.btnGold, opacity:saving?.7:1 }}>{saving?'Guardando...':'Registrar venta'}</button>
     </div>
   )
-}
+  }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
@@ -4125,10 +4125,20 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   async function fetchGame() {
     // First try active/waiting/paused
     const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
-    if (data) { setGame(data); return }
+    if (data) {
+      setGame(prev => {
+        if (prev && prev.id === data.id && prev.updated_at === data.updated_at && prev.status === data.status && JSON.stringify(prev.called_numbers) === JSON.stringify(data.called_numbers)) return prev
+        return data
+      })
+      return
+    }
     // If none, try finished (show until a new one is created)
     const { data: fin } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1).single()
-    setGame(fin || null)
+    setGame(prev => {
+      if (!prev && !fin) return prev
+      if (prev && fin && prev.id === fin.id) return prev
+      return fin || null
+    })
   }
 
   async function fetchMyCartones() {
@@ -4762,8 +4772,15 @@ function AdminBingoPanel({ onBack }) {
 
   async function fetchGame() {
     const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
-    setGame(data || null)
-    gameRef.current = data || null
+    const newData = data || null
+    // Only update state if something actually changed to prevent re-renders
+    setGame(prev => {
+      if (!prev && !newData) return prev
+      if (!prev || !newData) { gameRef.current = newData; return newData }
+      if (prev.id === newData.id && prev.updated_at === newData.updated_at && prev.status === newData.status && JSON.stringify(prev.called_numbers) === JSON.stringify(newData.called_numbers)) return prev
+      gameRef.current = newData
+      return newData
+    })
   }
 
   async function fetchStats() {
@@ -4794,34 +4811,47 @@ function AdminBingoPanel({ onBack }) {
     setCreating(true)
     try {
       const totalPrize = Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0)
-      const insertData = {
-        title: form.title, prize_description: buildConfigJson(), prize_amount: totalPrize,
-        carton_price: form.pack_price, mode: form.mode, auto_interval: form.auto_interval,
-        status: 'waiting', called_numbers: [],
+      const cfgJson = buildConfigJson()
+      // Only use columns guaranteed to exist — everything else goes in prize_description
+      const insertData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
+      // Try adding optional columns — ignore if they don't exist
+      try { insertData.prize_amount = totalPrize } catch(e) {}
+      try { insertData.carton_price = form.pack_price } catch(e) {}
+      try { insertData.mode = form.mode } catch(e) {}
+      try { insertData.auto_interval = form.auto_interval } catch(e) {}
+      console.log('Insert data:', JSON.stringify(insertData))
+      // First try with all columns
+      let { data, error } = await supabase.from('bingo_games').insert(insertData).select()
+      // If error mentions a column, retry without optional columns
+      if (error && (error.message||'').includes('column')) {
+        console.log('Retrying with minimal columns...')
+        const minData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
+        const r2 = await supabase.from('bingo_games').insert(minData).select()
+        data = r2.data; error = r2.error
       }
-      console.log('Inserting bingo_games:', JSON.stringify(insertData))
-      const { data, error } = await supabase.from('bingo_games').insert(insertData).select()
       if (error) {
-        console.error('Supabase error:', error)
-        alert('Error al crear bingo:\n\n' + error.message + (error.details ? '\n' + error.details : '') + (error.hint ? '\nHint: ' + error.hint : '') + '\n\nCódigo: ' + (error.code||''))
+        alert('Error: ' + error.message + (error.details ? '\n' + error.details : '') + (error.hint ? '\n' + error.hint : ''))
         setCreating(false); return
       }
-      console.log('Bingo creado:', data)
+      alert('✅ Bingo creado!')
       await fetchGame()
-    } catch(e) {
-      console.error('Error inesperado:', e)
-      alert('Error inesperado: ' + e.message)
-    }
+    } catch(e) { alert('Error: ' + e.message) }
     setCreating(false)
   }
 
   async function saveGame() {
     if (!game) return
     const totalPrize = Object.entries(form.prizes).filter(([k])=>form.win_types.includes(k)).reduce((s,[_,v])=>s+v,0)
-    await supabase.from('bingo_games').update({
-      title: form.title, prize_description: buildConfigJson(), prize_amount: totalPrize,
-      mode: form.mode, auto_interval: form.auto_interval
-    }).eq('id', game.id)
+    const updateData = { title: form.title, prize_description: buildConfigJson() }
+    // Try optional columns
+    try { updateData.prize_amount = totalPrize } catch(e) {}
+    try { updateData.mode = form.mode } catch(e) {}
+    try { updateData.auto_interval = form.auto_interval } catch(e) {}
+    const { error } = await supabase.from('bingo_games').update(updateData).eq('id', game.id)
+    if (error) {
+      // Retry with minimal
+      await supabase.from('bingo_games').update({ title: form.title, prize_description: buildConfigJson() }).eq('id', game.id)
+    }
     alert('✅ Bingo actualizado')
     await fetchGame()
   }
