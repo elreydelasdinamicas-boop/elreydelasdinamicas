@@ -669,20 +669,6 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        {appConfig.showHowItWorks && <button onClick={onHow} style={{ flex: 1, background: C.bg3, border: `1px solid ${C.cardBorder}`, borderRadius: 10, padding: '9px 10px', color: C.gold, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Como funciona?</button>}
-        {appConfig.showWinners && (
-          appConfig.winnersInstagram
-            ? <a href={appConfig.winnersInstagram} target="_blank" rel="noreferrer" style={{ flex:1, textDecoration:'none' }}>
-                <div style={{ background:'linear-gradient(135deg,rgba(240,148,51,0.1),rgba(188,24,136,0.1))', border:'1px solid rgba(220,39,67,0.3)', borderRadius:10, padding:'9px 10px', fontSize:11, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5, width:'100%' }}>
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" strokeWidth="2" strokeLinecap="round"><defs><linearGradient id="igG" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#f09433"/><stop offset="100%" stopColor="#bc1888"/></linearGradient></defs><rect x="2" y="2" width="20" height="20" rx="5" stroke="url(#igG)"/><circle cx="12" cy="12" r="4" stroke="url(#igG)"/><circle cx="17.5" cy="6.5" r="1" fill="#dc2743" stroke="none"/></svg>
-                  <span style={{ background:'linear-gradient(90deg,#f09433,#bc1888)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Ganadores</span>
-                </div>
-              </a>
-            : <button onClick={onWinners} style={{ flex: 1, background: C.bg3, border: '1px solid rgba(39,174,96,0.2)', borderRadius: 10, padding: '9px 10px', color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>🏆 Ganadores</button>
-        )}
-      </div>
-
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
         <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 15, margin: 0, textTransform: 'uppercase', letterSpacing: 1 }}>Dinamicas Activas</h2>
@@ -731,6 +717,21 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
           </div>
         </>
       )}
+
+      {/* COMO FUNCIONA + GANADORES — al final */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 20, marginBottom: 14 }}>
+        {appConfig.showHowItWorks && <button onClick={onHow} style={{ flex: 1, background: C.bg3, border: `1px solid ${C.cardBorder}`, borderRadius: 10, padding: '9px 10px', color: C.gold, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Como funciona?</button>}
+        {appConfig.showWinners && (
+          appConfig.winnersInstagram
+            ? <a href={appConfig.winnersInstagram} target="_blank" rel="noreferrer" style={{ flex:1, textDecoration:'none' }}>
+                <div style={{ background:'linear-gradient(135deg,rgba(240,148,51,0.1),rgba(188,24,136,0.1))', border:'1px solid rgba(220,39,67,0.3)', borderRadius:10, padding:'9px 10px', fontSize:11, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5, width:'100%' }}>
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" strokeWidth="2" strokeLinecap="round"><defs><linearGradient id="igG" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#f09433"/><stop offset="100%" stopColor="#bc1888"/></linearGradient></defs><rect x="2" y="2" width="20" height="20" rx="5" stroke="url(#igG)"/><circle cx="12" cy="12" r="4" stroke="url(#igG)"/><circle cx="17.5" cy="6.5" r="1" fill="#dc2743" stroke="none"/></svg>
+                  <span style={{ background:'linear-gradient(90deg,#f09433,#bc1888)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Ganadores</span>
+                </div>
+              </a>
+            : <button onClick={onWinners} style={{ flex: 1, background: C.bg3, border: '1px solid rgba(39,174,96,0.2)', borderRadius: 10, padding: '9px 10px', color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>🏆 Ganadores</button>
+        )}
+      </div>
     </div>
   )
 }
@@ -2613,8 +2614,8 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
   const filteredConvs = conversations.filter(c => {
     if (filter === 'image') return c.hasImage
-    if (filter === 'unread') return c.unread > 0
-        if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
+        if (filter === 'unread') return c.unread > 0
+    if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
   })
 
