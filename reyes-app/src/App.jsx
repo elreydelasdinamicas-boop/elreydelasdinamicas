@@ -1673,6 +1673,11 @@ function WinnersPage({ onBack, onRaffle }) {
 // ─── PROFILE ──────────────────────────────────────────────────────────────────
 function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, isAdmin, onAdmin, onRefresh, onSupport, appConfig, pwa }) {
   const [tab, setTab] = useState(0)
+  const [adminUsers, setAdminUsers] = useState([])
+  const [userSearch, setUserSearch] = useState('')
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [creditAmount, setCreditAmount] = useState('')
+  const [pointsAmount, setPointsAmount] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState({ full_name:'', phone:'' })
   const [saving, setSaving] = useState(false)
@@ -2619,7 +2624,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
     if (filter === 'image') return c.hasImage
     if (filter === 'unread') return c.unread > 0
     if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
-        return true
+    return true
   })
 
   // ── ADMIN VIEW ──────────────────────────────────────────────────────────────
@@ -2633,7 +2638,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
         {/* Lista conversaciones */}
-        <div style={{ width: selectedConv ? '35%' : '100%', borderRight:`1px solid ${C.cardBorder}`, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+                <div style={{ width: selectedConv ? '35%' : '100%', borderRight:`1px solid ${C.cardBorder}`, display:'flex', flexDirection:'column', overflow:'hidden' }}>
           {/* Filtros */}
           <div style={{ padding:'7px 10px', display:'flex', gap:5, overflowX:'auto', scrollbarWidth:'none', borderBottom:'1px solid #111', flexShrink:0 }}>
             {[['all','Todos'],['unread','Sin leer'],['image','Con imagen'],['today','Hoy']].map(([val,label]) => (
@@ -2898,6 +2903,46 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
     } catch(e) { console.error('loadAdminData:', e) }
   }
 
+  async function loadUsers(search) {
+    let q = supabase.from('users_profile').select('*').order('created_at',{ascending:false}).limit(50)
+    if (search) q = q.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`)
+    const { data } = await q
+    setAdminUsers(data || [])
+  }
+
+  async function addCredits(userId, amount) {
+    if (!amount || isNaN(amount)) return
+    const user = adminUsers.find(u => u.id === userId)
+    if (!user) return
+    const newCredits = (user.credits || 0) + parseInt(amount)
+    const { error } = await supabase.from('users_profile').update({ credits: newCredits }).eq('id', userId)
+    if (error) { alert('Error: ' + error.message); return }
+    setCreditAmount('')
+    loadUsers(userSearch)
+    alert('✅ Créditos agregados: ' + fmt(parseInt(amount)))
+  }
+
+  async function addPoints(userId, amount) {
+    if (!amount || isNaN(amount)) return
+    const user = adminUsers.find(u => u.id === userId)
+    if (!user) return
+    const newPoints = (user.points || 0) + parseInt(amount)
+    const { error } = await supabase.from('users_profile').update({ points: newPoints }).eq('id', userId)
+    if (error) { alert('Error: ' + error.message); return }
+    setPointsAmount('')
+    loadUsers(userSearch)
+    alert('✅ Puntos agregados: ' + fmt(parseInt(amount)))
+  }
+
+  async function toggleUnlimitedBingo(userId) {
+    const user = adminUsers.find(u => u.id === userId)
+    if (!user) return
+    const newVal = !user.bingo_unlimited
+    const { error } = await supabase.from('users_profile').update({ bingo_unlimited: newVal }).eq('id', userId)
+    if (error) { alert('Error: ' + error.message); return }
+    loadUsers(userSearch)
+  }
+
   async function saveConfig() {
     try {
       // Solo guardar columnas que sabemos que existen en app_config
@@ -2978,7 +3023,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
 
       {/* Tabs */}
       <div style={{ display:'flex', gap:3, background:'rgba(255,255,255,0.03)', borderRadius:10, padding:4, marginBottom:16 }}>
-        {['Dinamicas','Boletos','Config'].map((t,i) => (
+        {['Dinamicas','Boletos','Config','Usuarios'].map((t,i) => (
           <button key={t} onClick={() => setTab(i)} style={{ flex:1, padding:9, border:'none', background:tab===i?C.card:'transparent', color:tab===i?'#fff':'#555', fontSize:12, fontWeight:700, cursor:'pointer', borderRadius:8, fontFamily:'inherit' }}>{t}</button>
         ))}
       </div>
@@ -3117,6 +3162,70 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
             )}
           </div>
           <button onClick={saveConfig} style={S.btnGold}>Guardar configuracion</button>
+        </div>
+      )}
+
+      {/* Tab: Usuarios */}
+      {tab === 3 && (
+        <div>
+          <div style={{ marginBottom:12 }}>
+            <input value={userSearch} onChange={e=>setUserSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o email..." style={{ marginBottom:8 }} />
+            <button onClick={()=>loadUsers(userSearch)} style={{ ...S.btnOutline, fontSize:12 }}>🔍 Buscar usuarios</button>
+          </div>
+
+          {adminUsers.length === 0 && <div style={{ color:C.muted, fontSize:12, textAlign:'center', padding:20 }}>Busca un usuario para gestionar sus créditos y puntos</div>}
+
+          {adminUsers.map(u => (
+            <div key={u.id} style={{ ...S.card, marginBottom:10 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                <div>
+                  <div style={{ color:'#fff', fontSize:13, fontWeight:700 }}>{u.full_name || 'Sin nombre'}</div>
+                  <div style={{ color:C.muted, fontSize:10 }}>{u.phone || ''} · {u.email || ''}</div>
+                </div>
+                <button onClick={()=>setSelectedUser(selectedUser===u.id?null:u.id)} style={{ background:'rgba(230,190,0,0.08)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:8, padding:'4px 10px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>{selectedUser===u.id?'Cerrar':'Gestionar'}</button>
+              </div>
+
+              <div style={{ display:'flex', gap:8, marginBottom:selectedUser===u.id?10:0 }}>
+                <div style={{ background:'rgba(93,173,226,0.08)', borderRadius:8, padding:'6px 10px', flex:1, textAlign:'center' }}>
+                  <div style={{ color:'#888', fontSize:8 }}>Mi Dinero</div>
+                  <div style={{ color:'#5DADE2', fontSize:14, fontWeight:900 }}>{fmt(u.credits||0)}</div>
+                </div>
+                <div style={{ background:'rgba(230,190,0,0.06)', borderRadius:8, padding:'6px 10px', flex:1, textAlign:'center' }}>
+                  <div style={{ color:'#888', fontSize:8 }}>Puntos</div>
+                  <div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>{fmt(u.points||0)}</div>
+                </div>
+                <div style={{ background:u.bingo_unlimited?'rgba(39,174,96,0.1)':'rgba(255,255,255,0.03)', borderRadius:8, padding:'6px 10px', flex:1, textAlign:'center' }}>
+                  <div style={{ color:'#888', fontSize:8 }}>Bingo</div>
+                  <div style={{ color:u.bingo_unlimited?'#27AE60':'#555', fontSize:10, fontWeight:700 }}>{u.bingo_unlimited?'∞ Ilimitado':'Normal'}</div>
+                </div>
+              </div>
+
+              {selectedUser === u.id && (
+                <div style={{ background:'#0a0a0a', borderRadius:10, padding:10 }}>
+                  <div style={{ display:'flex', gap:6, marginBottom:8 }}>
+                    <div style={{ flex:1 }}>
+                      <label style={{ fontSize:9, color:C.muted, fontWeight:700, display:'block', marginBottom:3 }}>Agregar Mi Dinero $</label>
+                      <div style={{ display:'flex', gap:4 }}>
+                        <input type="number" value={creditAmount} onChange={e=>setCreditAmount(e.target.value)} placeholder="5000" style={{ flex:1 }} />
+                        <button onClick={()=>addCredits(u.id, creditAmount)} style={{ background:'rgba(93,173,226,0.15)', border:'1px solid rgba(93,173,226,0.3)', borderRadius:8, padding:'6px 10px', color:'#5DADE2', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>+</button>
+                      </div>
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <label style={{ fontSize:9, color:C.muted, fontWeight:700, display:'block', marginBottom:3 }}>Agregar Puntos</label>
+                      <div style={{ display:'flex', gap:4 }}>
+                        <input type="number" value={pointsAmount} onChange={e=>setPointsAmount(e.target.value)} placeholder="1000" style={{ flex:1 }} />
+                        <button onClick={()=>addPoints(u.id, pointsAmount)} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:8, padding:'6px 10px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>+</button>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={()=>toggleUnlimitedBingo(u.id)} style={{ width:'100%', background:u.bingo_unlimited?'rgba(231,76,60,0.08)':'rgba(39,174,96,0.08)', border:`1px solid ${u.bingo_unlimited?'rgba(231,76,60,0.3)':'rgba(39,174,96,0.3)'}`, borderRadius:8, padding:8, color:u.bingo_unlimited?'#E74C3C':'#27AE60', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                    {u.bingo_unlimited ? '🚫 Quitar bingo ilimitado' : '♾️ Activar bingo ilimitado'}
+                  </button>
+                  <div style={{ color:C.muted, fontSize:9, marginTop:4 }}>Bingo ilimitado: puede comprar cartones sin límite en cualquier partida</div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -4169,7 +4278,8 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     const cfg = getConfig(game)
     const numCartones = packOpt?.cartones || cfg.cartones_per_pack || 6
     const maxPer = cfg.max_per_person || 12
-    if (myCartones.length + numCartones > maxPer) { alert(`¡Máximo ${maxPer} cartones por persona! Ya tienes ${myCartones.length}.`); return }
+    const isUnlimited = profile?.bingo_unlimited === true
+    if (!isUnlimited && myCartones.length + numCartones > maxPer) { alert(`¡Máximo ${maxPer} cartones por persona! Ya tienes ${myCartones.length}.`); return }
     setBuyingPack(true)
     const cartones = Array.from({length:numCartones},(_,i) => ({
       game_id: game.id, user_id: user.id, numbers: generateCarton(), marked: [], carton_number: myCartones.length+i+1, paid: false
@@ -4314,164 +4424,6 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     </div>
   )
 
-  // ── WAITING / LOBBY SCREEN ──
-  if (isWaiting) {
-    const embedUrl = getEmbedUrl(liveUrl)
-    return (
-    <div style={{ background:C.bg, minHeight:'100vh' }}>
-      <style>{CSS}</style>
-      <div style={{ background:C.bg2, padding:'11px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #1a1a1a', position:'sticky', top:0, zIndex:40 }}>
-        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>← Volver</button>
-        <div style={{ display:'flex', alignItems:'center', gap:6 }}><div style={{ width:8, height:8, background:'#E67E22', borderRadius:'50%' }} className="pulse" /><span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>{game.title||'Bingo La Casa'}</span></div>
-        <button onClick={()=>setShowGuide(!showGuide)} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:8, color:C.gold, fontSize:10, fontWeight:700, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit' }}>{showGuide?'Cerrar':'❓'}</button>
-      </div>
-      <div style={{ padding:'16px 12px 100px', maxWidth:500, margin:'0 auto', textAlign:'center' }}>
-        <div style={{ fontSize:40, marginBottom:4 }}>🎱</div>
-        <div style={{ color:'#fff', fontSize:18, fontWeight:900 }}>{game.title||'Bingo La Casa'}</div>
-        <div style={{ color:C.gold, fontSize:11, fontWeight:700, marginBottom:12 }}>Sala de espera</div>
-
-        {/* COUNTDOWN */}
-        {countdown && cfg.scheduled_at && (
-          <div style={{ background:'#1a0f00', border:'1.5px solid rgba(230,190,0,0.4)', borderRadius:14, padding:16, marginBottom:10, position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.8),transparent)' }} />
-            <div style={{ position:'absolute', bottom:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.3),transparent)' }} />
-            <div style={{ color:C.gold, fontSize:9, textTransform:'uppercase', letterSpacing:2, fontWeight:700, marginBottom:8 }}>⏱ Inicia en</div>
-            <div style={{ display:'flex', justifyContent:'center', gap:8, marginBottom:10 }}>
-              {[['d','Días'],['h','Horas'],['m','Min']].map(([k,label])=>(
-                <div key={k} style={{ background:'#0a0800', border:'1.5px solid rgba(230,190,0,0.5)', borderRadius:10, padding:'8px 14px', minWidth:54 }}>
-                  <div style={{ color:C.gold, fontSize:26, fontWeight:900, lineHeight:1 }}>{String(countdown[k]).padStart(2,'0')}</div>
-                  <div style={{ color:'rgba(230,190,0,0.5)', fontSize:8, marginTop:3, textTransform:'uppercase', letterSpacing:1 }}>{label}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ color:'#fff', fontSize:13, fontWeight:700 }}>{new Date(cfg.scheduled_at).toLocaleDateString('es-CO',{weekday:'short',day:'numeric',month:'short'})} · <span style={{ color:C.gold, fontSize:15 }}>{new Date(cfg.scheduled_at).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</span></div>
-          </div>
-        )}
-
-        {/* PROGRESS BAR */}
-        {fakePercent > 0 && (
-          <div style={{ background:'#111', border:'1px solid rgba(39,174,96,0.2)', borderRadius:12, padding:10, marginBottom:10 }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
-              <span style={{ color:'#fff', fontSize:11, fontWeight:700 }}>Jugadores inscritos</span>
-              <span style={{ color:'#27AE60', fontSize:11, fontWeight:700 }}>{fakePercent}%</span>
-            </div>
-            <div style={{ background:'#0a0a0a', borderRadius:6, height:8, overflow:'hidden' }}>
-              <div style={{ background:'linear-gradient(90deg,#27AE60,#2ECC71)', height:'100%', width:`${Math.min(fakePercent,100)}%`, borderRadius:6 }} />
-            </div>
-            {fakePercent >= 60 && <div style={{ color:'#E67E22', fontSize:10, fontWeight:700, marginTop:4 }}>⚠ Quedan pocos cupos</div>}
-          </div>
-        )}
-
-        {/* PRIZES — attractive design */}
-        <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:14, padding:14, marginBottom:10, position:'relative', overflow:'hidden' }}>
-          <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.6),transparent)' }} />
-          <div style={{ fontSize:22, marginBottom:4 }}>🏆</div>
-          <div style={{ color:'#fff', fontSize:16, fontWeight:900, marginBottom:10 }}>¡Premios en efectivo!</div>
-          {winTypes.map(wt=>(
-            <div key={wt} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:10, padding:'8px 12px', marginBottom:6 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:16 }}>{WTIcon[wt]}</span>
-                <span style={{ color:'#fff', fontSize:13, fontWeight:700 }}>{WTL[wt]}</span>
-              </div>
-              <span style={{ color:C.gold, fontSize:15, fontWeight:900 }}>{prizes[wt]?fmt(prizes[wt]):'—'}</span>
-            </div>
-          ))}
-          <div style={{ background:'linear-gradient(135deg,rgba(39,174,96,0.1),rgba(39,174,96,0.05))', border:'1px solid rgba(39,174,96,0.3)', borderRadius:10, padding:'10px 12px', marginTop:8, textAlign:'center' }}>
-            <div style={{ color:'#888', fontSize:10, marginBottom:2 }}>TOTAL EN PREMIOS</div>
-            <div style={{ color:'#27AE60', fontSize:22, fontWeight:900 }}>{fmt(totalPrize)}</div>
-          </div>
-        </div>
-
-        {/* HOW TO PLAY BUTTON */}
-        <button onClick={()=>setShowGuide(!showGuide)} style={{ width:'100%', background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:10, marginBottom:10, cursor:'pointer', fontFamily:'inherit' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-            <span style={{ fontSize:16 }}>❓</span>
-            <span style={{ color:C.gold, fontSize:13, fontWeight:900 }}>¿Cómo se juega?</span>
-          </div>
-          <div style={{ color:C.muted, fontSize:10, marginTop:3 }}>Aprende las reglas y mira ejemplos de cómo ganar cada premio</div>
-        </button>
-
-        {/* HOW TO PLAY EXPANDED */}
-        {showGuide && (
-          <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:16, padding:16, marginBottom:14, position:'relative', overflow:'hidden', textAlign:'left' }}>
-            <GoldLine />
-            <div style={{ color:C.gold, fontSize:14, fontWeight:900, marginBottom:14, textAlign:'center' }}>¿Cómo jugar Bingo?</div>
-            <div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:8 }}>Paso a paso:</div>
-            {[
-              ['🎟️','Compra tu pack',`Cada pack tiene ${cPerPack} cartones${isFree?' (GRATIS)':` por ${fmt(packPrice)}`}. Cada cartón tiene 25 números aleatorios en 5 columnas (B-I-N-G-O).`],
-              ['📺','Mira la transmisión en vivo','El administrador saca las balotas en vivo por YouTube/Instagram. Los números aparecen aquí en tiempo real.'],
-              ['✅','Tus cartones se marcan solos','Con "Auto-marcar" activado, cuando sale un número que está en tu cartón, se marca automáticamente en dorado.'],
-              ['🏆','¡Gana premios!','El sistema verifica automáticamente si completaste alguna figura. Si ganas, te aparece una notificación y reclamas tu premio.'],
-            ].map(([ic,t,d])=>(
-              <div key={t} style={{ display:'flex', gap:12, marginBottom:14, paddingBottom:14, borderBottom:'1px solid #1a1a1a' }}>
-                <span style={{ fontSize:24, flexShrink:0 }}>{ic}</span>
-                <div><div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:3 }}>{t}</div><div style={{ color:C.muted, fontSize:11, lineHeight:1.4 }}>{d}</div></div>
-              </div>
-            ))}
-            <div style={{ color:C.gold, fontSize:12, fontWeight:700, marginBottom:10 }}>Figuras ganadoras:</div>
-            {winTypes.map(wt => (
-              <div key={wt} style={{ background:'#1a1a1a', borderRadius:10, padding:10, marginBottom:8, display:'flex', alignItems:'center', gap:10 }}>
-                <span style={{ fontSize:18, flexShrink:0 }}>{WTIcon[wt]}</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ color:'#fff', fontSize:11, fontWeight:700 }}>{WTL[wt]}</div>
-                  <div style={{ color:C.muted, fontSize:10, lineHeight:1.3, marginTop:2 }}>{WTDesc[wt]}</div>
-                </div>
-                <div style={{ color:C.gold, fontSize:11, fontWeight:700, flexShrink:0 }}>{prizes[wt]?fmt(prizes[wt]):'—'}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* BUY PACK */}
-        {!user ? (
-          <div style={{ padding:'20px 0' }}><div style={{ color:C.muted, fontSize:13, marginBottom:12 }}>Inicia sesión para jugar</div><button onClick={onLogin} style={{ ...S.btnGold, maxWidth:200, margin:'0 auto' }}>Entrar a jugar</button></div>
-        ) : (
-          <>
-            {myCartones.length > 0 && (
-              <div style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:12, padding:12, marginBottom:10 }}>
-                <div style={{ color:'#27AE60', fontSize:14, fontWeight:900, marginBottom:2 }}>✅ ¡Tienes {myCartones.length} cartones!</div>
-                <div style={{ color:C.muted, fontSize:11 }}>Cuando inicie el bingo, tus cartones se activarán automáticamente</div>
-              </div>
-            )}
-            {gamePacks.map((pack,pi)=>(
-              <div key={pi} style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:14, padding:16, marginBottom:8, textAlign:'center' }}>
-                <div style={{ color:'#fff', fontSize:14, fontWeight:900, marginBottom:2 }}>{pack.name || `Pack de ${pack.cartones}`}</div>
-                <div style={{ color:C.muted, fontSize:11, marginBottom:4 }}>{pack.cartones} cartones</div>
-                <div style={{ color:C.gold, fontSize:20, fontWeight:900, marginBottom:8 }}>{isFree?'GRATIS':fmt(pack.price)}</div>
-                {isFree ? (
-                  <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ ...S.btnGold, width:'100%', opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':'🎟️ Obtener gratis'}</button>
-                ) : (
-                  <>
-                    <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ ...S.btnGold, width:'100%', marginBottom:6, opacity:buyingPack?.7:1, fontSize:12 }}>{buyingPack?'Generando...':'Comprar por WhatsApp'}</button>
-                    {payMethods.points && (
-                      <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ width:'100%', background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:10, padding:'7px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginBottom:6 }}>Pagar con Puntos{pointsPrice > 0 ? ' · '+fmt(pointsPrice)+' pts' : ''}</button>
-                    )}
-                    {payMethods.dinero && (
-                      <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ width:'100%', background:'rgba(93,173,226,0.08)', border:'1px solid rgba(93,173,226,0.25)', borderRadius:10, padding:'7px', color:'#5DADE2', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Pagar con Mi Dinero</button>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
-            {myCartones.length > 0 && <div style={{ color:C.muted, fontSize:10, textAlign:'center', marginBottom:6 }}>Máx. {cfg.max_per_person||12} cartones · Tienes {myCartones.length}</div>}
-          </>
-        )}
-
-        {/* SHARE FOR FREE CARTON */}
-        <div style={{ background:'linear-gradient(135deg,rgba(39,174,96,0.08),rgba(39,174,96,0.02))', border:'1px solid rgba(39,174,96,0.3)', borderRadius:14, padding:14, marginBottom:10 }}>
-          <div style={{ fontSize:22, marginBottom:4 }}>🎁</div>
-          <div style={{ color:'#27AE60', fontSize:14, fontWeight:900, marginBottom:2 }}>¡Cartón GRATIS!</div>
-          <div style={{ color:'#fff', fontSize:12, fontWeight:700, marginBottom:8 }}>Comparte con 10 amigos por WhatsApp</div>
-          <button onClick={handleShare} style={{ width:'100%', background:'#27AE60', border:'none', borderRadius:10, padding:'10px', color:'#fff', fontSize:12, fontWeight:900, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-            Compartir por WhatsApp
-          </button>
-          <div style={{ color:C.muted, fontSize:9, marginTop:6 }}>Cada amigo que abra tu link cuenta. Al llegar a 10 recibes un cartón extra gratis.</div>
-        </div>
-      </div>
-    </div>
-  )}
-
   // ── ACTIVE GAME (original flow) ──
   const embedUrl = getEmbedUrl(liveUrl)
 
@@ -4491,6 +4443,64 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       </div>
 
       <div style={{ padding:'12px 12px 100px', maxWidth:500, margin:'0 auto' }}>
+
+        {/* COUNTDOWN — only when waiting */}
+        {isWaiting && countdown && cfg.scheduled_at && (
+          <div style={{ background:'linear-gradient(135deg,#4a0e0e,#6b1515)', border:'1.5px solid rgba(231,76,60,0.5)', borderRadius:12, padding:12, marginBottom:10, position:'relative', overflow:'hidden', textAlign:'center' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,#E74C3C,transparent)' }} />
+            <div style={{ color:'#E74C3C', fontSize:8, textTransform:'uppercase', letterSpacing:2, fontWeight:700, marginBottom:6 }}>⏱ Inicia en</div>
+            <div style={{ display:'flex', justifyContent:'center', gap:6, marginBottom:6 }}>
+              {[['d','Días'],['h','Horas'],['m','Min']].map(([k,label])=>(
+                <div key={k} style={{ background:'rgba(0,0,0,0.4)', border:'1px solid rgba(231,76,60,0.4)', borderRadius:8, padding:'5px 10px', minWidth:46 }}>
+                  <div style={{ color:'#ff6b6b', fontSize:20, fontWeight:900, lineHeight:1 }}>{String(countdown[k]).padStart(2,'0')}</div>
+                  <div style={{ color:'rgba(231,76,60,0.4)', fontSize:7, marginTop:2 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ color:'#fff', fontSize:11, fontWeight:700 }}>{new Date(cfg.scheduled_at).toLocaleDateString('es-CO',{weekday:'short',day:'numeric',month:'short'})} · <span style={{ color:'#ff6b6b' }}>{new Date(cfg.scheduled_at).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</span></div>
+          </div>
+        )}
+
+        {/* PRIZES — when waiting and no cartones yet */}
+        {isWaiting && myCartones.length === 0 && (
+          <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:12, padding:12, marginBottom:10, position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.6),transparent)' }} />
+            <div style={{ textAlign:'center', fontSize:16, marginBottom:2 }}>🏆</div>
+            <div style={{ textAlign:'center', color:'#fff', fontSize:13, fontWeight:900, marginBottom:8 }}>¡Premios en efectivo!</div>
+            {winTypes.map(wt=>(
+              <div key={wt} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:8, padding:'5px 10px', marginBottom:3 }}>
+                <span style={{ color:'#fff', fontSize:11, fontWeight:700 }}>{WTIcon[wt]} {WTL[wt]}</span>
+                <span style={{ color:C.gold, fontSize:12, fontWeight:900 }}>{prizes[wt]?fmt(prizes[wt]):'—'}</span>
+              </div>
+            ))}
+            <div style={{ background:'rgba(39,174,96,0.08)', borderRadius:7, padding:6, marginTop:4, textAlign:'center' }}><div style={{ color:'#888', fontSize:8 }}>TOTAL</div><div style={{ color:'#27AE60', fontSize:16, fontWeight:900 }}>{fmt(totalPrize)}</div></div>
+          </div>
+        )}
+
+        {/* PROGRESS BAR — when waiting */}
+        {isWaiting && fakePercent > 0 && (
+          <div style={{ background:'#111', border:'1px solid rgba(39,174,96,0.2)', borderRadius:10, padding:8, marginBottom:10 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
+              <span style={{ color:'#fff', fontSize:10, fontWeight:700 }}>Inscritos</span>
+              <span style={{ color:'#27AE60', fontSize:10, fontWeight:700 }}>{fakePercent}%</span>
+            </div>
+            <div style={{ background:'#0a0a0a', borderRadius:5, height:6, overflow:'hidden' }}>
+              <div style={{ background:'#27AE60', height:'100%', width:`${Math.min(fakePercent,100)}%`, borderRadius:5 }} />
+            </div>
+          </div>
+        )}
+
+        {/* PENDING PAYMENT BANNER — when has cartones but unpaid */}
+        {myCartones.length > 0 && myCartones.some(c => !c.paid) && (
+          <div style={{ background:'rgba(230,126,34,0.1)', border:'1.5px solid rgba(230,126,34,0.4)', borderRadius:12, padding:12, marginBottom:10, textAlign:'center' }}>
+            <div style={{ color:'#E67E22', fontSize:14, fontWeight:900, marginBottom:2 }}>⚠️ Pago pendiente</div>
+            <div style={{ color:'#fff', fontSize:11, marginBottom:8 }}>{myCartones.length} cartones reservados — envía el pago</div>
+            <button onClick={handleShare} style={{ width:'100%', background:'#27AE60', border:'none', borderRadius:10, padding:'9px', color:'#fff', fontSize:12, fontWeight:900, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+              Enviar pago por WhatsApp
+            </button>
+          </div>
+        )}
 
         {/* LIVE EMBED */}
         {embedUrl && <div style={{ background:'#000', border:'1px solid rgba(230,190,0,0.2)', borderRadius:14, overflow:'hidden', marginBottom:12 }}><div style={{ position:'relative', paddingBottom:'56.25%', height:0 }}><iframe src={embedUrl} style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', border:'none' }} allowFullScreen allow="autoplay; encrypted-media" /></div></div>}
@@ -4610,7 +4620,13 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
                 <div style={{ color:'#fff', fontSize:14, fontWeight:900, marginBottom:2 }}>{pack.name || `Pack de ${pack.cartones}`}</div>
                 <div style={{ color:C.muted, fontSize:11, marginBottom:2 }}>{pack.cartones} cartones</div>
                 <div style={{ color:C.gold, fontSize:20, fontWeight:900, marginBottom:8 }}>{isFree?'GRATIS':fmt(pack.price)}</div>
-                <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ ...S.btnGold, opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':(isFree?'🎟️ Obtener gratis':'🎟️ Comprar')}</button>
+                <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ ...S.btnGold, opacity:buyingPack?.7:1, marginBottom:payMethods.points||payMethods.dinero?6:0 }}>{buyingPack?'Generando...':(isFree?'🎟️ Obtener gratis':'🎟️ Comprar por WhatsApp')}</button>
+                {!isFree && payMethods.points && (
+                  <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ width:'100%', background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:10, padding:'7px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginBottom:payMethods.dinero?6:0 }}>Pagar con Puntos{pointsPrice > 0 ? ' · '+fmt(pointsPrice)+' pts' : ''}</button>
+                )}
+                {!isFree && payMethods.dinero && (
+                  <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ width:'100%', background:'rgba(93,173,226,0.08)', border:'1px solid rgba(93,173,226,0.25)', borderRadius:10, padding:'7px', color:'#5DADE2', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Pagar con Mi Dinero</button>
+                )}
               </div>
             ))}
           </div>
@@ -4638,7 +4654,8 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
               {myCartones.map((ct,ci)=>{
                 const nums=ct.numbers||[],marked=ct.marked||[],letters=['B','I','N','G','O'],isExp=expandedCarton===ci
                 return (
-                  <div key={ct.id} onClick={()=>setExpandedCarton(isExp?null:ci)} style={{ background:'#111', border:`1px solid ${isExp?C.gold:'rgba(230,190,0,0.2)'}`, borderRadius:10, padding:6, position:'relative', overflow:'hidden', cursor:'pointer' }}>
+                  <div key={ct.id} onClick={()=>setExpandedCarton(isExp?null:ci)} style={{ background:'#111', border:`1px solid ${isExp?C.gold:!ct.paid?'rgba(230,126,34,0.25)':'rgba(230,190,0,0.2)'}`, borderRadius:10, padding:6, position:'relative', overflow:'hidden', cursor:'pointer', opacity:ct.paid===false&&isWaiting?.6:1 }}>
+                    {ct.paid===false && <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%) rotate(-15deg)', background:'rgba(230,126,34,0.9)', borderRadius:4, padding:'2px 8px', zIndex:5 }}><span style={{ color:'#fff', fontSize:7, fontWeight:900, letterSpacing:1 }}>PENDIENTE</span></div>}
                     <GoldLine />
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}><span style={{ color:'#fff', fontSize:9, fontWeight:900 }}>#{ci+1}</span><span style={{ color:C.muted, fontSize:8 }}>{marked.length}m</span></div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:2, marginBottom:2 }}>{letters.map(l=><div key={l} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:3, padding:'2px 0', textAlign:'center', fontSize:7, fontWeight:900, color:'#000' }}>{l}</div>)}</div>
@@ -4650,6 +4667,26 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
               })}
             </div>
             <div style={{ textAlign:'center', marginBottom:10 }}><span style={{ color:'#666', fontSize:10 }}>Toca un cartón para verlo grande · BINGO se verifica automáticamente</span></div>
+
+            {/* SHARE + BUY MORE — after cartones */}
+            {isWaiting && (
+              <>
+                {gamePacks.map((pack,pi)=>(
+                  <div key={pi} style={{ background:'#111', border:'1px dashed #2a2a2a', borderRadius:12, padding:12, marginBottom:8, textAlign:'center' }}>
+                    <div style={{ color:'#fff', fontSize:12, fontWeight:900, marginBottom:2 }}>{pack.name || `Pack de ${pack.cartones}`}</div>
+                    <div style={{ color:C.gold, fontSize:16, fontWeight:900, marginBottom:6 }}>{isFree?'GRATIS':fmt(pack.price)}</div>
+                    <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ ...S.btnGold, fontSize:11, padding:8, opacity:buyingPack?.7:1 }}>{buyingPack?'Generando...':'+ Comprar más cartones'}</button>
+                  </div>
+                ))}
+                <div style={{ background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:10, padding:10, marginBottom:8, textAlign:'center' }}>
+                  <div style={{ color:'#27AE60', fontSize:12, fontWeight:900, marginBottom:4 }}>🎁 Cartón GRATIS · Comparte con 10 amigos</div>
+                  <button onClick={handleShare} style={{ width:'100%', background:'#27AE60', border:'none', borderRadius:8, padding:'8px', color:'#fff', fontSize:11, fontWeight:900, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+                    Compartir por WhatsApp
+                  </button>
+                </div>
+              </>
+            )}
           </>
         )}
 
