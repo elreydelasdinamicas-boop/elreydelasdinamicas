@@ -1385,7 +1385,7 @@ www.lacasadelasdinamicas.com`)}`)
                 return (
                   <div key={i} onClick={() => { setSelectedPkg(pkg); setSelectedNums(prev=>prev.slice(0,pkg.qty)) }} style={{ flexShrink:0, background:isSelected?'rgba(201,162,39,0.15)':'#1a1a1a', border:`${isSelected?'2px':'1px'} solid ${isSelected?C.gold:'rgba(255,255,255,0.07)'}`, borderRadius:11, padding:'10px 14px', cursor:'pointer', minWidth:80, textAlign:'center', position:'relative', overflow:'hidden' }}>
                     {isSelected && <GoldLine />}
-                    <div style={{ background:C.green, borderRadius:999, padding:'1px 5px', color:'#fff', fontSize:6, fontWeight:700, marginBottom:3, display:'inline-block' }}>-{Math.round(savings/pkg.qty*100/pricePerNum)}%</div>
+                                        <div style={{ background:C.green, borderRadius:999, padding:'1px 5px', color:'#fff', fontSize:6, fontWeight:700, marginBottom:3, display:'inline-block' }}>-{Math.round(savings/pkg.qty*100/pricePerNum)}%</div>
                     <div style={{ color:'#fff', fontSize:9, fontWeight:700, marginBottom:3 }}>{pkg.qty} boletos</div>
                     <div style={{ color:C.gold, fontSize:13, fontWeight:900 }}>{fmt(pkg.price)}</div>
                   </div>
@@ -2743,7 +2743,8 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
       }
     } catch(e) { console.error('sendMessage error:', e) }
   }
-    async function confirmPayment() {
+
+  async function confirmPayment() {
     if (!selectedConv) return
     await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'✅ Pago confirmado! Tu numero esta asegurado. Mucha suerte en el sorteo!', from_admin:true })
     await loadConvMessages(selectedConv.user_id)
@@ -2771,7 +2772,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
   const filteredConvs = conversations.filter(c => {
     if (filter === 'image') return c.hasImage
     if (filter === 'unread') return c.unread > 0
-    if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
+        if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
   })
 
@@ -4158,7 +4159,7 @@ function AdminSocietyPanel({ raffles, onBack }) {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
                         <span style={{ color: fmt(halfPrice), fontSize: 9 }}>{fmt(halfPrice)}</span>
                         {paid
-                          ? <span style={{ background: 'rgba(39,174,96,0.15)', borderRadius: 999, padding: '1px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700 }}>Pagado</span>
+                                                    ? <span style={{ background: 'rgba(39,174,96,0.15)', borderRadius: 999, padding: '1px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700 }}>Pagado</span>
                           : <button onClick={() => confirmPayment(s.id, num)} style={{ background: 'rgba(39,174,96,0.1)', border: '1px solid rgba(39,174,96,0.25)', borderRadius: 6, padding: '2px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Confirmar</button>
                         }
                       </div>
@@ -4989,6 +4990,23 @@ function AdminBingoPanel({ onBack }) {
   const [calling, setCalling] = useState(false)
   const [autoTimer, setAutoTimer] = useState(null)
   const [stats, setStats] = useState({ players:0, packs:0, revenue:0 })
+  const [adminCartones, setAdminCartones] = useState([])
+
+  async function fetchAdminCartones() {
+    if (!game) return
+    const { data } = await supabase.from('bingo_cartones').select('*, users_profile:user_id(full_name,phone)').eq('game_id', game.id).order('created_at',{ascending:false})
+    setAdminCartones(data || [])
+  }
+
+  async function approveCarton(cartonId) {
+    await supabase.from('bingo_cartones').update({ paid: true }).eq('id', cartonId)
+    fetchAdminCartones()
+  }
+
+  async function approveAllUser(userId) {
+    await supabase.from('bingo_cartones').update({ paid: true }).eq('game_id', game.id).eq('user_id', userId)
+    fetchAdminCartones()
+  }
   const [editing, setEditing] = useState(false)
   const gameRef = useRef(null)
   const pollPaused = useRef(false)
@@ -5037,7 +5055,7 @@ function AdminBingoPanel({ onBack }) {
     else stopPolling()
   }, [game?.status])
 
-  useEffect(() => { if (game) fetchStats() }, [game?.id, game?.status])
+  useEffect(() => { if (game) fetchStats(); fetchAdminCartones() }, [game?.id, game?.status])
 
   // Load game config into form for editing — only once per game id
   const loadedGameRef = useRef(null)
@@ -5076,7 +5094,7 @@ function AdminBingoPanel({ onBack }) {
     } catch(e) { /* ignore fetch errors during transitions */ }
   }
 
-  async function fetchStats() {
+  async function fetchStats(); fetchAdminCartones() {
     if (!game) return
     const { data: cartones } = await supabase.from('bingo_cartones').select('user_id').eq('game_id', game.id)
     if (cartones) {
@@ -5364,6 +5382,42 @@ function AdminBingoPanel({ onBack }) {
             </div>
             {game.status !== 'active' && <button onClick={()=>fetchGame()} style={{ marginTop:8, width:'100%', background:'rgba(52,152,219,0.08)', border:'1px solid rgba(52,152,219,0.2)', borderRadius:8, padding:6, color:'#3498DB', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>↻ Actualizar datos</button>}
           </div>
+
+          {/* PAYMENT APPROVAL */}
+          {adminCartones.length > 0 && (() => {
+            const pending = adminCartones.filter(c => !c.paid)
+            const paid = adminCartones.filter(c => c.paid)
+            const grouped = {}
+            pending.forEach(c => {
+              const uid = c.user_id
+              if (!grouped[uid]) grouped[uid] = { user: c.users_profile, cartones: [], userId: uid }
+              grouped[uid].cartones.push(c)
+            })
+            const groups = Object.values(grouped)
+            return groups.length > 0 ? (
+              <div style={{ ...S.card, marginBottom:12, borderColor:'rgba(230,126,34,0.3)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                  <div style={{ color:'#E67E22', fontSize:12, fontWeight:900 }}>⏳ Pagos pendientes ({pending.length} cartones)</div>
+                  <span style={{ color:'#27AE60', fontSize:10 }}>✅ {paid.length} pagados</span>
+                </div>
+                {groups.map(g => (
+                  <div key={g.userId} style={{ background:'rgba(230,126,34,0.06)', border:'1px solid rgba(230,126,34,0.2)', borderRadius:10, padding:10, marginBottom:6 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                      <div>
+                        <div style={{ color:'#fff', fontSize:12, fontWeight:700 }}>{g.user?.full_name || 'Sin nombre'}</div>
+                        <div style={{ color:'#888', fontSize:10 }}>{g.user?.phone || ''} · {g.cartones.length} cartones</div>
+                      </div>
+                      <button onClick={() => approveAllUser(g.userId)} style={{ background:'rgba(39,174,96,0.12)', border:'1px solid rgba(39,174,96,0.3)', borderRadius:8, padding:'6px 12px', color:'#27AE60', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>✅ Aprobar</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : adminCartones.length > 0 ? (
+              <div style={{ background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:10, padding:10, marginBottom:12, textAlign:'center' }}>
+                <span style={{ color:'#27AE60', fontSize:11, fontWeight:700 }}>✅ Todos pagados ({paid.length} cartones)</span>
+              </div>
+            ) : null
+          })()}
 
           {/* ACTION BUTTONS — always visible */}
           <div style={{ display:'flex', gap:8, marginBottom:12 }}>
