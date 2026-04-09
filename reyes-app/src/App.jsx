@@ -1737,7 +1737,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
                 {phone && <span style={{ color:'#555', fontSize:10 }}>{phone}</span>}
               </div>
             </div>
-                      </div>
+          </div>
           <div style={{ display:'flex', gap:7 }}>
             <button onClick={() => setShowEditModal(true)} style={{ width:36, height:36, background:'#111', border:'1px solid #2a2a2a', borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.gold} strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -2614,7 +2614,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
   const filteredConvs = conversations.filter(c => {
     if (filter === 'image') return c.hasImage
     if (filter === 'unread') return c.unread > 0
-    if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
+        if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
   })
 
@@ -3476,7 +3476,7 @@ function LoginScreen({ onLogin, onRegister, onBack }) {
     if (!email || !pwd) { setError('Ingresa tu correo y contrasena'); return }
     setLoading(true); setError('')
     try { await onLogin(email, pwd) }
-        catch(e) { setError(e?.message?.includes('Invalid')||e?.message?.includes('invalid') ? 'Correo o contrasena incorrectos' : (e?.message || 'Error al ingresar')) }
+    catch(e) { setError(e?.message?.includes('Invalid')||e?.message?.includes('invalid') ? 'Correo o contrasena incorrectos' : (e?.message || 'Error al ingresar')) }
     finally { setLoading(false) }
   }
   return (
@@ -4842,17 +4842,27 @@ function AdminBingoPanel({ onBack }) {
     setCreating(true)
     stopPolling()
     pollPaused.current = true
-    // Small delay to let any pending requests finish
-    await new Promise(r => setTimeout(r, 500))
-    try {
-      const cfgJson = buildConfigJson()
-      const insertData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
-      const { error } = await supabase.from('bingo_games').insert(insertData)
-      if (error) {
-        alert('❌ Error: ' + error.message + (error.hint ? '\nHint: '+error.hint : ''))
+    await new Promise(r => setTimeout(r, 1000))
+    let success = false
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const cfgJson = buildConfigJson()
+        const { error } = await supabase.from('bingo_games').insert({ title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] })
+        if (!error) { success = true; break }
+        if (error.message && error.message.includes('lock')) {
+          await new Promise(r => setTimeout(r, 2000))
+          continue
+        }
+        alert('❌ Error: ' + error.message)
+        break
+      } catch(e) {
+        if (e.message && e.message.includes('lock') && attempt < 3) {
+          await new Promise(r => setTimeout(r, 2000))
+          continue
+        }
+        alert('❌ Error: ' + e.message)
+        break
       }
-    } catch(e) {
-      alert('❌ Error: ' + e.message)
     }
     pollPaused.current = false
     await fetchGame()
@@ -4920,22 +4930,28 @@ function AdminBingoPanel({ onBack }) {
 
   async function finishGame() {
     if (!window.confirm('¿Finalizar partida? Los jugadores verán la pantalla de ganadores.')) return
-    if (autoTimer) clearInterval(autoTimer)
+    if (autoTimer) { clearInterval(autoTimer); setAutoTimer(null) }
+    stopPolling()
     pollPaused.current = true
     await supabase.from('bingo_games').update({ status:'finished' }).eq('id', game.id)
     pollPaused.current = false
     setGame(null)
+    gameRef.current = null
   }
 
   async function deleteGame() {
     if (!window.confirm('¿Eliminar este bingo? Se borrarán todos los cartones y datos.')) return
-    if (!window.confirm('⚠️ CONFIRMAR: Esta acción es permanente y no se puede deshacer.')) return
-    if (autoTimer) clearInterval(autoTimer)
+    if (!window.confirm('⚠️ CONFIRMAR: Esta acción es permanente.')) return
+    if (autoTimer) { clearInterval(autoTimer); setAutoTimer(null) }
+    stopPolling()
     pollPaused.current = true
-    await supabase.from('bingo_cartones').delete().eq('game_id', game.id)
-    await supabase.from('bingo_games').delete().eq('id', game.id)
-    pollPaused.current = false
+    const gid = game.id
     setGame(null)
+    gameRef.current = null
+    await new Promise(r => setTimeout(r, 300))
+    await supabase.from('bingo_cartones').delete().eq('game_id', gid)
+    await supabase.from('bingo_games').delete().eq('id', gid)
+    pollPaused.current = false
   }
 
   function toggleWinType(type) { setForm(p=>({...p, win_types:p.win_types.includes(type)?p.win_types.filter(t=>t!==type):[...p.win_types,type]})) }
