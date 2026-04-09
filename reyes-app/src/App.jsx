@@ -330,7 +330,14 @@ export default function App() {
     const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name, phone, referral_code: refCode } } })
     if (error) throw error
     if (data.session) {
-      await supabase.from('users_profile').upsert({ id: data.user.id, full_name: name, phone, email, role: 'customer', credits: appConfig.showWelcomeBonus ? 500 : 0, points: appConfig.showWelcomeBonus ? 1000 : 0, referral_code: refCode, is_promoter: false })
+      // Check if user came from a referral link
+      const urlRef = new URLSearchParams(window.location.search).get('ref')
+      let referrerId = null
+      if (urlRef) {
+        const { data: refUser } = await supabase.from('users_profile').select('id').eq('referral_code', urlRef).limit(1)
+        if (refUser?.[0]) referrerId = refUser[0].id
+      }
+      await supabase.from('users_profile').upsert({ id: data.user.id, full_name: name, phone, email, role: 'customer', credits: appConfig.showWelcomeBonus ? 500 : 0, points: appConfig.showWelcomeBonus ? 1000 : 0, referral_code: refCode, is_promoter: false, referred_by: referrerId })
       setUser(data.user); await fetchProfile(data.user.id)
       setAuthPage(null)
       // Si tenía boletos pendientes, esperar a que reservePending los procese y ir al perfil
@@ -478,8 +485,8 @@ export default function App() {
       )}
       <nav style={S.bottomNav}>
         {[{ id: 'home', label: 'Inicio', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-          ...(appConfig.showPoints ? [{ id: 'points', label: 'Puntos', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> }] : []),
-          { id: 'bingo', label: 'Bingo', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> },
+          ...(profile?.is_promoter ? [{ id: 'promoter', label: 'Promotor', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg> }] : []),
+          ...(appConfig.show_bingo ? [{ id: 'bingo', label: 'Bingo', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> }] : []),
           { id: 'support', label: 'Soporte', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
           { id: 'profile', label: 'Mi Cuenta', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
         ].map(({ id, label, icon }) => (<button key={id} onClick={() => setPage(id)} style={S.navBtn(page === id)}>{icon}<span style={{ fontSize: 9, fontWeight: 700 }}>{label}</span></button>))}
@@ -1383,9 +1390,9 @@ www.lacasadelasdinamicas.com`)}`)
                 const isSelected = selectedPkg?.qty === pkg.qty
                 const savings = (pkg.qty * pricePerNum) - pkg.price
                 return (
-                  <div key={i} onClick={() => { setSelectedPkg(pkg); setSelectedNums(prev=>prev.slice(0,pkg.qty)) }} style={{ flexShrink:0, background:isSelected?'rgba(201,162,39,0.15)':'#1a1a1a', border:`${isSelected?'2px':'1px'} solid ${isSelected?C.gold:'rgba(255,255,255,0.07)'}`, borderRadius:11, padding:'10px 14px', cursor:'pointer', minWidth:80, textAlign:'center', position:'relative', overflow:'hidden' }}>
+                                    <div key={i} onClick={() => { setSelectedPkg(pkg); setSelectedNums(prev=>prev.slice(0,pkg.qty)) }} style={{ flexShrink:0, background:isSelected?'rgba(201,162,39,0.15)':'#1a1a1a', border:`${isSelected?'2px':'1px'} solid ${isSelected?C.gold:'rgba(255,255,255,0.07)'}`, borderRadius:11, padding:'10px 14px', cursor:'pointer', minWidth:80, textAlign:'center', position:'relative', overflow:'hidden' }}>
                     {isSelected && <GoldLine />}
-                                        <div style={{ background:C.green, borderRadius:999, padding:'1px 5px', color:'#fff', fontSize:6, fontWeight:700, marginBottom:3, display:'inline-block' }}>-{Math.round(savings/pkg.qty*100/pricePerNum)}%</div>
+                    <div style={{ background:C.green, borderRadius:999, padding:'1px 5px', color:'#fff', fontSize:6, fontWeight:700, marginBottom:3, display:'inline-block' }}>-{Math.round(savings/pkg.qty*100/pricePerNum)}%</div>
                     <div style={{ color:'#fff', fontSize:9, fontWeight:700, marginBottom:3 }}>{pkg.qty} boletos</div>
                     <div style={{ color:C.gold, fontSize:13, fontWeight:900 }}>{fmt(pkg.price)}</div>
                   </div>
@@ -2413,9 +2420,9 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
         <div onClick={onBecomePromoter} style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.08),rgba(39,174,96,0.05))', border:'1.5px solid rgba(230,190,0,0.3)', borderRadius:14, padding:16, marginTop:16, cursor:'pointer', position:'relative', overflow:'hidden', textAlign:'center' }}>
           <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.6),transparent)' }} />
           <div style={{ fontSize:24, marginBottom:4 }}>💰</div>
-          <div style={{ color:C.gold, fontSize:14, fontWeight:900, marginBottom:2 }}>¡Gana dinero con nosotros!</div>
+          <div style={{ color:C.gold, fontSize:14, fontWeight:900, marginBottom:2 }}>¡Gana $10.000 por cada venta!</div>
           <div style={{ color:'#fff', fontSize:11, marginBottom:4 }}>Conviértete en <span style={{ color:C.gold, fontWeight:900 }}>Promotor Oficial</span></div>
-          <div style={{ color:C.muted, fontSize:10, marginBottom:10 }}>Comparte tu enlace, gana comisiones por cada venta</div>
+          <div style={{ color:C.muted, fontSize:10, marginBottom:10 }}>Comisiones de por vida — ganas por TODAS las compras de tus referidos</div>
           <div style={{ display:'flex', gap:6, marginBottom:10, justifyContent:'center' }}>
             <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:8, padding:'6px 12px' }}><div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>{appConfig?.level1_rate||15}%</div><div style={{ color:'#888', fontSize:8 }}>venta directa</div></div>
             <div style={{ background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.15)', borderRadius:8, padding:'6px 12px' }}><div style={{ color:'#27AE60', fontSize:14, fontWeight:900 }}>{appConfig?.level2_rate||5}%</div><div style={{ color:'#888', fontSize:8 }}>sub-referido</div></div>
@@ -2462,15 +2469,25 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
             </div>
           ))}
         </div>
-        <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:12, marginBottom:16, textAlign:'left' }}>
-          <div style={{ color:'#888', fontSize:10, marginBottom:6 }}>Ejemplo: 20 personas compran $5.000 c/u</div>
-          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}><span style={{ color:C.gold, fontSize:11 }}>Tu comisión ({appConfig?.level1_rate||15}%)</span><span style={{ color:C.gold, fontSize:11, fontWeight:900 }}>{fmt(20*5000*(appConfig?.level1_rate||15)/100)}</span></div>
-          <div style={{ display:'flex', justifyContent:'space-between' }}><span style={{ color:'#27AE60', fontSize:11 }}>3 nuevos promotores</span><span style={{ color:'#27AE60', fontSize:11, fontWeight:900 }}>{fmt(3*(appConfig?.promoter_bonus||5000))}</span></div>
-          <div style={{ height:1, background:'#1a1a1a', margin:'6px 0' }} />
-          <div style={{ display:'flex', justifyContent:'space-between' }}><span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>Total</span><span style={{ color:C.gold, fontSize:15, fontWeight:900 }}>{fmt(20*5000*(appConfig?.level1_rate||15)/100 + 3*(appConfig?.promoter_bonus||5000))}</span></div>
+        <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:12, marginBottom:12, textAlign:'left' }}>
+          <div style={{ color:'#fff', fontSize:12, fontWeight:900, marginBottom:6 }}>📊 Ejemplo real</div>
+          <div style={{ color:'#888', fontSize:10, marginBottom:8 }}>Sorteo de $35.000 — ganas $10.000 por venta:</div>
+          {[[5,50000],[10,100000],[20,200000],[50,500000]].map(([n,t])=>(
+            <div key={n} style={{ display:'flex', justifyContent:'space-between', marginBottom:3, paddingBottom:3, borderBottom:'1px solid #1a1a1a' }}>
+              <span style={{ color:'#fff', fontSize:11 }}>Vendes {n} boletos</span>
+              <span style={{ color:C.gold, fontSize:12, fontWeight:900 }}>{fmt(t)}</span>
+            </div>
+          ))}
+          <div style={{ color:'#888', fontSize:10, marginTop:6, marginBottom:4 }}>+ Nivel 2: ganas $1.750 extra por cada venta de tus referidos</div>
         </div>
-        <button onClick={async () => { await becomePromoterFn(); }} style={S.btnGold}>🚀 ¡Afiliarme ahora!</button>
-        <div style={{ color:C.muted, fontSize:10, marginTop:4 }}>Es gratis y solo toma 2 segundos</div>
+        <div style={{ background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:10, padding:10, marginBottom:12, textAlign:'left' }}>
+          <div style={{ color:'#27AE60', fontSize:11, fontWeight:900, marginBottom:6 }}>✨ Beneficios</div>
+          {['Ganas por TODAS las compras de tu referido, no solo la primera','Comisiones de por vida mientras tu referido siga comprando','$10.000 por cada boleto de $35.000 vendido','$1.750 por ventas de tus sub-referidos (Nivel 2)','Sin inversión, 100% gratis','Ganancias ilimitadas — sin techo','Retira a Nequi, Daviplata, Bancolombia','Panel con estadísticas en tiempo real'].map(b=>(
+            <div key={b} style={{ color:'#fff', fontSize:10, marginBottom:3 }}>✔ {b}</div>
+          ))}
+        </div>
+        <button onClick={async () => { await becomePromoterFn(); }} style={S.btnGold}>🚀 ¡Afiliarme ahora — es gratis!</button>
+        <div style={{ color:C.muted, fontSize:10, marginTop:4 }}>Solo toma 2 segundos</div>
       </div>
     </div>
   )
@@ -2535,6 +2552,9 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
       {tab === 0 && (
         <div>
           <div style={{ color:C.gold, fontSize:12, fontWeight:900, marginBottom:8 }}>🔥 Dinámicas con comisión</div>
+          <div style={{ background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.15)', borderRadius:8, padding:8, marginBottom:8, textAlign:'center' }}>
+            <span style={{ color:'#27AE60', fontSize:10, fontWeight:700 }}>💰 Ganas por TODAS las compras de tus referidos, no solo la primera. ¡Comisiones de por vida!</span>
+          </div>
           {activeRaffles.length === 0 && <div style={{ color:C.muted, fontSize:11, textAlign:'center', padding:20 }}>No hay dinámicas activas</div>}
           {activeRaffles.map(r => {
             const rl1 = r.commission_l1 || l1
@@ -2762,7 +2782,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
   async function saveNota() {
     if (!notaText.trim()) return
-    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:`[NOTA INTERNA] ${notaText}`, from_admin:true, is_internal:true })
+        await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:`[NOTA INTERNA] ${notaText}`, from_admin:true, is_internal:true })
     await loadConvMessages(selectedConv.user_id)
     setNotaModal(false); setNotaText('')
   }
@@ -2772,7 +2792,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
   const filteredConvs = conversations.filter(c => {
     if (filter === 'image') return c.hasImage
     if (filter === 'unread') return c.unread > 0
-        if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
+    if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
   })
 
@@ -4154,12 +4174,12 @@ function AdminSocietyPanel({ raffles, onBack }) {
                   <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                   {socio ? (
                     <>
-                      <div style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>{socio.full_name}</div>
+                                            <div style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>{socio.full_name}</div>
                       <div style={{ color: C.muted, fontSize: 9, margin: '2px 0' }}>{socio.phone}</div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
                         <span style={{ color: fmt(halfPrice), fontSize: 9 }}>{fmt(halfPrice)}</span>
                         {paid
-                                                    ? <span style={{ background: 'rgba(39,174,96,0.15)', borderRadius: 999, padding: '1px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700 }}>Pagado</span>
+                          ? <span style={{ background: 'rgba(39,174,96,0.15)', borderRadius: 999, padding: '1px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700 }}>Pagado</span>
                           : <button onClick={() => confirmPayment(s.id, num)} style={{ background: 'rgba(39,174,96,0.1)', border: '1px solid rgba(39,174,96,0.25)', borderRadius: 6, padding: '2px 6px', color: '#27AE60', fontSize: 7, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Confirmar</button>
                         }
                       </div>
