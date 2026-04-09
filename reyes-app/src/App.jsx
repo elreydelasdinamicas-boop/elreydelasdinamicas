@@ -2662,14 +2662,14 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
               ? <div style={{ textAlign:'center', padding:'30px 16px', color:C.muted }}><div style={{ fontSize:32, marginBottom:8 }}>💬</div>Sin conversaciones</div>
               : filteredConvs.map((conv,i) => (
                 <div key={i} onClick={() => setSelectedConv(conv)} style={{ padding:'11px 12px', borderBottom:'1px solid #0d0d0d', cursor:'pointer', background:selectedConv?.user_id===conv.user_id?'rgba(230,190,0,0.05)':'transparent', display:'flex', gap:9, alignItems:'center' }}>
-                  <div style={{ width:36, height:36, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:13, flexShrink:0 }}>{(conv.name||'U')[0].toUpperCase()}</div>
+                                    <div style={{ width:36, height:36, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:13, flexShrink:0 }}>{(conv.name||'U')[0].toUpperCase()}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2 }}>
                       <div style={{ color:'#fff', fontWeight:700, fontSize:11 }}>{conv.name}</div>
                       <div style={{ color:'#444', fontSize:8 }}>{conv.last_time ? fmtTime(conv.last_time) : ''}</div>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                                            {conv.hasImage && <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#888" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#888" stroke="none"/><polyline points="21 15 16 10 5 21"/></svg>}
+                      {conv.hasImage && <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#888" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#888" stroke="none"/><polyline points="21 15 16 10 5 21"/></svg>}
                       <div style={{ color:C.muted, fontSize:10, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{conv.last_msg}</div>
                     </div>
                   </div>
@@ -4136,13 +4136,12 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 
   function getConfig(g) { try { return JSON.parse(g?.prize_description||'{}') } catch { return {} } }
 
-  const fetchingRef = useRef(false)
   useEffect(() => {
     fetchGame()
     const ch = supabase.channel('bingo-live-'+Date.now())
-      .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => { if (!fetchingRef.current) fetchGame() })
+      .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => fetchGame())
       .subscribe()
-    const poll = setInterval(() => { if (!fetchingRef.current) fetchGame() }, 5000)
+    const poll = setInterval(fetchGame, 6000)
     return () => { supabase.removeChannel(ch); clearInterval(poll) }
   }, [])
 
@@ -4237,28 +4236,15 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   }
 
   async function fetchGame() {
-    if (fetchingRef.current) return
-    fetchingRef.current = true
     try {
-      const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1)
-      const game1 = data?.[0] || null
-      if (game1) {
-        setGame(prev => {
-          if (prev && prev.id === game1.id && prev.updated_at === game1.updated_at && prev.status === game1.status) return prev
-          return game1
-        })
-        fetchingRef.current = false
-        return
-      }
-      const { data: finData } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1)
-      const fin = finData?.[0] || null
-      setGame(prev => {
-        if (!prev && !fin) return prev
-        if (prev && fin && prev.id === fin.id) return prev
-        return fin || null
-      })
-    } catch(e) { console.log('fetchGame error:', e) }
-    fetchingRef.current = false
+      const { data, error } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1)
+      if (error) { console.log('fetchGame error:', error); return }
+      const g = data?.[0] || null
+      if (g) { setGame(g); return }
+      // No active game - check finished
+      const { data: fd } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1)
+      setGame(fd?.[0] || null)
+    } catch(e) { console.log('fetchGame catch:', e) }
   }
 
   async function fetchMyCartones() {
