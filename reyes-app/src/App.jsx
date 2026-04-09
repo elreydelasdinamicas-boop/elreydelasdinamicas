@@ -2613,9 +2613,9 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
   const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
 
   const filteredConvs = conversations.filter(c => {
-        if (filter === 'image') return c.hasImage
+    if (filter === 'image') return c.hasImage
     if (filter === 'unread') return c.unread > 0
-    if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
+        if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
   })
 
@@ -4024,12 +4024,13 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 
   function getConfig(g) { try { return JSON.parse(g?.prize_description||'{}') } catch { return {} } }
 
+  const fetchingRef = useRef(false)
   useEffect(() => {
     fetchGame()
     const ch = supabase.channel('bingo-live-'+Date.now())
-      .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => fetchGame())
+      .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => { if (!fetchingRef.current) fetchGame() })
       .subscribe()
-    const poll = setInterval(() => fetchGame(), 3000)
+    const poll = setInterval(() => { if (!fetchingRef.current) fetchGame() }, 5000)
     return () => { supabase.removeChannel(ch); clearInterval(poll) }
   }, [])
 
@@ -4439,8 +4440,11 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
                 ) : (
                   <>
                     <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ ...S.btnGold, width:'100%', marginBottom:6, opacity:buyingPack?.7:1, fontSize:12 }}>{buyingPack?'Generando...':'Comprar por WhatsApp'}</button>
-                    {payMethods.points && pointsPrice > 0 && (
-                      <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ width:'100%', background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:10, padding:'7px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Puntos · {fmt(pointsPrice)} pts</button>
+                    {payMethods.points && (
+                      <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ width:'100%', background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:10, padding:'7px', color:C.gold, fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginBottom:6 }}>Pagar con Puntos{pointsPrice > 0 ? ' · '+fmt(pointsPrice)+' pts' : ''}</button>
+                    )}
+                    {payMethods.dinero && (
+                      <button onClick={()=>buyPack(pack)} disabled={buyingPack} style={{ width:'100%', background:'rgba(93,173,226,0.08)', border:'1px solid rgba(93,173,226,0.25)', borderRadius:10, padding:'7px', color:'#5DADE2', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>Pagar con Mi Dinero</button>
                     )}
                   </>
                 )}
