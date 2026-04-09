@@ -2407,7 +2407,6 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
           </div>
         </div>
       )}
-    </div>
 
       {/* PROMOTER BANNER */}
       {user && !profile?.is_promoter && (
@@ -2432,6 +2431,7 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
           <span style={{ color:C.gold, marginLeft:'auto' }}>→</span>
         </button>
       )}
+    </div>
   )
 }
 
