@@ -2638,7 +2638,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
         {/* Lista conversaciones */}
-                <div style={{ width: selectedConv ? '35%' : '100%', borderRight:`1px solid ${C.cardBorder}`, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        <div style={{ width: selectedConv ? '35%' : '100%', borderRight:`1px solid ${C.cardBorder}`, display:'flex', flexDirection:'column', overflow:'hidden' }}>
           {/* Filtros */}
           <div style={{ padding:'7px 10px', display:'flex', gap:5, overflowX:'auto', scrollbarWidth:'none', borderBottom:'1px solid #111', flexShrink:0 }}>
             {[['all','Todos'],['unread','Sin leer'],['image','Con imagen'],['today','Hoy']].map(([val,label]) => (
@@ -2654,7 +2654,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
                   <div style={{ color:'#444', fontSize:7, marginTop:2 }}>{l}</div>
                 </div>
               ))}
-            </div>
+                          </div>
           )}
           {/* Lista */}
           <div style={{ flex:1, overflowY:'auto' }}>
@@ -4536,8 +4536,8 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
           </div>
         )}
 
-        {/* BALOTA ACTUAL */}
-        <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:16, padding:14, marginBottom:10, position:'relative', overflow:'hidden' }}>
+        {/* BALOTA ACTUAL — hide when waiting */}
+        {!isWaiting && <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:16, padding:14, marginBottom:10, position:'relative', overflow:'hidden' }}>
           <GoldLine />
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
             <div style={{ width:68, height:68, background:currentNum?`linear-gradient(135deg,${C.gold},${C.goldLight})`:'#1a1a1a', borderRadius:'50%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0, border:currentNum?'none':'2px dashed #2a2a2a' }}>
@@ -4556,10 +4556,10 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
               <span style={{ color:C.muted, fontSize:10 }}>Cantados: <b style={{ color:C.gold }}>{calledNums.length}/75</b></span>
             </div>
           </div>
-        </div>
+        </div>}
 
-        {/* PREMIOS COMPACTOS */}
-        <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.12)', borderRadius:10, padding:'8px 10px', marginBottom:10, display:'flex', gap:4, flexWrap:'wrap', alignItems:'center' }}>
+        {/* PREMIOS COMPACTOS — hide when waiting */}
+        {!isWaiting && <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.12)', borderRadius:10, padding:'8px 10px', marginBottom:10, display:'flex', gap:4, flexWrap:'wrap', alignItems:'center' }}>
           <span style={{ color:'#fff', fontSize:10, fontWeight:900, marginRight:2 }}>🏆</span>
           {winTypes.map(wt => {
             const isWon = wonTypes.includes(wt)
@@ -4569,7 +4569,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
               </button>
             )
           })}
-        </div>
+        </div>}
 
         {/* POPUP premio seleccionado */}
         {showPrizeInfo && (
@@ -4593,15 +4593,15 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
           </div>
         )}
 
-        {/* CONTROLES */}
-        <div style={{ display:'flex', gap:8, marginBottom:10 }}>
+        {/* CONTROLES — hide when waiting */}
+        {!isWaiting && <div style={{ display:'flex', gap:8, marginBottom:10 }}>
           <button onClick={()=>setAutoMark(!autoMark)} style={{ flex:1, background:'#111', border:`1px solid ${autoMark?'rgba(39,174,96,0.3)':'#2a2a2a'}`, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', fontFamily:'inherit' }}><span style={{ color:'#fff', fontSize:11, fontWeight:700 }}>Auto-marcar</span><Toggle on={autoMark} onToggle={()=>setAutoMark(!autoMark)} /></button>
           <button onClick={()=>setShowBoard(!showBoard)} style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:'8px 12px', cursor:'pointer', fontFamily:'inherit', color:C.gold, fontSize:10, fontWeight:700 }}>{showBoard?'Ocultar':'1-75'}</button>
           {myCartones.length>0 && <button onClick={handlePrint} style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:'8px 12px', cursor:'pointer', fontFamily:'inherit', color:C.gold, fontSize:10, fontWeight:700 }}>🖨️ Imprimir</button>}
-        </div>
+        </div>}
 
         {/* TABLERO 1-75 */}
-        {showBoard && (
+        {!isWaiting && showBoard && (
           <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:14, padding:10, marginBottom:12 }}>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:4 }}>{['B','I','N','G','O'].map(l=><div key={l} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:6, padding:4, textAlign:'center', fontSize:11, fontWeight:900, color:'#000' }}>{l}</div>)}</div>
             {Array.from({length:15},(_,row)=>(
@@ -4612,7 +4612,40 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 
         {/* COMPRAR PACK O CARTONES */}
         {!user ? (
-          <div style={{ textAlign:'center', padding:'20px 0' }}><div style={{ color:C.muted, fontSize:13, marginBottom:12 }}>Inicia sesión para jugar</div><button onClick={onLogin} style={{ ...S.btnGold, maxWidth:200, margin:'0 auto' }}>Entrar a jugar</button></div>
+          <div>
+            <div style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.06),rgba(230,190,0,0.02))', border:'1.5px solid rgba(230,190,0,0.3)', borderRadius:14, padding:16, marginBottom:10, textAlign:'center', position:'relative', overflow:'hidden' }}>
+              <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.6),transparent)' }} />
+              <div style={{ fontSize:28, marginBottom:4 }}>🎟️</div>
+              <div style={{ color:'#fff', fontSize:16, fontWeight:900, marginBottom:2 }}>¡Juega Bingo!</div>
+              <div style={{ color:C.muted, fontSize:11, marginBottom:10 }}>Compra tu pack y gana premios en efectivo</div>
+              {gamePacks.map((pack,pi)=>(
+                <div key={pi} style={{ background:'#0d0d0d', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:12, marginBottom:8 }}>
+                  <div style={{ color:'#fff', fontSize:14, fontWeight:900, marginBottom:1 }}>{pack.name || `Pack de ${pack.cartones}`}</div>
+                  <div style={{ color:C.muted, fontSize:10, marginBottom:4 }}>{pack.cartones} cartones aleatorios</div>
+                  <div style={{ color:C.gold, fontSize:22, fontWeight:900 }}>{isFree?'GRATIS':fmt(pack.price)}</div>
+                </div>
+              ))}
+              <button onClick={onLogin} style={{ ...S.btnGold, width:'100%', fontSize:14, padding:12, marginBottom:6 }}>🎟️ Comprar y jugar</button>
+              <div style={{ color:C.muted, fontSize:10 }}>Al presionar se te pedirá crear cuenta gratis</div>
+            </div>
+            <div style={{ display:'flex', gap:4, marginBottom:8 }}>
+              <div style={{ flex:1, background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:8, padding:8, textAlign:'center' }}>
+                <div style={{ fontSize:14, marginBottom:2 }}>✨</div>
+                <div style={{ color:'#27AE60', fontSize:10, fontWeight:700 }}>Auto-verificación</div>
+                <div style={{ color:C.muted, fontSize:8 }}>El sistema detecta si ganaste</div>
+              </div>
+              <div style={{ flex:1, background:'rgba(93,173,226,0.06)', border:'1px solid rgba(93,173,226,0.2)', borderRadius:8, padding:8, textAlign:'center' }}>
+                <div style={{ fontSize:14, marginBottom:2 }}>📺</div>
+                <div style={{ color:'#5DADE2', fontSize:10, fontWeight:700 }}>En vivo</div>
+                <div style={{ color:C.muted, fontSize:8 }}>Transmisión YouTube</div>
+              </div>
+              <div style={{ flex:1, background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:8, padding:8, textAlign:'center' }}>
+                <div style={{ fontSize:14, marginBottom:2 }}>💰</div>
+                <div style={{ color:C.gold, fontSize:10, fontWeight:700 }}>Premios reales</div>
+                <div style={{ color:C.muted, fontSize:8 }}>Pago inmediato</div>
+              </div>
+            </div>
+          </div>
         ) : myCartones.length===0 ? (
           <div style={{ marginBottom:14 }}>
             {gamePacks.map((pack,pi)=>(
