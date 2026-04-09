@@ -211,7 +211,7 @@ export default function App() {
   async function reservePending() {
     const { raffleId, nums, price } = pendingNums
     if (!raffleId || !nums?.length) return
-    const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', raffleId).in('status', ['reserved', 'paid'])
+    const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', raffleId).in('status', ['reserved', 'paid', 'winner'])
     const taken = (ex || []).flatMap(t => t.numbers || [])
     const avail = nums.filter(n => !taken.includes(n))
     if (avail.length > 0) await supabase.from('tickets').insert({ user_id: user.id, raffle_id: raffleId, numbers: avail, status: 'reserved', total_amount: avail.length * price })
@@ -226,18 +226,20 @@ export default function App() {
     if (data) setAppConfig(prev => ({ ...prev, ...data }))
   }
   async function fetchReserved(id) {
-    // Tickets normales
-    const { data } = await supabase.from('tickets').select('numbers').eq('raffle_id', id).in('status', ['reserved', 'paid'])
-    const normalNums = (data || []).flatMap(t => t.numbers || [])
-    // Society tickets — numeros con 2 socios completos se marcan como reservados en la tabla
-    // Society completas (2 socios) Y en espera (1 socio) se marcan como ocupadas
-    // Excluir canceladas explícitamente
-    const { data: sData } = await supabase.from('society_tickets')
-      .select('number')
-      .eq('raffle_id', id)
-      .in('status', ['waiting', 'complete'])  // canceladas NO se incluyen
-    const societyOccupied = (sData || []).map(s => s.number)
-    setAllReservedNums([...normalNums, ...societyOccupied])
+    try {
+      // Tickets normales
+      const { data, error } = await supabase.from('tickets').select('numbers').eq('raffle_id', id).in('status', ['reserved', 'paid', 'winner'])
+      if (error) { console.error('fetchReserved tickets error:', error); return }
+      const normalNums = (data || []).flatMap(t => t.numbers || [])
+      // Society tickets
+      const { data: sData, error: sErr } = await supabase.from('society_tickets')
+        .select('number')
+        .eq('raffle_id', id)
+        .in('status', ['waiting', 'complete'])
+      if (sErr) console.error('fetchReserved society error:', sErr)
+      const societyOccupied = (sData || []).map(s => s.number)
+      setAllReservedNums([...normalNums, ...societyOccupied])
+    } catch(e) { console.error('fetchReserved catch:', e) }
   }
   async function fetchProfile(id) {
     const { data } = await supabase.from('users_profile').select('*').eq('id', id).single()
@@ -348,7 +350,7 @@ export default function App() {
     }
     const r = selectedRaffle
     try {
-      const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', r.id).in('status', ['reserved', 'paid'])
+      const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', r.id).in('status', ['reserved', 'paid', 'winner'])
       const taken = (ex || []).flatMap(t => t.numbers || [])
       const conflict = selectedNums.filter(n => taken.includes(n))
       if (conflict.length > 0) { alert(`Los numeros ${conflict.map(n => String(n).padStart(2, '0')).join(', ')} ya estan apartados.`); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); return }
@@ -2661,8 +2663,8 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
             {filteredConvs.length === 0
               ? <div style={{ textAlign:'center', padding:'30px 16px', color:C.muted }}><div style={{ fontSize:32, marginBottom:8 }}>💬</div>Sin conversaciones</div>
               : filteredConvs.map((conv,i) => (
-                <div key={i} onClick={() => setSelectedConv(conv)} style={{ padding:'11px 12px', borderBottom:'1px solid #0d0d0d', cursor:'pointer', background:selectedConv?.user_id===conv.user_id?'rgba(230,190,0,0.05)':'transparent', display:'flex', gap:9, alignItems:'center' }}>
-                                    <div style={{ width:36, height:36, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:13, flexShrink:0 }}>{(conv.name||'U')[0].toUpperCase()}</div>
+                                <div key={i} onClick={() => setSelectedConv(conv)} style={{ padding:'11px 12px', borderBottom:'1px solid #0d0d0d', cursor:'pointer', background:selectedConv?.user_id===conv.user_id?'rgba(230,190,0,0.05)':'transparent', display:'flex', gap:9, alignItems:'center' }}>
+                  <div style={{ width:36, height:36, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:13, flexShrink:0 }}>{(conv.name||'U')[0].toUpperCase()}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2 }}>
                       <div style={{ color:'#fff', fontWeight:700, fontSize:11 }}>{conv.name}</div>
@@ -4943,7 +4945,8 @@ function AdminBingoPanel({ onBack }) {
     setCreating(true)
     stopPolling()
     pollPaused.current = true
-    try { supabase.removeAllChannels() } catch(e) { try { const chs = supabase.getChannels(); for(const c of chs) supabase.removeChannel(c) } catch(e2){} }
+    // Only remove bingo channels, not tickets/society channels
+    try { const chs = supabase.getChannels(); for(const c of chs) { if (c.topic && c.topic.includes('bingo')) supabase.removeChannel(c) } } catch(e) {}
     await new Promise(r => setTimeout(r, 2000))
     try {
       const cfgJson = buildConfigJson()
