@@ -457,7 +457,7 @@ export default function App() {
           } catch(e) { console.error('Society error:', e); throw e }
         }} />}
         {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { setSupportTicketContext(ctx||null); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
-        {page === 'promoter' && <PromoterPage user={user} profile={profile} onBack={() => setPage('profile')} />}
+        {page === 'promoter' && <PromoterPage user={user} profile={profile} raffles={raffles} appConfig={appConfig} onBack={() => setPage('profile')} />}
         {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
         {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={isAdmin} onBack={() => setPage('home')} appConfig={appConfig} ticketContext={supportTicketContext} />}
         {page === 'admin' && <AdminSafe user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={() => setPage('home')} onOpenSupport={() => setPage('admin-support')} onOpenSociety={() => setPage('admin-society')} onOpenBingo={() => setPage('admin-bingo')} onRefreshRaffles={fetchRaffles} />}
@@ -1673,7 +1673,7 @@ function WinnersPage({ onBack, onRaffle }) {
 }
 
 // ─── PROFILE ──────────────────────────────────────────────────────────────────
-function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, isAdmin, onAdmin, onRefresh, onSupport, appConfig, pwa }) {
+function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, onPromoter, onBecomePromoter, isAdmin, onAdmin, onRefresh, onSupport, appConfig, pwa }) {
   const [tab, setTab] = useState(0)
   const [adminUsers, setAdminUsers] = useState([])
   const [userSearch, setUserSearch] = useState('')
@@ -2408,48 +2408,195 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
         </div>
       )}
     </div>
+
+      {/* PROMOTER BANNER */}
+      {user && !profile?.is_promoter && (
+        <div onClick={onBecomePromoter} style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.08),rgba(39,174,96,0.05))', border:'1.5px solid rgba(230,190,0,0.3)', borderRadius:14, padding:16, marginTop:16, cursor:'pointer', position:'relative', overflow:'hidden', textAlign:'center' }}>
+          <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.6),transparent)' }} />
+          <div style={{ fontSize:24, marginBottom:4 }}>💰</div>
+          <div style={{ color:C.gold, fontSize:14, fontWeight:900, marginBottom:2 }}>¡Gana dinero con nosotros!</div>
+          <div style={{ color:'#fff', fontSize:11, marginBottom:4 }}>Conviértete en <span style={{ color:C.gold, fontWeight:900 }}>Promotor Oficial</span></div>
+          <div style={{ color:C.muted, fontSize:10, marginBottom:10 }}>Comparte tu enlace, gana comisiones por cada venta</div>
+          <div style={{ display:'flex', gap:6, marginBottom:10, justifyContent:'center' }}>
+            <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:8, padding:'6px 12px' }}><div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>{appConfig?.level1_rate||15}%</div><div style={{ color:'#888', fontSize:8 }}>venta directa</div></div>
+            <div style={{ background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.15)', borderRadius:8, padding:'6px 12px' }}><div style={{ color:'#27AE60', fontSize:14, fontWeight:900 }}>{appConfig?.level2_rate||5}%</div><div style={{ color:'#888', fontSize:8 }}>sub-referido</div></div>
+            <div style={{ background:'rgba(93,173,226,0.06)', border:'1px solid rgba(93,173,226,0.15)', borderRadius:8, padding:'6px 12px' }}><div style={{ color:'#5DADE2', fontSize:14, fontWeight:900 }}>{fmt(appConfig?.promoter_bonus||5000)}</div><div style={{ color:'#888', fontSize:8 }}>nuevo promotor</div></div>
+          </div>
+          <div style={{ background:'linear-gradient(135deg,#E6BE00,#f0d000)', borderRadius:10, padding:11 }}><div style={{ color:'#000', fontSize:13, fontWeight:900 }}>🚀 Quiero ser Promotor</div></div>
+        </div>
+      )}
+      {user && profile?.is_promoter && (
+        <button onClick={onPromoter} style={{ width:'100%', marginTop:16, background:'linear-gradient(135deg,rgba(230,190,0,0.08),rgba(230,190,0,0.03))', border:'1.5px solid rgba(230,190,0,0.3)', borderRadius:14, padding:14, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+          <span style={{ fontSize:20 }}>📣</span>
+          <div style={{ textAlign:'left' }}><div style={{ color:C.gold, fontSize:13, fontWeight:900 }}>Panel del Promotor</div><div style={{ color:C.muted, fontSize:10 }}>Ver ganancias y referidos</div></div>
+          <span style={{ color:C.gold, marginLeft:'auto' }}>→</span>
+        </button>
+      )}
   )
 }
 
 // ─── PROMOTER ─────────────────────────────────────────────────────────────────
-function PromoterPage({ user, profile, onBack }) {
+function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
   const [referrals, setReferrals] = useState([])
-  useEffect(() => { if(user) supabase.from('referrals').select('*').eq('promoter_id', user.id).then(({ data }) => { if(data) setReferrals(data) }) }, [user])
-  if (!profile?.is_promoter) return <div style={{ ...S.content, textAlign:'center', paddingTop:60 }}><p style={{ color:C.muted }}>No eres Vendedor Oficial aun</p><button onClick={onBack} style={{ ...S.btnGold, maxWidth:240, margin:'16px auto 0' }}>Volver</button></div>
-  const refUrl = `https://www.lacasadelasdinamicas.com/?ref=${profile?.referral_code}`
-  return (
+  const [earnings, setEarnings] = useState([])
+  const [tab, setTab] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    supabase.from('users_profile').select('id,full_name,phone,created_at,is_promoter').eq('referred_by', user.id).then(({ data }) => setReferrals(data || []))
+  }, [user])
+
+  if (!profile?.is_promoter) return (
     <div style={S.content}>
       <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
-      <div style={{ background:`linear-gradient(160deg,#1a1200,${C.card})`, border:`1px solid ${C.cardBorder}`, borderRadius:18, padding:18, marginBottom:16, position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}><span style={{ fontSize:26 }}>📣</span><div><h2 style={{ color:'#fff', fontWeight:900, fontSize:18, margin:0 }}>Panel del Vendedor</h2><span style={S.badge('green')}>Activo</span></div></div>
-      </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
-        {[[referrals.length,'Referidos','👥'],[fmt(profile?.total_earnings||0),'Ganancias','💵'],[fmt(profile?.pending_earnings||0),'Por cobrar','💰'],['15%','Comision N1','📈']].map(([val,label,icon]) => (
-          <div key={label} style={{ background:C.card, border:`1px solid ${C.cardBorder}`, borderRadius:14, padding:14, textAlign:'center' }}>
-            <div style={{ fontSize:18, marginBottom:4 }}>{icon}</div>
-            <div style={{ fontSize:20, fontWeight:900, color:C.gold }}>{val}</div>
-            <div style={{ fontSize:10, color:C.muted, marginTop:3, textTransform:'uppercase' }}>{label}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ ...S.card, marginBottom:14 }}>
-        <div style={{ fontSize:13, fontWeight:700, color:'#fff', marginBottom:10 }}>Tu enlace de referidos</div>
-        <div style={{ background:C.bg3, border:`1px dashed rgba(201,162,39,0.3)`, borderRadius:10, padding:'12px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, marginBottom:10 }}>
-          <span style={{ fontSize:11, color:C.gold, fontFamily:'monospace', wordBreak:'break-all' }}>{refUrl}</span>
-          <button onClick={() => navigator.clipboard.writeText(refUrl).then(() => alert('Copiado!'))} style={{ background:'rgba(201,162,39,0.15)', border:`1px solid rgba(201,162,39,0.3)`, borderRadius:8, color:C.gold, fontSize:11, fontWeight:700, padding:'6px 10px', cursor:'pointer', whiteSpace:'nowrap', fontFamily:'inherit' }}>Copiar</button>
+      <div style={{ textAlign:'center', padding:'40px 0' }}>
+        <div style={{ fontSize:40, marginBottom:8 }}>🏆</div>
+        <div style={{ color:C.gold, fontSize:18, fontWeight:900, marginBottom:4 }}>Programa de Promotores</div>
+        <div style={{ color:C.muted, fontSize:12, marginBottom:20 }}>La Casa De Las Dinámicas</div>
+        <div style={{ textAlign:'left', marginBottom:20 }}>
+          <div style={{ color:'#fff', fontSize:13, fontWeight:900, marginBottom:8 }}>¿Cómo funciona?</div>
+          {[['1','Comparte tu enlace','Recibes un link único para compartir por WhatsApp, redes sociales, etc.','rgba(230,190,0,0.1)'],['2','Tus referidos compran','Cada vez que alguien compra con tu enlace, ganas comisión.','rgba(39,174,96,0.1)'],['3','Cobra tus ganancias','Retira a Nequi, Daviplata o Bancolombia.','rgba(93,173,226,0.1)']].map(([n,t,d,bg])=>(
+            <div key={n} style={{ display:'flex', gap:10, alignItems:'flex-start', marginBottom:8, background:'#111', borderRadius:10, padding:10 }}>
+              <div style={{ width:28, height:28, background:bg, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color:'#fff', fontSize:13, fontWeight:900 }}>{n}</div>
+              <div><div style={{ color:'#fff', fontSize:11, fontWeight:700 }}>{t}</div><div style={{ color:'#888', fontSize:10 }}>{d}</div></div>
+            </div>
+          ))}
         </div>
-        <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`La Casa De Las Dinamicas!\nParticipa en las mejores dinamicas del pais!\nRegistrate: ${refUrl}`)}`)} style={S.btnGold}>Compartir por WhatsApp</button>
+        <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:12, marginBottom:16, textAlign:'left' }}>
+          <div style={{ color:'#888', fontSize:10, marginBottom:6 }}>Ejemplo: 20 personas compran $5.000 c/u</div>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}><span style={{ color:C.gold, fontSize:11 }}>Tu comisión ({appConfig?.level1_rate||15}%)</span><span style={{ color:C.gold, fontSize:11, fontWeight:900 }}>{fmt(20*5000*(appConfig?.level1_rate||15)/100)}</span></div>
+          <div style={{ display:'flex', justifyContent:'space-between' }}><span style={{ color:'#27AE60', fontSize:11 }}>3 nuevos promotores</span><span style={{ color:'#27AE60', fontSize:11, fontWeight:900 }}>{fmt(3*(appConfig?.promoter_bonus||5000))}</span></div>
+          <div style={{ height:1, background:'#1a1a1a', margin:'6px 0' }} />
+          <div style={{ display:'flex', justifyContent:'space-between' }}><span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>Total</span><span style={{ color:C.gold, fontSize:15, fontWeight:900 }}>{fmt(20*5000*(appConfig?.level1_rate||15)/100 + 3*(appConfig?.promoter_bonus||5000))}</span></div>
+        </div>
+        <button onClick={async () => { await becomePromoterFn(); }} style={S.btnGold}>🚀 ¡Afiliarme ahora!</button>
+        <div style={{ color:C.muted, fontSize:10, marginTop:4 }}>Es gratis y solo toma 2 segundos</div>
       </div>
-      <div style={S.card}>
-        <div style={{ fontSize:13, fontWeight:700, color:'#fff', marginBottom:12 }}>Estructura de comisiones</div>
-        {[['Nivel 1 — Venta directa','15%'],['Nivel 2 — Referido de referido','7%'],['Nivel 3','3%']].map(([label,pct]) => (
-          <div key={label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg3, borderRadius:9, padding:'10px 12px', marginBottom:8 }}>
-            <span style={{ color:'#ccc', fontSize:12 }}>{label}</span>
-            <span style={S.badge('gold')}>{pct}</span>
-          </div>
+    </div>
+  )
+
+  async function becomePromoterFn() {
+    const refCode = profile?.referral_code || 'CASA-' + Math.random().toString(36).substr(2,6).toUpperCase()
+    await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id)
+    await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: appConfig?.level1_rate||15, level2_rate: appConfig?.level2_rate||5 })
+    alert('✅ ¡Ahora eres Promotor Oficial!')
+    window.location.reload()
+  }
+
+  const refUrl = `https://www.lacasadelasdinamicas.com/?ref=${profile?.referral_code}`
+  const totalEarnings = profile?.total_earnings || 0
+  const pendingEarnings = profile?.pending_earnings || 0
+  const activeRaffles = (raffles||[]).filter(r => r.status === 'active')
+  const l1 = appConfig?.level1_rate || 15
+  const l2 = appConfig?.level2_rate || 5
+  const subPromoters = referrals.filter(r => r.is_promoter)
+
+  return (
+    <div style={S.content}>
+      <div style={{ background:'#111', padding:'11px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #1a1a1a', marginBottom:12, borderRadius:'12px 12px 0 0' }}>
+        <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, fontSize:13, padding:0, fontFamily:'inherit' }}>← Volver</button>
+        <span style={{ color:'#fff', fontSize:12, fontWeight:900 }}>Mi Panel Promotor</span>
+        <span style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:999, padding:'2px 8px', color:C.gold, fontSize:9, fontWeight:700 }}>PRO</span>
+      </div>
+
+      {/* STATS */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+        <div style={{ background:'linear-gradient(135deg,rgba(39,174,96,0.1),rgba(39,174,96,0.03))', border:'1px solid rgba(39,174,96,0.25)', borderRadius:12, padding:12, textAlign:'center' }}><div style={{ color:'#888', fontSize:9 }}>Ganancias totales</div><div style={{ color:'#27AE60', fontSize:20, fontWeight:900 }}>{fmt(totalEarnings)}</div></div>
+        <div style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.08),rgba(230,190,0,0.02))', border:'1px solid rgba(230,190,0,0.25)', borderRadius:12, padding:12, textAlign:'center' }}><div style={{ color:'#888', fontSize:9 }}>Pendiente cobro</div><div style={{ color:C.gold, fontSize:20, fontWeight:900 }}>{fmt(pendingEarnings)}</div></div>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6, marginBottom:12 }}>
+        <div style={{ background:'#111', borderRadius:8, padding:8, textAlign:'center' }}><div style={{ color:'#fff', fontSize:16, fontWeight:900 }}>{referrals.length}</div><div style={{ color:'#888', fontSize:8 }}>Referidos</div></div>
+        <div style={{ background:'#111', borderRadius:8, padding:8, textAlign:'center' }}><div style={{ color:'#fff', fontSize:16, fontWeight:900 }}>{l1}%</div><div style={{ color:'#888', fontSize:8 }}>Comisión N1</div></div>
+        <div style={{ background:'#111', borderRadius:8, padding:8, textAlign:'center' }}><div style={{ color:'#fff', fontSize:16, fontWeight:900 }}>{subPromoters.length}</div><div style={{ color:'#888', fontSize:8 }}>Sub-promotores</div></div>
+      </div>
+
+      {/* REFERRAL LINK */}
+      <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:10, marginBottom:12 }}>
+        <div style={{ color:C.gold, fontSize:10, fontWeight:700, marginBottom:6 }}>TU ENLACE DE REFERIDO</div>
+        <div style={{ background:'#0a0a0a', border:'1px solid #1a1a1a', borderRadius:8, padding:8, display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+          <span style={{ color:'#fff', fontSize:10, fontFamily:'monospace', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{refUrl}</span>
+          <button onClick={() => { navigator.clipboard.writeText(refUrl); alert('✅ Enlace copiado!') }} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:6, padding:'3px 8px', color:C.gold, fontSize:9, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginLeft:6, flexShrink:0 }}>📋 Copiar</button>
+        </div>
+        <div style={{ display:'flex', gap:4 }}>
+          <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`🎱 ¡La Casa De Las Dinámicas! Premios en efectivo 💰\nRegistrate: ${refUrl}`)}`, '_blank')} style={{ flex:1, background:'#27AE60', border:'none', borderRadius:8, padding:8, color:'#fff', fontSize:10, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>WhatsApp</button>
+          <button onClick={() => navigator.clipboard.writeText(`🎱 ¡La Casa De Las Dinámicas!\nRegistrate: ${refUrl}`).then(()=>alert('Texto copiado para Instagram!'))} style={{ flex:1, background:'linear-gradient(135deg,#405DE6,#C13584)', border:'none', borderRadius:8, padding:8, color:'#fff', fontSize:10, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>Instagram</button>
+          <button onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(refUrl)}`, '_blank')} style={{ flex:1, background:'#1877F2', border:'none', borderRadius:8, padding:8, color:'#fff', fontSize:10, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>Facebook</button>
+        </div>
+      </div>
+
+      {/* TABS */}
+      <div style={{ display:'flex', gap:3, background:'rgba(255,255,255,0.03)', borderRadius:10, padding:4, marginBottom:12 }}>
+        {['Dinámicas','Referidos','Comisiones'].map((t,i) => (
+          <button key={t} onClick={() => setTab(i)} style={{ flex:1, padding:8, border:'none', background:tab===i?C.card:'transparent', color:tab===i?'#fff':'#555', fontSize:11, fontWeight:700, cursor:'pointer', borderRadius:8, fontFamily:'inherit' }}>{t}</button>
         ))}
       </div>
+
+      {/* TAB: Dinámicas con comisión */}
+      {tab === 0 && (
+        <div>
+          <div style={{ color:C.gold, fontSize:12, fontWeight:900, marginBottom:8 }}>🔥 Dinámicas con comisión</div>
+          {activeRaffles.length === 0 && <div style={{ color:C.muted, fontSize:11, textAlign:'center', padding:20 }}>No hay dinámicas activas</div>}
+          {activeRaffles.map(r => {
+            const rl1 = r.commission_l1 || l1
+            const earnPer = Math.round(r.ticket_price * rl1 / 100)
+            return (
+              <div key={r.id} style={{ background:'#111', border:'1.5px solid rgba(230,190,0,0.3)', borderRadius:12, padding:10, marginBottom:6, position:'relative', overflow:'hidden' }}>
+                <div style={{ position:'absolute', top:0, right:0, background:'#27AE60', borderRadius:'0 0 0 8px', padding:'2px 8px' }}><span style={{ color:'#fff', fontSize:8, fontWeight:900 }}>ACTIVO</span></div>
+                <div style={{ color:'#fff', fontSize:13, fontWeight:900, marginBottom:4 }}>🎟️ {r.title}</div>
+                <div style={{ display:'flex', gap:6, marginBottom:6 }}>
+                  <span style={{ background:'rgba(230,190,0,0.08)', borderRadius:6, padding:'3px 8px', color:C.gold, fontSize:10, fontWeight:700 }}>{rl1}% por venta</span>
+                  <span style={{ background:'rgba(39,174,96,0.08)', borderRadius:6, padding:'3px 8px', color:'#27AE60', fontSize:10, fontWeight:700 }}>{r.commission_l2||l2}% sub-ref</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div style={{ color:'#888', fontSize:10 }}>Boleto: {fmt(r.ticket_price)} · <span style={{ color:C.gold }}>Ganas {fmt(earnPer)}</span></div>
+                  <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`🎟️ ${r.title} — Premios increíbles!\nCompra aquí: ${refUrl}`)}`,'_blank')} style={{ background:'#27AE60', border:'none', borderRadius:6, padding:'4px 10px', color:'#fff', fontSize:9, fontWeight:900, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:4 }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>Compartir
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* TAB: Referidos */}
+      {tab === 1 && (
+        <div>
+          <div style={{ color:'#fff', fontSize:12, fontWeight:900, marginBottom:8 }}>Mis referidos ({referrals.length})</div>
+          {referrals.length === 0 && <div style={{ color:C.muted, fontSize:11, textAlign:'center', padding:20 }}>Aún no tienes referidos. ¡Comparte tu enlace!</div>}
+          {referrals.map(r => (
+            <div key={r.id} style={{ background:'#111', borderRadius:10, padding:10, marginBottom:6 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <div style={{ width:32, height:32, background:r.is_promoter?'rgba(93,173,226,0.1)':'rgba(39,174,96,0.1)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>{r.is_promoter?'⭐':'👤'}</div>
+                  <div>
+                    <div style={{ color:'#fff', fontSize:11, fontWeight:700 }}>{r.full_name||'Sin nombre'} {r.is_promoter && <span style={{ background:'rgba(93,173,226,0.15)', borderRadius:4, padding:'1px 4px', color:'#5DADE2', fontSize:7, fontWeight:900 }}>PROMOTOR</span>}</div>
+                    <div style={{ color:'#888', fontSize:9 }}>Tel: {r.phone ? r.phone.slice(0,3)+'****'+r.phone.slice(-3) : 'N/A'}</div>
+                  </div>
+                </div>
+                {r.phone && <button onClick={() => window.open(`https://wa.me/${r.phone.replace(/\D/g,'')}?text=${encodeURIComponent('¡Hola! Soy promotor de La Casa De Las Dinámicas. Hay nuevas dinámicas con premios increíbles, ¿te animas a participar?')}`, '_blank')} style={{ background:'#27AE60', border:'none', borderRadius:6, padding:'4px 8px', color:'#fff', fontSize:8, fontWeight:700, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:3 }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>Escribir
+                </button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* TAB: Comisiones */}
+      {tab === 2 && (
+        <div>
+          <div style={{ color:'#fff', fontSize:13, fontWeight:900, marginBottom:8 }}>Estructura de comisiones</div>
+          {[['Nivel 1 — Venta directa',`${l1}%`,C.gold],['Nivel 2 — Sub-referido',`${l2}%`,'#27AE60'],['Bono nuevo promotor',fmt(appConfig?.promoter_bonus||5000),'#5DADE2']].map(([label,val,col]) => (
+            <div key={label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#111', borderRadius:9, padding:'10px 12px', marginBottom:8 }}>
+              <span style={{ color:'#ccc', fontSize:12 }}>{label}</span>
+              <span style={{ background:`${col}20`, border:`1px solid ${col}50`, borderRadius:6, padding:'3px 10px', color:col, fontSize:12, fontWeight:900 }}>{val}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button onClick={() => alert('Solicitud de retiro enviada. El admin la procesará pronto.')} style={{ ...S.btnGold, marginTop:12 }}>💸 Solicitar retiro</button>
     </div>
   )
 }
@@ -2596,8 +2743,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
       }
     } catch(e) { console.error('sendMessage error:', e) }
   }
-
-  async function confirmPayment() {
+    async function confirmPayment() {
     if (!selectedConv) return
     await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'✅ Pago confirmado! Tu numero esta asegurado. Mucha suerte en el sorteo!', from_admin:true })
     await loadConvMessages(selectedConv.user_id)
@@ -2663,7 +2809,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
             {filteredConvs.length === 0
               ? <div style={{ textAlign:'center', padding:'30px 16px', color:C.muted }}><div style={{ fontSize:32, marginBottom:8 }}>💬</div>Sin conversaciones</div>
               : filteredConvs.map((conv,i) => (
-                                <div key={i} onClick={() => setSelectedConv(conv)} style={{ padding:'11px 12px', borderBottom:'1px solid #0d0d0d', cursor:'pointer', background:selectedConv?.user_id===conv.user_id?'rgba(230,190,0,0.05)':'transparent', display:'flex', gap:9, alignItems:'center' }}>
+                <div key={i} onClick={() => setSelectedConv(conv)} style={{ padding:'11px 12px', borderBottom:'1px solid #0d0d0d', cursor:'pointer', background:selectedConv?.user_id===conv.user_id?'rgba(230,190,0,0.05)':'transparent', display:'flex', gap:9, alignItems:'center' }}>
                   <div style={{ width:36, height:36, background:`linear-gradient(135deg,${C.goldDark},${C.gold})`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, color:'#000', fontSize:13, flexShrink:0 }}>{(conv.name||'U')[0].toUpperCase()}</div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2 }}>
@@ -3110,6 +3256,19 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
                 <Toggle on={!!localConfig[key]} onToggle={() => setLocalConfig(prev=>({...prev,[key]:!prev[key]}))} />
               </div>
             ))}
+          </div>
+          <div style={S.card}>
+            <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:10 }}>Comisiones de Promotores</div>
+            <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+              <div style={{ flex:1 }}><label style={{ fontSize:9, fontWeight:700, color:C.muted, display:'block', marginBottom:4 }}>NIVEL 1 (venta directa)</label><div style={{ display:'flex', alignItems:'center', gap:4 }}><input type="number" value={localConfig.level1_rate||15} onChange={e=>setLocalConfig(p=>({...p,level1_rate:parseInt(e.target.value)||0}))} style={{ flex:1 }} /><span style={{ color:C.muted }}>%</span></div></div>
+              <div style={{ flex:1 }}><label style={{ fontSize:9, fontWeight:700, color:C.muted, display:'block', marginBottom:4 }}>NIVEL 2 (sub-referido)</label><div style={{ display:'flex', alignItems:'center', gap:4 }}><input type="number" value={localConfig.level2_rate||5} onChange={e=>setLocalConfig(p=>({...p,level2_rate:parseInt(e.target.value)||0}))} style={{ flex:1 }} /><span style={{ color:C.muted }}>%</span></div></div>
+            </div>
+            <label style={{ fontSize:9, fontWeight:700, color:C.muted, display:'block', marginBottom:4 }}>BONO POR NUEVO PROMOTOR ($)</label>
+            <input type="number" value={localConfig.promoter_bonus||5000} onChange={e=>setLocalConfig(p=>({...p,promoter_bonus:parseInt(e.target.value)||0}))} style={{ marginBottom:8 }} />
+            <label style={{ fontSize:9, fontWeight:700, color:C.muted, display:'block', marginBottom:4 }}>PUNTOS POR REGISTRO DE REFERIDO</label>
+            <input type="number" value={localConfig.ref_points_register||500} onChange={e=>setLocalConfig(p=>({...p,ref_points_register:parseInt(e.target.value)||0}))} style={{ marginBottom:8 }} />
+            <label style={{ fontSize:9, fontWeight:700, color:C.muted, display:'block', marginBottom:4 }}>PUNTOS POR COMPRA DE REFERIDO</label>
+            <input type="number" value={localConfig.ref_points_purchase||200} onChange={e=>setLocalConfig(p=>({...p,ref_points_purchase:parseInt(e.target.value)||0}))} style={{ marginBottom:4 }} />
           </div>
           <div style={S.card}>
             <div style={{ color:C.gold, fontSize:13, fontWeight:800, marginBottom:10 }}>WhatsApp de Pagos</div>
