@@ -2617,9 +2617,9 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
   const filteredConvs = conversations.filter(c => {
     if (filter === 'image') return c.hasImage
-        if (filter === 'unread') return c.unread > 0
+    if (filter === 'unread') return c.unread > 0
     if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
-    return true
+        return true
   })
 
   // ── ADMIN VIEW ──────────────────────────────────────────────────────────────
@@ -4766,6 +4766,10 @@ function AdminBingoPanel({ onBack }) {
 
   function startPolling() {
     if (channelRef.current) return
+    // Only poll when game is active (live bingo needs real-time updates)
+    // For waiting/paused, manual refresh is enough
+    const g = gameRef.current
+    if (!g || g.status !== 'active') return
     channelRef.current = supabase.channel('bingo-admin-'+Date.now())
       .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => { if (!pollPaused.current) fetchGame() })
       .subscribe()
@@ -4782,11 +4786,11 @@ function AdminBingoPanel({ onBack }) {
     return () => { stopPolling(); if (autoTimer) clearInterval(autoTimer) }
   }, [])
 
-  // Start/stop polling based on game existence
+  // Start/stop polling based on game status
   useEffect(() => {
-    if (game) startPolling()
+    if (game && game.status === 'active') startPolling()
     else stopPolling()
-  }, [!!game])
+  }, [game?.status])
 
   useEffect(() => { if (game) fetchStats() }, [game?.id, game?.status])
 
@@ -5111,6 +5115,7 @@ function AdminBingoPanel({ onBack }) {
                 <div key={l} style={{ background:'rgba(230,190,0,0.06)', borderRadius:8, padding:'6px 8px', flex:1, textAlign:'center' }}><div style={{ color:C.muted, fontSize:9 }}>{l}</div><div style={{ color:c, fontSize:16, fontWeight:900 }}>{v}</div></div>
               ))}
             </div>
+            {game.status !== 'active' && <button onClick={()=>fetchGame()} style={{ marginTop:8, width:'100%', background:'rgba(52,152,219,0.08)', border:'1px solid rgba(52,152,219,0.2)', borderRadius:8, padding:6, color:'#3498DB', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>↻ Actualizar datos</button>}
           </div>
 
           {/* ACTION BUTTONS — always visible */}
