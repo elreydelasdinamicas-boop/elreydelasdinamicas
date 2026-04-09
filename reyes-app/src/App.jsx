@@ -2654,7 +2654,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
                   <div style={{ color:'#444', fontSize:7, marginTop:2 }}>{l}</div>
                 </div>
               ))}
-                          </div>
+            </div>
           )}
           {/* Lista */}
           <div style={{ flex:1, overflowY:'auto' }}>
@@ -2669,7 +2669,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
                       <div style={{ color:'#444', fontSize:8 }}>{conv.last_time ? fmtTime(conv.last_time) : ''}</div>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                      {conv.hasImage && <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#888" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#888" stroke="none"/><polyline points="21 15 16 10 5 21"/></svg>}
+                                            {conv.hasImage && <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#888" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#888" stroke="none"/><polyline points="21 15 16 10 5 21"/></svg>}
                       <div style={{ color:C.muted, fontSize:10, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{conv.last_msg}</div>
                     </div>
                   </div>
@@ -4240,22 +4240,24 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     if (fetchingRef.current) return
     fetchingRef.current = true
     try {
-      const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
-      if (data) {
+      const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1)
+      const game1 = data?.[0] || null
+      if (game1) {
         setGame(prev => {
-          if (prev && prev.id === data.id && prev.updated_at === data.updated_at && prev.status === data.status) return prev
-          return data
+          if (prev && prev.id === game1.id && prev.updated_at === game1.updated_at && prev.status === game1.status) return prev
+          return game1
         })
         fetchingRef.current = false
         return
       }
-      const { data: fin } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1).single()
+      const { data: finData } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1)
+      const fin = finData?.[0] || null
       setGame(prev => {
         if (!prev && !fin) return prev
         if (prev && fin && prev.id === fin.id) return prev
         return fin || null
       })
-    } catch(e) { /* ignore */ }
+    } catch(e) { console.log('fetchGame error:', e) }
     fetchingRef.current = false
   }
 
@@ -4334,11 +4336,37 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     w.document.close()
   }
 
+  const [shareCount, setShareCount] = useState(() => {
+    try { return parseInt(localStorage.getItem('bingo_shares_'+game?.id)||'0') } catch { return 0 }
+  })
+  const [freeCartonClaimed, setFreeCartonClaimed] = useState(() => {
+    try { return localStorage.getItem('bingo_free_'+game?.id)==='true' } catch { return false }
+  })
+
   function handleShare() {
     const ref = profile?.referral_code || ''
     const url = `https://lacasadelasdinamicas.com?ref=${ref}&from=bingo`
     const text = `🎱 ¡Juega Bingo en La Casa De Las Dinámicas! Premios en efectivo 💰\n${url}`
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+    const newCount = shareCount + 1
+    setShareCount(newCount)
+    try { localStorage.setItem('bingo_shares_'+game?.id, String(newCount)) } catch(e) {}
+    if (newCount >= 10 && !freeCartonClaimed && user && game) {
+      claimFreeCarton()
+    }
+  }
+
+  async function claimFreeCarton() {
+    if (freeCartonClaimed || !user || !game) return
+    setFreeCartonClaimed(true)
+    try { localStorage.setItem('bingo_free_'+game?.id, 'true') } catch(e) {}
+    const carton = {
+      game_id: game.id, user_id: user.id, numbers: generateCarton(),
+      marked: [], carton_number: myCartones.length + 1, paid: true
+    }
+    await supabase.from('bingo_cartones').insert(carton)
+    await fetchMyCartones()
+    alert('🎁 ¡Felicidades! Ganaste un cartón GRATIS por compartir 10 veces')
   }
 
   const calledNums = game?.called_numbers || []
@@ -4887,7 +4915,8 @@ function AdminBingoPanel({ onBack }) {
   async function fetchGame() {
     if (pollPaused.current) return
     try {
-      const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
+      const { data: rows } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1)
+      const data = rows?.[0] || null
       const d = data || null
       gameRef.current = d
       setGame(prev => {
