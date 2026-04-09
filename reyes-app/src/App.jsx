@@ -347,12 +347,15 @@ export default function App() {
       setShowReservePopup(false); setAuthPage('choose'); return
     }
     const r = selectedRaffle
-    const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', r.id).in('status', ['reserved', 'paid'])
-    const taken = (ex || []).flatMap(t => t.numbers || [])
-    const conflict = selectedNums.filter(n => taken.includes(n))
-    if (conflict.length > 0) { alert(`Los numeros ${conflict.map(n => String(n).padStart(2, '0')).join(', ')} ya estan apartados.`); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); return }
-    await supabase.from('tickets').insert({ user_id: user.id, raffle_id: r.id, numbers: selectedNums, status: 'reserved', total_amount: selectedNums.length * r.ticket_price })
-    await fetchMyTickets(); setSelectedNums([]); setShowReservePopup(false); setPage('profile')
+    try {
+      const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', r.id).in('status', ['reserved', 'paid'])
+      const taken = (ex || []).flatMap(t => t.numbers || [])
+      const conflict = selectedNums.filter(n => taken.includes(n))
+      if (conflict.length > 0) { alert(`Los numeros ${conflict.map(n => String(n).padStart(2, '0')).join(', ')} ya estan apartados.`); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); return }
+      const { error } = await supabase.from('tickets').insert({ user_id: user.id, raffle_id: r.id, numbers: selectedNums, status: 'reserved', total_amount: selectedNums.length * r.ticket_price })
+      if (error) { alert('Error al reservar: ' + error.message); return }
+      await fetchMyTickets(); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); setPage('profile')
+    } catch(e) { alert('Error: ' + e.message) }
   }
   async function becomePromoter() {
     if (!user) return
@@ -2614,8 +2617,8 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
   const filteredConvs = conversations.filter(c => {
     if (filter === 'image') return c.hasImage
-    if (filter === 'unread') return c.unread > 0
-        if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
+        if (filter === 'unread') return c.unread > 0
+    if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
   })
 
