@@ -2613,8 +2613,8 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
   const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
 
   const filteredConvs = conversations.filter(c => {
-    if (filter === 'image') return c.hasImage
-        if (filter === 'unread') return c.unread > 0
+        if (filter === 'image') return c.hasImage
+    if (filter === 'unread') return c.unread > 0
     if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
   })
@@ -4124,22 +4124,26 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   }
 
   async function fetchGame() {
-    // First try active/waiting/paused
-    const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
-    if (data) {
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+    try {
+      const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1).single()
+      if (data) {
+        setGame(prev => {
+          if (prev && prev.id === data.id && prev.updated_at === data.updated_at && prev.status === data.status) return prev
+          return data
+        })
+        fetchingRef.current = false
+        return
+      }
+      const { data: fin } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1).single()
       setGame(prev => {
-        if (prev && prev.id === data.id && prev.updated_at === data.updated_at && prev.status === data.status && JSON.stringify(prev.called_numbers) === JSON.stringify(data.called_numbers)) return prev
-        return data
+        if (!prev && !fin) return prev
+        if (prev && fin && prev.id === fin.id) return prev
+        return fin || null
       })
-      return
-    }
-    // If none, try finished (show until a new one is created)
-    const { data: fin } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1).single()
-    setGame(prev => {
-      if (!prev && !fin) return prev
-      if (prev && fin && prev.id === fin.id) return prev
-      return fin || null
-    })
+    } catch(e) { /* ignore */ }
+    fetchingRef.current = false
   }
 
   async function fetchMyCartones() {
@@ -4843,27 +4847,21 @@ function AdminBingoPanel({ onBack }) {
     setCreating(true)
     stopPolling()
     pollPaused.current = true
-    await new Promise(r => setTimeout(r, 1000))
-    let success = false
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const cfgJson = buildConfigJson()
-        const { error } = await supabase.from('bingo_games').insert({ title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] })
-        if (!error) { success = true; break }
-        if (error.message && error.message.includes('lock')) {
-          await new Promise(r => setTimeout(r, 2000))
-          continue
-        }
-        alert('❌ Error: ' + error.message)
-        break
-      } catch(e) {
-        if (e.message && e.message.includes('lock') && attempt < 3) {
-          await new Promise(r => setTimeout(r, 2000))
-          continue
-        }
-        alert('❌ Error: ' + e.message)
-        break
+    try { supabase.removeAllChannels() } catch(e) { try { const chs = supabase.getChannels(); for(const c of chs) supabase.removeChannel(c) } catch(e2){} }
+    await new Promise(r => setTimeout(r, 2000))
+    try {
+      const cfgJson = buildConfigJson()
+      const insertData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
+      console.log('Creating bingo:', insertData)
+      const res = await supabase.from('bingo_games').insert(insertData)
+      console.log('Result:', res)
+      if (res.error) {
+        alert('❌ Error: ' + res.error.message + (res.error.details ? '\nDetalles: '+res.error.details : '') + (res.error.hint ? '\nHint: '+res.error.hint : '') + '\nCode: '+(res.error.code||''))
+      } else {
+        alert('✅ ¡Bingo creado exitosamente!')
       }
+    } catch(e) {
+      alert('❌ Error: ' + e.message)
     }
     pollPaused.current = false
     await fetchGame()
