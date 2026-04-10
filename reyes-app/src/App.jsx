@@ -657,6 +657,9 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
 
   return (
     <div style={S.content}>
+      <div style={{ background:'#C0392B', color:'#fff', padding:'12px', borderRadius:8, marginBottom:12, textAlign:'center', fontWeight:900, fontSize:15, border:'3px solid #fff' }}>
+        🔴 v68 CARGADO — PROMOTORES ACTIVO
+      </div>
       {/* BIENVENIDA compacta */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ color: '#fff', fontSize: 18, fontWeight: 900, lineHeight: 1.2, marginBottom: 3 }}>
@@ -1396,7 +1399,7 @@ www.lacasadelasdinamicas.com`)}`)
                     <div style={{ color:'#fff', fontSize:9, fontWeight:700, marginBottom:3 }}>{pkg.qty} boletos</div>
                     <div style={{ color:C.gold, fontSize:13, fontWeight:900 }}>{fmt(pkg.price)}</div>
                   </div>
-                                  )
+                )
               })}
             </div>
           </div>
@@ -2789,12 +2792,11 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
   const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
 
-  const filteredConvs = conversations.filter(c => {
-    if (filter === 'image') return c.hasImage
+  const filteredConvs = conversations.filter(c => {    if (filter === 'image') return c.hasImage
     if (filter === 'unread') return c.unread > 0
     if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
-      })
+  })
 
   // ── ADMIN VIEW ──────────────────────────────────────────────────────────────
   if (isAdmin) return (
@@ -4192,7 +4194,7 @@ function AdminSocietyPanel({ raffles, onBack }) {
             </div>
 
             {/* Socios */}
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
               {[{ socio: s.socio1, paid: s.socio1_paid, num: 1, label: 'Socio 1' }, { socio: s.socio2, paid: s.socio2_paid, num: 2, label: 'Socio 2' }].map(({ socio, paid, num, label }) => (
                 <div key={num} style={{ flex: 1, background: '#1a1a1a', borderRadius: 10, padding: '8px 10px' }}>
                   <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
