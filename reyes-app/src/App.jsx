@@ -2418,7 +2418,8 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
         </div>
       )}
 
-      {/* PROMOTER BANNER */}
+      {/* PROMOTER BANNER WRAPPER */}
+      <div style={{ padding:'0 16px 100px', maxWidth:500, margin:'0 auto' }}>
       {user && !profile?.is_promoter && (
         <div onClick={onPromoter} style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.12),rgba(39,174,96,0.08))', border:'2px solid rgba(230,190,0,0.4)', borderRadius:16, padding:16, marginTop:16, cursor:'pointer', position:'relative', overflow:'hidden', textAlign:'center' }}>
           <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:'linear-gradient(90deg,#E6BE00,#27AE60,#E6BE00)' }} />
@@ -2441,6 +2442,7 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
           <span style={{ color:C.gold, marginLeft:'auto' }}>→</span>
         </button>
       )}
+      </div>
     </div>
   )
 }
@@ -2791,8 +2793,8 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
   }
 
   const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
-
-  const filteredConvs = conversations.filter(c => {    if (filter === 'image') return c.hasImage
+  const filteredConvs = conversations.filter(c => {
+    if (filter === 'image') return c.hasImage
     if (filter === 'unread') return c.unread > 0
     if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
