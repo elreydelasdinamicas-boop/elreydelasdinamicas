@@ -485,7 +485,7 @@ export default function App() {
       )}
       <nav style={S.bottomNav}>
         {[{ id: 'home', label: 'Inicio', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-          ...(profile?.is_promoter ? [{ id: 'promoter', label: 'Promotor', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg> }] : []),
+          ...(profile?.is_promoter ? [{ id: 'promoter', label: 'Promotor', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> }] : []),
           ...(appConfig.show_bingo ? [{ id: 'bingo', label: 'Bingo', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> }] : []),
           { id: 'support', label: 'Soporte', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
           { id: 'profile', label: 'Mi Cuenta', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
@@ -1390,13 +1390,13 @@ www.lacasadelasdinamicas.com`)}`)
                 const isSelected = selectedPkg?.qty === pkg.qty
                 const savings = (pkg.qty * pricePerNum) - pkg.price
                 return (
-                                    <div key={i} onClick={() => { setSelectedPkg(pkg); setSelectedNums(prev=>prev.slice(0,pkg.qty)) }} style={{ flexShrink:0, background:isSelected?'rgba(201,162,39,0.15)':'#1a1a1a', border:`${isSelected?'2px':'1px'} solid ${isSelected?C.gold:'rgba(255,255,255,0.07)'}`, borderRadius:11, padding:'10px 14px', cursor:'pointer', minWidth:80, textAlign:'center', position:'relative', overflow:'hidden' }}>
+                  <div key={i} onClick={() => { setSelectedPkg(pkg); setSelectedNums(prev=>prev.slice(0,pkg.qty)) }} style={{ flexShrink:0, background:isSelected?'rgba(201,162,39,0.15)':'#1a1a1a', border:`${isSelected?'2px':'1px'} solid ${isSelected?C.gold:'rgba(255,255,255,0.07)'}`, borderRadius:11, padding:'10px 14px', cursor:'pointer', minWidth:80, textAlign:'center', position:'relative', overflow:'hidden' }}>
                     {isSelected && <GoldLine />}
                     <div style={{ background:C.green, borderRadius:999, padding:'1px 5px', color:'#fff', fontSize:6, fontWeight:700, marginBottom:3, display:'inline-block' }}>-{Math.round(savings/pkg.qty*100/pricePerNum)}%</div>
                     <div style={{ color:'#fff', fontSize:9, fontWeight:700, marginBottom:3 }}>{pkg.qty} boletos</div>
                     <div style={{ color:C.gold, fontSize:13, fontWeight:900 }}>{fmt(pkg.price)}</div>
                   </div>
-                )
+                                  )
               })}
             </div>
           </div>
@@ -2417,18 +2417,18 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
 
       {/* PROMOTER BANNER */}
       {user && !profile?.is_promoter && (
-        <div onClick={onBecomePromoter} style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.08),rgba(39,174,96,0.05))', border:'1.5px solid rgba(230,190,0,0.3)', borderRadius:14, padding:16, marginTop:16, cursor:'pointer', position:'relative', overflow:'hidden', textAlign:'center' }}>
-          <div style={{ position:'absolute', top:0, left:0, right:0, height:2, background:'linear-gradient(90deg,transparent,rgba(230,190,0,0.6),transparent)' }} />
-          <div style={{ fontSize:24, marginBottom:4 }}>💰</div>
-          <div style={{ color:C.gold, fontSize:14, fontWeight:900, marginBottom:2 }}>¡Gana $10.000 por cada venta!</div>
-          <div style={{ color:'#fff', fontSize:11, marginBottom:4 }}>Conviértete en <span style={{ color:C.gold, fontWeight:900 }}>Promotor Oficial</span></div>
-          <div style={{ color:C.muted, fontSize:10, marginBottom:10 }}>Comisiones de por vida — ganas por TODAS las compras de tus referidos</div>
-          <div style={{ display:'flex', gap:6, marginBottom:10, justifyContent:'center' }}>
-            <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:8, padding:'6px 12px' }}><div style={{ color:C.gold, fontSize:14, fontWeight:900 }}>{appConfig?.level1_rate||15}%</div><div style={{ color:'#888', fontSize:8 }}>venta directa</div></div>
-            <div style={{ background:'rgba(39,174,96,0.06)', border:'1px solid rgba(39,174,96,0.15)', borderRadius:8, padding:'6px 12px' }}><div style={{ color:'#27AE60', fontSize:14, fontWeight:900 }}>{appConfig?.level2_rate||5}%</div><div style={{ color:'#888', fontSize:8 }}>sub-referido</div></div>
-            <div style={{ background:'rgba(93,173,226,0.06)', border:'1px solid rgba(93,173,226,0.15)', borderRadius:8, padding:'6px 12px' }}><div style={{ color:'#5DADE2', fontSize:14, fontWeight:900 }}>{fmt(appConfig?.promoter_bonus||5000)}</div><div style={{ color:'#888', fontSize:8 }}>nuevo promotor</div></div>
+        <div onClick={onPromoter} style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.12),rgba(39,174,96,0.08))', border:'2px solid rgba(230,190,0,0.4)', borderRadius:16, padding:16, marginTop:16, cursor:'pointer', position:'relative', overflow:'hidden', textAlign:'center' }}>
+          <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:'linear-gradient(90deg,#E6BE00,#27AE60,#E6BE00)' }} />
+          <div style={{ fontSize:32, marginBottom:4 }}>💰</div>
+          <div style={{ color:C.gold, fontSize:17, fontWeight:900, marginBottom:2 }}>¡Gana dinero real!</div>
+          <div style={{ color:'#fff', fontSize:12, marginBottom:2 }}>Conviértete en <span style={{ color:C.gold, fontWeight:900 }}>Promotor</span></div>
+          <div style={{ color:C.muted, fontSize:10, marginBottom:10 }}>Comparte sorteos y gana comisiones en efectivo</div>
+          <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:10, padding:10, marginBottom:10 }}>
+            <div style={{ color:C.gold, fontSize:11, fontWeight:700, marginBottom:2 }}>💸 Ejemplo real</div>
+            <div style={{ color:'#27AE60', fontSize:18, fontWeight:900 }}>Ganas hasta $10.000</div>
+            <div style={{ color:'#888', fontSize:9 }}>por cada boleto vendido con tu enlace</div>
           </div>
-          <div style={{ background:'linear-gradient(135deg,#E6BE00,#f0d000)', borderRadius:10, padding:11 }}><div style={{ color:'#000', fontSize:13, fontWeight:900 }}>🚀 Quiero ser Promotor</div></div>
+          <div style={{ background:'linear-gradient(135deg,#E6BE00,#f0d000)', borderRadius:10, padding:12 }}><div style={{ color:'#000', fontSize:14, fontWeight:900 }}>🚀 Quiero ser Promotor</div></div>
         </div>
       )}
       {user && profile?.is_promoter && (
@@ -2782,7 +2782,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
   async function saveNota() {
     if (!notaText.trim()) return
-        await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:`[NOTA INTERNA] ${notaText}`, from_admin:true, is_internal:true })
+    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:`[NOTA INTERNA] ${notaText}`, from_admin:true, is_internal:true })
     await loadConvMessages(selectedConv.user_id)
     setNotaModal(false); setNotaText('')
   }
@@ -2794,7 +2794,7 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
     if (filter === 'unread') return c.unread > 0
     if (filter === 'today') { const today = new Date().toDateString(); return new Date(c.last_time).toDateString() === today }
     return true
-  })
+      })
 
   // ── ADMIN VIEW ──────────────────────────────────────────────────────────────
   if (isAdmin) return (
@@ -3454,6 +3454,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
     is_featured:       raffle?.is_featured || false,
     release_hours:     raffle?.release_hours || 24,
     payment_deadline:  raffle?.payment_deadline || '',
+    commission_l1:     raffle?.commission_l1 || 0,
+    commission_l2:     raffle?.commission_l2 || 0,
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
@@ -3504,6 +3506,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
         release_hours:  24,
         card_color:     form.card_color || '#E67E22',
         max_per_person: Number(form.max_per_person) || 5,
+        commission_l1:  Number(form.commission_l1) || 0,
+        commission_l2:  Number(form.commission_l2) || 0,
       }
 
       // Campos opcionales
@@ -3695,6 +3699,26 @@ function RaffleForm({ raffle, onBack, onSave }) {
       <FormField label="Descripcion opcional">
         <textarea rows={3} value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Informacion adicional..." style={{ background:'#1a1a1a', border:`1px solid rgba(201,162,39,0.2)`, borderRadius:12, padding:'13px 16px', color:'#fff', fontSize:14, outline:'none', width:'100%', fontFamily:'inherit', resize:'none', boxSizing:'border-box' }} />
       </FormField>
+
+      {/* COMISIONES DE PROMOTORES */}
+      <div style={{ background:'rgba(230,190,0,0.04)', border:'1px solid rgba(230,190,0,0.2)', borderRadius:12, padding:12, marginBottom:14 }}>
+        <div style={{ color:C.gold, fontSize:12, fontWeight:800, marginBottom:4 }}>💰 Comisiones de promotores</div>
+        <div style={{ color:C.muted, fontSize:10, marginBottom:10 }}>Monto fijo en $ que gana el promotor por cada boleto vendido. Déjalo en 0 si no quieres pagar comisión.</div>
+        <FormField label="Comisión Nivel 1 — venta directa ($)">
+          <input type="number" value={form.commission_l1} onChange={e => setForm(p => ({ ...p, commission_l1: parseInt(e.target.value) || 0 }))} placeholder="Ej: 10000" />
+        </FormField>
+        <FormField label="Comisión Nivel 2 — sub-referido ($)">
+          <input type="number" value={form.commission_l2} onChange={e => setForm(p => ({ ...p, commission_l2: parseInt(e.target.value) || 0 }))} placeholder="Ej: 2000" />
+        </FormField>
+        {form.ticket_price > 0 && form.commission_l1 > 0 && (
+          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
+            <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>
+            <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Precio boleto: <span style={{ color:C.gold, fontWeight:700 }}>{fmt(form.ticket_price)}</span></div>
+            <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Promotor gana: <span style={{ color:'#27AE60', fontWeight:700 }}>{fmt(form.commission_l1)}</span></div>
+            <div style={{ color:'#fff', fontSize:11 }}>Tu ingreso neto: <span style={{ color:'#5DADE2', fontWeight:700 }}>{fmt(form.ticket_price - form.commission_l1)}</span></div>
+          </div>
+        )}
+      </div>
 
       <button onClick={save} disabled={saving} style={{ ...S.btnGold, marginBottom:10 }}>
         {saving
@@ -4168,13 +4192,13 @@ function AdminSocietyPanel({ raffles, onBack }) {
             </div>
 
             {/* Socios */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
               {[{ socio: s.socio1, paid: s.socio1_paid, num: 1, label: 'Socio 1' }, { socio: s.socio2, paid: s.socio2_paid, num: 2, label: 'Socio 2' }].map(({ socio, paid, num, label }) => (
                 <div key={num} style={{ flex: 1, background: '#1a1a1a', borderRadius: 10, padding: '8px 10px' }}>
                   <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', marginBottom: 4 }}>{label}</div>
                   {socio ? (
                     <>
-                                            <div style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>{socio.full_name}</div>
+                      <div style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>{socio.full_name}</div>
                       <div style={{ color: C.muted, fontSize: 9, margin: '2px 0' }}>{socio.phone}</div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
                         <span style={{ color: fmt(halfPrice), fontSize: 9 }}>{fmt(halfPrice)}</span>
