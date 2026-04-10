@@ -5075,7 +5075,7 @@ function AdminBingoPanel({ onBack }) {
     else stopPolling()
   }, [game?.status])
 
-  useEffect(() => { if (game) fetchStats(); fetchAdminCartones() }, [game?.id, game?.status])
+  useEffect(() => { if (game) { fetchStats(); fetchAdminCartones() } }, [game?.id, game?.status])
 
   // Load game config into form for editing — only once per game id
   const loadedGameRef = useRef(null)
@@ -5114,7 +5114,7 @@ function AdminBingoPanel({ onBack }) {
     } catch(e) { /* ignore fetch errors during transitions */ }
   }
 
-  async function fetchStats(); fetchAdminCartones() {
+  async function fetchStats() {
     if (!game) return
     const { data: cartones } = await supabase.from('bingo_cartones').select('user_id').eq('game_id', game.id)
     if (cartones) {
