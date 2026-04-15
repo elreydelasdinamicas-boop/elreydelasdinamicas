@@ -79,7 +79,7 @@ const Icons = {
 }
 
 const DEFAULT_CONFIG = {
-  showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
+  show_bingo: false, showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
   whatsapp: '', canal: '', instagram: '', facebook: '', telegram: '',
   supportWhatsapp: '3013986016', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
   paymentWhatsapp: '3013986016', showWAPayButton: true, showChatPayButton: true, waMsgTemplate: '', imgDeleteDays: 3, showBanner: false, bannerText: '🔥 ¡Hoy es tu día de suerte! Aparta tu número antes de que se agote · 💰 Premios reales cada semana · ✅ Pagos seguros y verificados · 🏆 Ganadores publicados en Instagram', bannerBg: '#E6BE00', bannerColor: '#5a3e00', bannerSpeed: 3,
@@ -486,7 +486,7 @@ export default function App() {
       <nav style={S.bottomNav}>
         {[{ id: 'home', label: 'Inicio', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
           ...(profile?.is_promoter ? [{ id: 'promoter', label: 'Promotor', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> }] : []),
-          ...(appConfig.show_bingo ? [{ id: 'bingo', label: 'Bingo', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> }] : []),
+          ...((appConfig.show_bingo || appConfig.showBingo) ? [{ id: 'bingo', label: 'Bingo', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> }] : []),
           { id: 'support', label: 'Soporte', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
           { id: 'profile', label: 'Mi Cuenta', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
         ].map(({ id, label, icon }) => (<button key={id} onClick={() => setPage(id)} style={S.navBtn(page === id)}>{icon}<span style={{ fontSize: 9, fontWeight: 700 }}>{label}</span></button>))}
@@ -1864,7 +1864,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
           </span>
         </div>
 
-        {myTickets.length === 0 ? (          <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
+        {myTickets.length === 0 ? (
+                <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
             <div style={{ fontSize:44, marginBottom:12 }}>🎟️</div>
             <div style={{ color:'#fff', fontSize:14, fontWeight:600, marginBottom:6 }}>Aun no tienes boletos</div>
             <div style={{ fontSize:12 }}>Participa en una dinamica!</div>
@@ -2464,7 +2465,7 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
       if (e1) { alert('Error perfil: ' + e1.message); return }
       const { error: e2 } = await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: appConfig?.level1_rate||15, level2_rate: appConfig?.level2_rate||5 }, { onConflict: 'user_id' })
       if (e2) { alert('Error promoter: ' + e2.message); return }
-      alert('✅ ¡Ahora eres Promotor Oficial!')
+      alert('✅ ¡Ahora eres Promotor Oficial! Recarga la página para ver tu panel.')
       window.location.reload()
     } catch(err) { alert('Error: ' + err.message) }
   }
