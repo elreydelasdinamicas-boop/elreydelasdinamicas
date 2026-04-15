@@ -370,7 +370,7 @@ export default function App() {
     if (!user) return
     const refCode = 'CASA-' + Math.random().toString(36).substr(2, 6).toUpperCase()
     await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id)
-    await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: 15, level2_rate: 7, level3_rate: 3 })
+    await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: 15, level2_rate: 7, level3_rate: 3 }, { onConflict: 'user_id' })
     await fetchProfile(user.id); alert('Ahora eres Vendedor Oficial!'); setPage('promoter')
   }
 
@@ -2458,7 +2458,19 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
     supabase.from('users_profile').select('id,full_name,phone,created_at,is_promoter').eq('referred_by', user.id).then(({ data }) => setReferrals(data || []))
   }, [user])
 
-  if (!profile?.is_promoter) return (
+  async function becomePromoterFn() {
+    try {
+      const refCode = profile?.referral_code || 'CASA-' + Math.random().toString(36).substr(2,6).toUpperCase()
+      const { error: e1 } = await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id)
+      if (e1) { alert('Error perfil: ' + e1.message); return }
+      const { error: e2 } = await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: appConfig?.level1_rate||15, level2_rate: appConfig?.level2_rate||5 }, { onConflict: 'user_id' })
+      if (e2) { alert('Error promoter: ' + e2.message); return }
+      alert('✅ ¡Ahora eres Promotor Oficial!')
+      window.location.reload()
+    } catch(err) { alert('Error: ' + err.message) }
+  }
+
+    if (!profile?.is_promoter) return (
     <div style={S.content}>
       <button onClick={onBack} style={{ background:'transparent', border:'none', color:C.gold, cursor:'pointer', fontWeight:700, marginBottom:16, fontSize:14, padding:0, fontFamily:'inherit' }}>← Volver</button>
       <div style={{ textAlign:'center', padding:'40px 0' }}>
@@ -2497,13 +2509,7 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
     </div>
   )
 
-  async function becomePromoterFn() {
-    const refCode = profile?.referral_code || 'CASA-' + Math.random().toString(36).substr(2,6).toUpperCase()
-    await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id)
-    await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: appConfig?.level1_rate||15, level2_rate: appConfig?.level2_rate||5 })
-    alert('✅ ¡Ahora eres Promotor Oficial!')
-    window.location.reload()
-  }
+
 
   const refUrl = `https://www.lacasadelasdinamicas.com/?ref=${profile?.referral_code}`
   const totalEarnings = profile?.total_earnings || 0
@@ -2791,8 +2797,8 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
     await loadConvMessages(selectedConv.user_id)
     setNotaModal(false); setNotaText('')
   }
+    const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
 
-  const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
   const filteredConvs = conversations.filter(c => {
     if (filter === 'image') return c.hasImage
     if (filter === 'unread') return c.unread > 0
