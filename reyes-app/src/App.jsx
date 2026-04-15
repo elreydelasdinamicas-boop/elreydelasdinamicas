@@ -1807,6 +1807,30 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
           </div>
         </div>
 
+        {/* PROMOTER BANNER — right after Mis Puntos */}
+        {user && !profile?.is_promoter && (
+          <div onClick={onPromoter} style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.12),rgba(39,174,96,0.08))', border:'2px solid rgba(230,190,0,0.4)', borderRadius:16, padding:14, marginBottom:14, cursor:'pointer', position:'relative', overflow:'hidden', textAlign:'center' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:'linear-gradient(90deg,#E6BE00,#27AE60,#E6BE00)' }} />
+            <div style={{ fontSize:28, marginBottom:4 }}>💰</div>
+            <div style={{ color:C.gold, fontSize:16, fontWeight:900, marginBottom:2 }}>¡Gana dinero real!</div>
+            <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Conviértete en <span style={{ color:C.gold, fontWeight:900 }}>Promotor</span></div>
+            <div style={{ color:C.muted, fontSize:10, marginBottom:8 }}>Comparte sorteos y gana comisiones en efectivo</div>
+            <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:10, padding:8, marginBottom:8 }}>
+              <div style={{ color:C.gold, fontSize:10, fontWeight:700, marginBottom:2 }}>💸 Ejemplo real</div>
+              <div style={{ color:'#27AE60', fontSize:16, fontWeight:900 }}>Ganas hasta $10.000</div>
+              <div style={{ color:'#888', fontSize:9 }}>por cada boleto vendido con tu enlace</div>
+            </div>
+            <div style={{ background:'linear-gradient(135deg,#E6BE00,#f0d000)', borderRadius:10, padding:11 }}><div style={{ color:'#000', fontSize:13, fontWeight:900 }}>🚀 Quiero ser Promotor</div></div>
+          </div>
+        )}
+        {user && profile?.is_promoter && (
+          <button onClick={onPromoter} style={{ width:'100%', marginBottom:14, background:'linear-gradient(135deg,rgba(230,190,0,0.08),rgba(230,190,0,0.03))', border:'1.5px solid rgba(230,190,0,0.3)', borderRadius:14, padding:12, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+            <span style={{ fontSize:18 }}>📣</span>
+            <div style={{ textAlign:'left' }}><div style={{ color:C.gold, fontSize:12, fontWeight:900 }}>Panel del Promotor</div><div style={{ color:C.muted, fontSize:9 }}>Ver ganancias y referidos</div></div>
+            <span style={{ color:C.gold, marginLeft:'auto' }}>→</span>
+          </button>
+        )}
+
         {/* BANNER ANDROID */}
         {isAndroid && pwa && !pwa.isInstalled && (
           <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'11px 14px', marginBottom:14, display:'flex', alignItems:'center', gap:10, position:'relative', overflow:'hidden' }}>
@@ -2418,31 +2442,7 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
         </div>
       )}
 
-      {/* PROMOTER BANNER WRAPPER */}
-      <div style={{ padding:'0 16px 100px', maxWidth:500, margin:'0 auto' }}>
-      {user && !profile?.is_promoter && (
-        <div onClick={onPromoter} style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.12),rgba(39,174,96,0.08))', border:'2px solid rgba(230,190,0,0.4)', borderRadius:16, padding:16, marginTop:16, cursor:'pointer', position:'relative', overflow:'hidden', textAlign:'center' }}>
-          <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:'linear-gradient(90deg,#E6BE00,#27AE60,#E6BE00)' }} />
-          <div style={{ fontSize:32, marginBottom:4 }}>💰</div>
-          <div style={{ color:C.gold, fontSize:17, fontWeight:900, marginBottom:2 }}>¡Gana dinero real!</div>
-          <div style={{ color:'#fff', fontSize:12, marginBottom:2 }}>Conviértete en <span style={{ color:C.gold, fontWeight:900 }}>Promotor</span></div>
-          <div style={{ color:C.muted, fontSize:10, marginBottom:10 }}>Comparte sorteos y gana comisiones en efectivo</div>
-          <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:10, padding:10, marginBottom:10 }}>
-            <div style={{ color:C.gold, fontSize:11, fontWeight:700, marginBottom:2 }}>💸 Ejemplo real</div>
-            <div style={{ color:'#27AE60', fontSize:18, fontWeight:900 }}>Ganas hasta $10.000</div>
-            <div style={{ color:'#888', fontSize:9 }}>por cada boleto vendido con tu enlace</div>
-          </div>
-          <div style={{ background:'linear-gradient(135deg,#E6BE00,#f0d000)', borderRadius:10, padding:12 }}><div style={{ color:'#000', fontSize:14, fontWeight:900 }}>🚀 Quiero ser Promotor</div></div>
-        </div>
-      )}
-      {user && profile?.is_promoter && (
-        <button onClick={onPromoter} style={{ width:'100%', marginTop:16, background:'linear-gradient(135deg,rgba(230,190,0,0.08),rgba(230,190,0,0.03))', border:'1.5px solid rgba(230,190,0,0.3)', borderRadius:14, padding:14, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
-          <span style={{ fontSize:20 }}>📣</span>
-          <div style={{ textAlign:'left' }}><div style={{ color:C.gold, fontSize:13, fontWeight:900 }}>Panel del Promotor</div><div style={{ color:C.muted, fontSize:10 }}>Ver ganancias y referidos</div></div>
-          <span style={{ color:C.gold, marginLeft:'auto' }}>→</span>
-        </button>
-      )}
-      </div>
+
     </div>
   )
 }
