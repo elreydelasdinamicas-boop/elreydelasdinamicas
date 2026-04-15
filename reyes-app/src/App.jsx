@@ -1864,8 +1864,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
           </span>
         </div>
 
-        {myTickets.length === 0 ? (
-          <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
+        {myTickets.length === 0 ? (          <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
             <div style={{ fontSize:44, marginBottom:12 }}>🎟️</div>
             <div style={{ color:'#fff', fontSize:14, fontWeight:600, marginBottom:6 }}>Aun no tienes boletos</div>
             <div style={{ fontSize:12 }}>Participa en una dinamica!</div>
@@ -2797,7 +2796,8 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
     await loadConvMessages(selectedConv.user_id)
     setNotaModal(false); setNotaText('')
   }
-    const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
+
+  const waLink = () => { const num=(appConfig?.supportWhatsapp||'').replace(/\D/g,''); return num?`https://wa.me/${num}?text=${encodeURIComponent(appConfig?.supportWhatsappMsg||'Hola!')}`:null }
 
   const filteredConvs = conversations.filter(c => {
     if (filter === 'image') return c.hasImage
@@ -3731,7 +3731,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
       </div>
 
       <button onClick={save} disabled={saving} style={{ ...S.btnGold, marginBottom:10 }}>
-        {saving
+                {saving
           ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#000" strokeWidth="2.5" style={{ animation:'spin 1s linear infinite' }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
               Guardando...
