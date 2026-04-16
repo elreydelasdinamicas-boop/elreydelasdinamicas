@@ -628,7 +628,7 @@ function RaffleCard({ r, onRaffle, featured }) {
   const cardColor = r.card_color || '#E6BE00'
   const isFeatured = r.is_featured || featured
   return (
-    <div onClick={() => onRaffle(r)} style={{ background: '#000', border: `1.5px solid ${isFeatured ? C.gold : cardColor+'60'}`, borderRadius: 16, padding: 16, cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+    <div onClick={() => onRaffle(r)} style={{ background: 'linear-gradient(135deg,#1a1a2e 0%,#16213e 100%)', border: `1.5px solid ${isFeatured ? C.gold : cardColor+'60'}`, borderRadius: 16, padding: 16, cursor: 'pointer', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg,transparent,${isFeatured ? C.gold : cardColor},transparent)` }}></div>
       {/* Badges */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -645,15 +645,15 @@ function RaffleCard({ r, onRaffle, featured }) {
       {/* Info fecha/loteria/numeros */}
       <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
         {[['📅', new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'})], ['🎱', r.lottery_name], ['🔢', `00 — ${String(r.number_range-1).padStart(2,'0')}`]].map(([ic,v]) => (
-          <div key={ic} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 7, padding: '5px 6px', flex: 1, textAlign: 'center' }}>
+          <div key={ic} style={{ background: 'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '6px 6px', flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 9 }}>{ic}</div>
             <div style={{ color: '#fff', fontSize: 7, fontWeight: 700, marginTop: 1 }}>{v}</div>
           </div>
         ))}
       </div>
       {/* Premios — hasta 4 */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ color: C.muted, fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Premios</div>
+      <div style={{ marginBottom: 10, background:'linear-gradient(135deg,rgba(230,190,0,0.12),rgba(230,190,0,0.04))', border:'1px solid rgba(230,190,0,0.25)', borderRadius:10, padding:10 }}>
+        <div style={{ color: C.gold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, fontWeight:800 }}>🏆 Premios</div>
         {prizes.slice(0, 4).map((p, i) => (
           <div key={i} style={{ marginBottom: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -1456,7 +1456,7 @@ www.lacasadelasdinamicas.com`)}`)
 
         {/* ── LEYENDA — fuera de la tabla ── */}
         <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:10 }}>
-          {[['#111','1px solid #333','#fff','Disponible'],['rgba(201,162,39,0.2)',`2px solid ${C.gold}`,C.gold,'Seleccionado'],['rgba(231,76,60,0.12)','1px solid rgba(231,76,60,0.25)','#E74C3C','Apartado']].map(([bg,border,color,label]) => (
+          {[['#fff','1px solid #ddd','#000','Disponible'],['rgba(201,162,39,0.2)',`2px solid ${C.gold}`,C.gold,'Seleccionado'],['rgba(231,76,60,0.25)','1.5px solid #E74C3C','#E74C3C','Apartado']].map(([bg,border,color,label]) => (
             <div key={label} style={{ display:'flex', alignItems:'center', gap:5 }}>
               <div style={{ width:22, height:22, background:bg, border, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center' }}>{label==='Apartado'&&<span style={{fontSize:9}}>🔒</span>}</div>
               <span style={{ fontSize:11, color:C.muted }}>{label}</span>
@@ -1495,9 +1495,9 @@ www.lacasadelasdinamicas.com`)}`)
                   <div style={{ fontSize:8, lineHeight:1, marginTop:1 }}>👥</div>
                 </div>
               )
-              if (isRes) return <div key={n} style={{ aspectRatio:1, border:'1px solid rgba(231,76,60,0.25)', borderRadius:8, background:'rgba(231,76,60,0.12)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, cursor:'not-allowed' }}>🔒</div>
+              if (isRes) return <div key={n} style={{ aspectRatio:1, border:'1.5px solid #E74C3C', borderRadius:8, background:'rgba(231,76,60,0.25)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, cursor:'not-allowed' }}>🔒</div>
               if (isSel) return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio:1, border:`2px solid ${C.gold}`, borderRadius:8, background:'rgba(201,162,39,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:range<=100?13:11, fontWeight:900, color:C.gold, cursor:'pointer' }}>{pStr}</div>
-              return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio:1, border:'1px solid #1a1a1a', borderRadius:8, background:'#111', display:'flex', alignItems:'center', justifyContent:'center', fontSize:range<=100?13:11, fontWeight:700, color:'#fff', cursor:'pointer' }}>{pStr}</div>
+              return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio:1, border:'1px solid #ddd', borderRadius:8, background:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:range<=100?13:11, fontWeight:800, color:'#000', cursor:'pointer' }}>{pStr}</div>
             })}
           </div>
 
