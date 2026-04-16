@@ -149,8 +149,18 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [authPage, setAuthPage] = useState(null)
-  const [raffles, setRaffles] = useState([])
-  const [loadingRaffles, setLoadingRaffles] = useState(true)
+  const [raffles, setRaffles] = useState(() => {
+    try {
+      const cached = localStorage.getItem('lcdd_raffles')
+      return cached ? JSON.parse(cached) : []
+    } catch { return [] }
+  })
+  const [loadingRaffles, setLoadingRaffles] = useState(() => {
+    try {
+      const cached = localStorage.getItem('lcdd_raffles')
+      return !cached
+    } catch { return true }
+  })
   const [selectedRaffle, setSelectedRaffle] = useState(null)
   const [myTickets, setMyTickets] = useState([])
   const [selectedNums, setSelectedNums] = useState([])
@@ -628,7 +638,7 @@ function RaffleCard({ r, onRaffle, featured }) {
   const cardColor = r.card_color || '#E6BE00'
   const isFeatured = r.is_featured || featured
   return (
-    <div onClick={() => onRaffle(r)} style={{ background: 'linear-gradient(135deg,#1a1a2e 0%,#16213e 100%)', border: `1.5px solid ${isFeatured ? C.gold : cardColor+'60'}`, borderRadius: 16, padding: 16, cursor: 'pointer', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+    <div onClick={() => onRaffle(r)} style={{ background: 'linear-gradient(180deg,#1a1a1a 0%,#0d0d0d 100%)', border: `2px solid ${isFeatured ? C.gold : cardColor || C.gold}`, borderRadius: 16, padding: 16, cursor: 'pointer', position: 'relative', overflow: 'hidden', boxShadow: `0 0 20px ${isFeatured ? 'rgba(230,190,0,0.12)' : 'rgba(0,0,0,0.3)'} inset` }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg,transparent,${isFeatured ? C.gold : cardColor},transparent)` }}></div>
       {/* Badges */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -645,20 +655,20 @@ function RaffleCard({ r, onRaffle, featured }) {
       {/* Info fecha/loteria/numeros */}
       <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
         {[['📅', new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'})], ['🎱', r.lottery_name], ['🔢', `00 — ${String(r.number_range-1).padStart(2,'0')}`]].map(([ic,v]) => (
-          <div key={ic} style={{ background: 'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.1)', borderRadius: 7, padding: '6px 6px', flex: 1, textAlign: 'center' }}>
+          <div key={ic} style={{ background: 'rgba(230,190,0,0.08)', border:'1px solid rgba(230,190,0,0.2)', borderRadius: 7, padding: '6px 6px', flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 9 }}>{ic}</div>
             <div style={{ color: '#fff', fontSize: 7, fontWeight: 700, marginTop: 1 }}>{v}</div>
           </div>
         ))}
       </div>
       {/* Premios — hasta 4 */}
-      <div style={{ marginBottom: 10, background:'linear-gradient(135deg,rgba(230,190,0,0.12),rgba(230,190,0,0.04))', border:'1px solid rgba(230,190,0,0.25)', borderRadius:10, padding:10 }}>
+      <div style={{ marginBottom: 10, background:'#0a0a0a', border:'2px solid rgba(230,190,0,0.5)', borderRadius:10, padding:10 }}>
         <div style={{ color: C.gold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, fontWeight:800 }}>🏆 Premios</div>
         {prizes.slice(0, 4).map((p, i) => (
           <div key={i} style={{ marginBottom: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <span style={{ fontSize: 11 }}>{medals[i]}</span>
-              <span style={{ color: i === 0 ? '#fff' : C.muted, fontSize: i === 0 ? 12 : 11, fontWeight: i === 0 ? 700 : 400 }}>{p.amount || (typeof p==='string'?p:'')}</span>
+              <span style={{ color: i === 0 ? C.gold : '#ccc', fontSize: i === 0 ? 13 : 11, fontWeight: i === 0 ? 900 : 500 }}>{p.amount || (typeof p==='string'?p:'')}</span>
             </div>
             {p.how_to_win && <div style={{ color:'#555', fontSize:9, marginLeft:18, marginTop:1 }}>↳ {p.how_to_win}</div>}
           </div>
@@ -1877,11 +1887,11 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
           <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'11px 14px', marginBottom:14, display:'flex', alignItems:'center', gap:10, position:'relative', overflow:'hidden' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
             <div style={{ width:34, height:34, borderRadius:9, overflow:'hidden', flexShrink:0, border:'1px solid rgba(230,190,0,0.25)' }}><LogoSVG size={34} /></div>
-            <div style={{ flex:1 }}>
-              <div style={{ color:'#fff', fontSize:12, fontWeight:800 }}>Instala La Casa</div>
+            <div style={{ flex:1 }}>              <div style={{ color:'#fff', fontSize:12, fontWeight:800 }}>Instala La Casa</div>
               <div style={{ color:C.muted, fontSize:9, marginTop:1 }}>Acceso rapido + funciona sin internet</div>
             </div>
-            {pwa.canInstall              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
+            {pwa.canInstall
+              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
               : <span style={{ color:C.muted, fontSize:9, flexShrink:0, textAlign:'right', maxWidth:70, lineHeight:1.4 }}>Menu → Agregar a pantalla</span>
             }
           </div>
@@ -3764,9 +3774,9 @@ function RaffleForm({ raffle, onBack, onSave }) {
         <FormField label="Comisión Nivel 2 — sub-referido ($)">
           <input type="number" value={form.commission_l2} onChange={e => setForm(p => ({ ...p, commission_l2: parseInt(e.target.value) || 0 }))} placeholder="Ej: 2000" />
         </FormField>
-        {form.ticket_price > 0 && form.commission_l1 > 0 && (          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
-            <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>
-            <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Precio boleto: <span style={{ color:C.gold, fontWeight:700 }}>{fmt(form.ticket_price)}</span></div>
+        {form.ticket_price > 0 && form.commission_l1 > 0 && (
+          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
+            <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>            <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Precio boleto: <span style={{ color:C.gold, fontWeight:700 }}>{fmt(form.ticket_price)}</span></div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Promotor gana: <span style={{ color:'#27AE60', fontWeight:700 }}>{fmt(form.commission_l1)}</span></div>
             <div style={{ color:'#fff', fontSize:11 }}>Tu ingreso neto: <span style={{ color:'#5DADE2', fontWeight:700 }}>{fmt(form.ticket_price - form.commission_l1)}</span></div>
           </div>
@@ -4439,11 +4449,16 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
         }
       }
     })
-  }, [game?.called_numbers?.length, autoMark])
+  }, [game?.called_numbers?.length, autoMark, myCartones.length])
 
   function checkBingoWin(carton, marked, called) {
+    if (!game || !user) return
+    if (game.status === 'finished') return
     const cfg = getConfig(game)
-    const winTypes = cfg.win_types || ['linea','vertical','diagonal','esquinas','full']
+    let winTypes = cfg.win_types
+    if (!Array.isArray(winTypes) || winTypes.length === 0) {
+      winTypes = ['linea','vertical','diagonal','esquinas','full']
+    }
     const winners = cfg.winners || []
     const nums = carton.numbers || []
     const markedSet = new Set(marked)
@@ -4465,6 +4480,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   }
 
   async function submitAutoWin(carton, winType) {
+    console.log('🎯 BINGO WIN DETECTED!', winType, 'carton:', carton.carton_number)
     const cfg = getConfig(game)
     const prizes = cfg.prizes || {}
     const prize = prizes[winType] || 0
@@ -4474,7 +4490,9 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       prize, time: new Date().toISOString(), auto: true
     }]
     const newCfg = { ...cfg, winners }
-    await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id)
+    const { error: winErr } = await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id)
+    if (winErr) { console.error('submitAutoWin error:', winErr); alert('Error registrando bingo: ' + winErr.message); return }
+    console.log('✅ BINGO registered in DB!')
     setWinToast(`🎉 ¡BINGO! Ganaste ${WTL[winType]||winType}${prize ? ' — '+fmt(prize) : ''}!`)
     setTimeout(() => setWinToast(null), 8000)
   }
