@@ -391,9 +391,7 @@ export default function App() {
     try {
       await supabase.auth.signOut()
     } catch(e) { console.error('signOut error:', e) }
-    setUser(null); setProfile(null); setMyTickets([]); setPageHistory([]); _setPage('home')
-    // Force reload to clear all state
-    setTimeout(() => window.location.reload(), 100)
+    setUser(null); setProfile(null); setMyTickets([]); setPageHistory([]); setAllReservedNums([]); _setPage('home')
   }
   async function handleReserve() {
     if (!user) {
@@ -1882,8 +1880,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <div style={{ flex:1 }}>
               <div style={{ color:'#fff', fontSize:12, fontWeight:800 }}>Instala La Casa</div>
               <div style={{ color:C.muted, fontSize:9, marginTop:1 }}>Acceso rapido + funciona sin internet</div>
-            </div>            {pwa.canInstall
-              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
+            </div>
+            {pwa.canInstall              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
               : <span style={{ color:C.muted, fontSize:9, flexShrink:0, textAlign:'right', maxWidth:70, lineHeight:1.4 }}>Menu → Agregar a pantalla</span>
             }
           </div>
@@ -2507,8 +2505,9 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
       if (e1) { alert('Error perfil: ' + e1.message); return }
       const { error: e2 } = await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: appConfig?.level1_rate||15, level2_rate: appConfig?.level2_rate||5 }, { onConflict: 'user_id' })
       if (e2) { alert('Error promoter: ' + e2.message); return }
-      alert('✅ ¡Ahora eres Promotor Oficial! Recarga la página para ver tu panel.')
-      window.location.reload()
+      alert('✅ ¡Ahora eres Promotor Oficial!')
+      // Navigate to home to trigger fresh profile fetch
+      window.location.href = window.location.origin + '/'
     } catch(err) { alert('Error: ' + err.message) }
   }
 
@@ -3765,8 +3764,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
         <FormField label="Comisión Nivel 2 — sub-referido ($)">
           <input type="number" value={form.commission_l2} onChange={e => setForm(p => ({ ...p, commission_l2: parseInt(e.target.value) || 0 }))} placeholder="Ej: 2000" />
         </FormField>
-        {form.ticket_price > 0 && form.commission_l1 > 0 && (
-          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>            <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>
+        {form.ticket_price > 0 && form.commission_l1 > 0 && (          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
+            <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Precio boleto: <span style={{ color:C.gold, fontWeight:700 }}>{fmt(form.ticket_price)}</span></div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Promotor gana: <span style={{ color:'#27AE60', fontWeight:700 }}>{fmt(form.commission_l1)}</span></div>
             <div style={{ color:'#fff', fontSize:11 }}>Tu ingreso neto: <span style={{ color:'#5DADE2', fontWeight:700 }}>{fmt(form.ticket_price - form.commission_l1)}</span></div>
