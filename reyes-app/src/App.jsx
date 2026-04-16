@@ -79,7 +79,7 @@ const Icons = {
 }
 
 const DEFAULT_CONFIG = {
-  show_bingo: false, showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
+  show_bingo: false, show_promoter_banner: true, showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
   whatsapp: '', canal: '', instagram: '', facebook: '', telegram: '',
   supportWhatsapp: '3013986016', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
   paymentWhatsapp: '3013986016', showWAPayButton: true, showChatPayButton: true, waMsgTemplate: '', imgDeleteDays: 3, showBanner: false, bannerText: '🔥 ¡Hoy es tu día de suerte! Aparta tu número antes de que se agote · 💰 Premios reales cada semana · ✅ Pagos seguros y verificados · 🏆 Ganadores publicados en Instagram', bannerBg: '#E6BE00', bannerColor: '#5a3e00', bannerSpeed: 3,
@@ -129,7 +129,22 @@ function usePWA() {
 
 // ─── APP PRINCIPAL ────────────────────────────────────────────────────────────
 export default function App() {
-  const [page, setPage] = useState('home')
+  const [page, _setPage] = useState('home')
+  const [pageHistory, setPageHistory] = useState([])
+  const setPage = (newPage) => {
+    _setPage(prev => {
+      if (prev !== newPage) setPageHistory(h => [...h, prev])
+      return newPage
+    })
+  }
+  const goBack = () => {
+    setPageHistory(h => {
+      if (h.length === 0) { _setPage('home'); return [] }
+      const last = h[h.length - 1]
+      _setPage(last)
+      return h.slice(0, -1)
+    })
+  }
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -223,7 +238,29 @@ export default function App() {
 
   async function fetchConfig() {
     const { data } = await supabase.from('app_config').select('*').eq('id', 1).single()
-    if (data) setAppConfig(prev => ({ ...prev, ...data }))
+    if (data) {
+      const mapped = {
+        ...data,
+        showBanner: data.show_banner,
+        bannerText: data.banner_text,
+        bannerBg: data.banner_bg,
+        bannerColor: data.banner_color,
+        bannerSpeed: data.banner_speed,
+        showPoints: data.show_points,
+        showWinners: data.show_winners,
+        showHowItWorks: data.show_how_it_works,
+        showWelcomeBonus: data.show_welcome_bonus,
+        supportWhatsapp: data.support_whatsapp,
+        supportWhatsappText: data.support_whatsapp_text,
+        supportWhatsappMsg: data.support_whatsapp_msg,
+        paymentWhatsapp: data.payment_whatsapp,
+        showWAPayButton: data.show_wa_pay_button,
+        showChatPayButton: data.show_chat_pay_button,
+        waMsgTemplate: data.wa_msg_template,
+        imgDeleteDays: data.img_delete_days,
+      }
+      setAppConfig(prev => ({ ...prev, ...mapped }))
+    }
   }
   async function fetchReserved(id) {
     try {
@@ -232,12 +269,15 @@ export default function App() {
       if (error) { console.error('fetchReserved tickets error:', error); return }
       const normalNums = (data || []).flatMap(t => t.numbers || [])
       // Society tickets
+      // Solo marcar como reservado/ocupado si la sociedad está COMPLETA
+      // (ambos socios). 'waiting' aún tiene 1 espacio libre.
       const { data: sData, error: sErr } = await supabase.from('society_tickets')
-        .select('number')
+        .select('number, status')
         .eq('raffle_id', id)
         .in('status', ['waiting', 'complete'])
       if (sErr) console.error('fetchReserved society error:', sErr)
-      const societyOccupied = (sData || []).map(s => s.number)
+      // Solo 'complete' = ocupado totalmente. 'waiting' sigue disponible.
+      const societyOccupied = (sData || []).filter(s => s.status === 'complete').map(s => s.number)
       setAllReservedNums([...normalNums, ...societyOccupied])
     } catch(e) { console.error('fetchReserved catch:', e) }
   }
@@ -348,7 +388,12 @@ export default function App() {
     if (data.user && !data.session) throw new Error('Revisa tu correo y confirma tu cuenta.')
   }
   async function doLogout() {
-    await supabase.auth.signOut(); setUser(null); setProfile(null); setMyTickets([]); setPage('home')
+    try {
+      await supabase.auth.signOut()
+    } catch(e) { console.error('signOut error:', e) }
+    setUser(null); setProfile(null); setMyTickets([]); setPageHistory([]); _setPage('home')
+    // Force reload to clear all state
+    setTimeout(() => window.location.reload(), 100)
   }
   async function handleReserve() {
     if (!user) {
@@ -409,7 +454,7 @@ export default function App() {
       </header>
       <main>
         {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
-        {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={() => setPage('home')} onSociety={async (num, mode) => {
+        {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={goBack} onSociety={async (num, mode) => {
           if (!user) { setAuthPage('login'); return }
           const halfPrice = Math.round(selectedRaffle.ticket_price / 2)
           try {
@@ -466,15 +511,15 @@ export default function App() {
         {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { setSupportTicketContext(ctx||null); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
         {page === 'promoter' && <PromoterPage user={user} profile={profile} raffles={raffles} appConfig={appConfig} onBack={() => setPage('profile')} />}
         {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
-        {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={isAdmin} onBack={() => setPage('home')} appConfig={appConfig} ticketContext={supportTicketContext} />}
-        {page === 'admin' && <AdminSafe user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={() => setPage('home')} onOpenSupport={() => setPage('admin-support')} onOpenSociety={() => setPage('admin-society')} onOpenBingo={() => setPage('admin-bingo')} onRefreshRaffles={fetchRaffles} />}
+        {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={isAdmin} onBack={goBack} appConfig={appConfig} ticketContext={supportTicketContext} />}
+        {page === 'admin' && <AdminSafe user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={goBack} onOpenSupport={() => setPage('admin-support')} onOpenSociety={() => setPage('admin-society')} onOpenBingo={() => setPage('admin-bingo')} onRefreshRaffles={fetchRaffles} />}
         {page === 'admin-support' && <SupportPage user={user} profile={profile} isAdmin={true} onBack={() => setPage('admin')} appConfig={appConfig} />}
-        {page === 'winners' && <WinnersPage onBack={() => setPage('home')} onRaffle={() => setPage('home')} />}
+        {page === 'winners' && <WinnersPage onBack={goBack} onRaffle={() => setPage('home')} />}
         {page === 'society' && societyData && <SocietyPage user={user} profile={profile} raffle={societyData.raffle} number={societyData.number} onBack={() => { setPage('raffle') }} onLogin={() => setAuthPage('login')} />}
         {page === 'admin-society' && <AdminSocietyPanel raffles={raffles} onBack={() => setPage('admin')} />}
-        {page === 'bingo' && <BingoPage user={user} profile={profile} appConfig={appConfig} onLogin={() => setAuthPage('login')} onBack={() => setPage('home')} />}
+        {page === 'bingo' && <BingoPage user={user} profile={profile} appConfig={appConfig} onLogin={() => setAuthPage('login')} onBack={goBack} />}
         {page === 'admin-bingo' && <AdminBingoPanel onBack={() => setPage('admin')} />}
-        {page === 'how' && <HowItWorksPage onBack={() => setPage('home')} onRegister={() => setAuthPage('register')} />}
+        {page === 'how' && <HowItWorksPage onBack={goBack} onRegister={() => setAuthPage('register')} />}
       </main>
       {/* TOAST */}
       {toast && (
@@ -657,9 +702,7 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
 
   return (
     <div style={S.content}>
-      <div style={{ background:'#C0392B', color:'#fff', padding:'12px', borderRadius:8, marginBottom:12, textAlign:'center', fontWeight:900, fontSize:15, border:'3px solid #fff' }}>
-        🔴 v68 CARGADO — PROMOTORES ACTIVO
-      </div>
+
       {/* BIENVENIDA compacta */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ color: '#fff', fontSize: 18, fontWeight: 900, lineHeight: 1.2, marginBottom: 3 }}>
@@ -1415,7 +1458,7 @@ www.lacasadelasdinamicas.com`)}`)
 
         {/* ── LEYENDA — fuera de la tabla ── */}
         <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:10 }}>
-          {[['#111','1px solid #333','#fff','Disponible'],['rgba(201,162,39,0.2)',`2px solid ${C.gold}`,C.gold,'Seleccionado'],['#050505','1px solid #0d0d0d','#555','Apartado']].map(([bg,border,color,label]) => (
+          {[['#111','1px solid #333','#fff','Disponible'],['rgba(201,162,39,0.2)',`2px solid ${C.gold}`,C.gold,'Seleccionado'],['rgba(231,76,60,0.12)','1px solid rgba(231,76,60,0.25)','#E74C3C','Apartado']].map(([bg,border,color,label]) => (
             <div key={label} style={{ display:'flex', alignItems:'center', gap:5 }}>
               <div style={{ width:22, height:22, background:bg, border, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center' }}>{label==='Apartado'&&<span style={{fontSize:9}}>🔒</span>}</div>
               <span style={{ fontSize:11, color:C.muted }}>{label}</span>
@@ -1442,8 +1485,8 @@ www.lacasadelasdinamicas.com`)}`)
           {/* GRID — numeros blancos grandes */}
           <div style={{ display:'grid', gridTemplateColumns:`repeat(${cols},1fr)`, gap:5 }}>
             {Array.from({ length:range },(_,n) => {
-              const isSoc = societyNums.includes(n)
               const isRes = allReservedNums.includes(n)
+              const isSoc = societyNums.includes(n) && !isRes
               const isSel = selectedNums.includes(n)
               const pStr  = pad(n)
               if (isSoc) return (
@@ -1454,7 +1497,7 @@ www.lacasadelasdinamicas.com`)}`)
                   <div style={{ fontSize:8, lineHeight:1, marginTop:1 }}>👥</div>
                 </div>
               )
-              if (isRes) return <div key={n} style={{ aspectRatio:1, border:'1px solid #111', borderRadius:8, background:'#050505', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, cursor:'not-allowed' }}>🔒</div>
+              if (isRes) return <div key={n} style={{ aspectRatio:1, border:'1px solid rgba(231,76,60,0.25)', borderRadius:8, background:'rgba(231,76,60,0.12)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, cursor:'not-allowed' }}>🔒</div>
               if (isSel) return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio:1, border:`2px solid ${C.gold}`, borderRadius:8, background:'rgba(201,162,39,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:range<=100?13:11, fontWeight:900, color:C.gold, cursor:'pointer' }}>{pStr}</div>
               return <div key={n} onClick={() => toggleNum(n)} style={{ aspectRatio:1, border:'1px solid #1a1a1a', borderRadius:8, background:'#111', display:'flex', alignItems:'center', justifyContent:'center', fontSize:range<=100?13:11, fontWeight:700, color:'#fff', cursor:'pointer' }}>{pStr}</div>
             })}
@@ -1808,7 +1851,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
         </div>
 
         {/* PROMOTER BANNER — right after Mis Puntos */}
-        {user && !profile?.is_promoter && (
+        {user && !profile?.is_promoter && (appConfig?.show_promoter_banner !== false) && (
           <div onClick={onPromoter} style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.12),rgba(39,174,96,0.08))', border:'2px solid rgba(230,190,0,0.4)', borderRadius:16, padding:14, marginBottom:14, cursor:'pointer', position:'relative', overflow:'hidden', textAlign:'center' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:'linear-gradient(90deg,#E6BE00,#27AE60,#E6BE00)' }} />
             <div style={{ fontSize:28, marginBottom:4 }}>💰</div>
@@ -1839,8 +1882,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <div style={{ flex:1 }}>
               <div style={{ color:'#fff', fontSize:12, fontWeight:800 }}>Instala La Casa</div>
               <div style={{ color:C.muted, fontSize:9, marginTop:1 }}>Acceso rapido + funciona sin internet</div>
-            </div>
-            {pwa.canInstall
+            </div>            {pwa.canInstall
               ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
               : <span style={{ color:C.muted, fontSize:9, flexShrink:0, textAlign:'right', maxWidth:70, lineHeight:1.4 }}>Menu → Agregar a pantalla</span>
             }
@@ -1864,7 +1906,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
           </span>
         </div>
 
-        {myTickets.length === 0 ? (          <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
+        {myTickets.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
             <div style={{ fontSize:44, marginBottom:12 }}>🎟️</div>
             <div style={{ color:'#fff', fontSize:14, fontWeight:600, marginBottom:6 }}>Aun no tienes boletos</div>
             <div style={{ fontSize:12 }}>Participa en una dinamica!</div>
@@ -3125,23 +3168,24 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
   async function saveConfig() {
     try {
       // Solo guardar columnas que sabemos que existen en app_config
+      // Use snake_case column names matching DB schema
       const payload = {
         id: 1,
-        showPoints:       localConfig.showPoints       ?? true,
-        showWinners:      localConfig.showWinners      ?? true,
-        showHowItWorks:   localConfig.showHowItWorks   ?? true,
-        showWelcomeBonus: localConfig.showWelcomeBonus ?? true,
-        show_bingo:       localConfig.show_bingo       ?? true,
-        showWAPayButton:  localConfig.showWAPayButton  ?? true,
-        showChatPayButton: localConfig.showChatPayButton ?? true,
-        waMsgTemplate:    localConfig.waMsgTemplate    ?? '',
-        showBanner:       localConfig.showBanner       ?? false,
-        bannerText:       localConfig.bannerText       ?? '',
-        bannerBg:         localConfig.bannerBg         ?? '#E6BE00',
-        bannerColor:      localConfig.bannerColor      ?? '#5a3e00',
-        bannerSpeed:      localConfig.bannerSpeed      ?? 3,
-        paymentWhatsapp:  localConfig.paymentWhatsapp  ?? '',
-        winnersInstagram: localConfig.winnersInstagram ?? '',
+        show_points:       localConfig.showPoints       ?? true,
+        show_winners:      localConfig.showWinners      ?? true,
+        show_how_it_works: localConfig.showHowItWorks   ?? true,
+        show_welcome_bonus: localConfig.showWelcomeBonus ?? true,
+        show_bingo:        localConfig.show_bingo       ?? true,
+        show_promoter_banner: localConfig.show_promoter_banner ?? true,
+        show_wa_pay_button:  localConfig.showWAPayButton  ?? true,
+        show_chat_pay_button: localConfig.showChatPayButton ?? true,
+        wa_msg_template:   localConfig.waMsgTemplate    ?? '',
+        show_banner:       localConfig.showBanner       ?? false,
+        banner_text:       localConfig.bannerText       ?? '',
+        banner_bg:         localConfig.bannerBg         ?? '#E6BE00',
+        banner_color:      localConfig.bannerColor      ?? '#5a3e00',
+        banner_speed:      localConfig.bannerSpeed      ?? 3,
+        payment_whatsapp:  localConfig.paymentWhatsapp  ?? '',
       }
       const { error } = await supabase.from('app_config').upsert(payload, { onConflict: 'id' })
       if (error) throw error
@@ -3279,6 +3323,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
               ['showHowItWorks','Mostrar Como funciona?','Visible en inicio'],
               ['showWelcomeBonus','Bono de bienvenida','$500 + 1000 pts'],
               ['show_bingo','Mostrar Bingo','Activa el bingo'],
+              ['show_promoter_banner','Banner Promotor','Muestra banner "Gana dinero" en perfil'],
               ['showWAPayButton','Boton Pagar por WhatsApp','Desactiva para solo chat'],
               ['showChatPayButton','Boton Adjuntar comprobante en chat','Desactiva si no quieres ese boton'],
             ].map(([key,label,desc]) => (
@@ -3721,8 +3766,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
           <input type="number" value={form.commission_l2} onChange={e => setForm(p => ({ ...p, commission_l2: parseInt(e.target.value) || 0 }))} placeholder="Ej: 2000" />
         </FormField>
         {form.ticket_price > 0 && form.commission_l1 > 0 && (
-          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
-            <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>
+          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>            <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Precio boleto: <span style={{ color:C.gold, fontWeight:700 }}>{fmt(form.ticket_price)}</span></div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Promotor gana: <span style={{ color:'#27AE60', fontWeight:700 }}>{fmt(form.commission_l1)}</span></div>
             <div style={{ color:'#fff', fontSize:11 }}>Tu ingreso neto: <span style={{ color:'#5DADE2', fontWeight:700 }}>{fmt(form.ticket_price - form.commission_l1)}</span></div>
@@ -3730,7 +3774,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
         )}
       </div>
 
-      <button onClick={save} disabled={saving} style={{ ...S.btnGold, marginBottom:10 }}>        {saving
+      <button onClick={save} disabled={saving} style={{ ...S.btnGold, marginBottom:10 }}>
+        {saving
           ? <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#000" strokeWidth="2.5" style={{ animation:'spin 1s linear infinite' }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
               Guardando...
@@ -4478,19 +4523,27 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 
   async function buyPack(packOpt) {
     if (!user) { onLogin(); return }
-    const cfg = getConfig(game)
-    const numCartones = packOpt?.cartones || cfg.cartones_per_pack || 6
-    const maxPer = cfg.max_per_person || 12
-    const isUnlimited = profile?.bingo_unlimited === true
-    if (!isUnlimited && myCartones.length + numCartones > maxPer) { alert(`¡Máximo ${maxPer} cartones por persona! Ya tienes ${myCartones.length}.`); return }
-    setBuyingPack(true)
-    const cartones = Array.from({length:numCartones},(_,i) => ({
-      game_id: game.id, user_id: user.id, numbers: generateCarton(), marked: [], carton_number: myCartones.length+i+1, paid: false
-    }))
-    const { error } = await supabase.from('bingo_cartones').insert(cartones)
-    if (error) alert('Error: ' + error.message)
-    await fetchMyCartones()
-    setBuyingPack(false)
+    try {
+      const cfg = getConfig(game)
+      const numCartones = packOpt?.cartones || cfg.cartones_per_pack || 6
+      const maxPer = cfg.max_per_person || 12
+      const isUnlimited = profile?.bingo_unlimited === true
+      if (!isUnlimited && myCartones.length + numCartones > maxPer) {
+        alert(`¡Máximo ${maxPer} cartones por persona! Ya tienes ${myCartones.length}.`)
+        return
+      }
+      setBuyingPack(true)
+      const cartones = Array.from({length:numCartones},(_,i) => ({
+        game_id: game.id, user_id: user.id, numbers: generateCarton(), marked: [], carton_number: myCartones.length+i+1, paid: false
+      }))
+      const { error } = await supabase.from('bingo_cartones').insert(cartones)
+      if (error) { alert('Error al crear cartones: ' + error.message); setBuyingPack(false); return }
+      await fetchMyCartones()
+      setBuyingPack(false)
+    } catch(err) {
+      alert('Error: ' + err.message)
+      setBuyingPack(false)
+    }
   }
 
   async function markNumber(cartonId, num) {
@@ -4905,7 +4958,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}><span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>Cartón #{expandedCarton+1}</span><button onClick={()=>setExpandedCarton(null)} style={{ background:'rgba(230,190,0,0.1)', border:'1px solid rgba(230,190,0,0.3)', borderRadius:6, color:C.gold, fontSize:9, padding:'3px 8px', cursor:'pointer', fontFamily:'inherit', fontWeight:700 }}>Minimizar</button></div>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>{letters.map(l=><div key={l} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:6, padding:5, textAlign:'center', fontSize:13, fontWeight:900, color:'#000' }}>{l}</div>)}</div>
                   {Array.from({length:5},(_,row)=>(
-                    <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>{nums.map((col,ci)=>{ const n=col[row],isStar=n===null,isCalled=n!==null&&calledNums.includes(n),isMarked=n!==null?marked.includes(n):true; return <div key={ci} onClick={()=>n&&markNumber(ct.id,n)} style={{ aspectRatio:1, borderRadius:6, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.25)':isCalled?'rgba(39,174,96,0.15)':'#1a1a1a', border:`1px solid ${isStar?'transparent':isMarked&&isCalled?'rgba(230,190,0,0.5)':isCalled?'rgba(39,174,96,0.4)':'#2a2a2a'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:900, color:isStar?'#000':isMarked&&isCalled?C.gold:isCalled?'#27AE60':'#fff', cursor:isCalled&&!isStar?'pointer':'default' }}>{isStar?'⭐':n}</div> })}</div>
+                    <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:3, marginBottom:3 }}>{nums.map((col,ci)=>{ const n=col[row],isStar=n===null,isCalled=n!==null&&calledNums.includes(n),isMarked=n!==null?marked.includes(n):true; return <div key={ci} onClick={()=>n&&markNumber(ct.id,n)} style={{ aspectRatio:1, borderRadius:6, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.35)':isCalled?'rgba(39,174,96,0.25)':'#fff', border:`1px solid ${isStar?'transparent':isMarked&&isCalled?'rgba(230,190,0,0.6)':isCalled?'rgba(39,174,96,0.5)':'#ddd'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:900, color:isStar?'#000':'#000', cursor:isCalled&&!isStar?'pointer':'default' }}>{isStar?'⭐':n}</div> })}</div>
                   ))}
                 </div>
               )
@@ -4922,7 +4975,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}><span style={{ color:'#fff', fontSize:9, fontWeight:900 }}>#{ci+1}</span><span style={{ color:C.muted, fontSize:8 }}>{marked.length}m</span></div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:2, marginBottom:2 }}>{letters.map(l=><div key={l} style={{ background:`linear-gradient(135deg,${C.gold},${C.goldLight})`, borderRadius:3, padding:'2px 0', textAlign:'center', fontSize:7, fontWeight:900, color:'#000' }}>{l}</div>)}</div>
                     {Array.from({length:5},(_,row)=>(
-                      <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:2, marginBottom:1 }}>{nums.map((col,ci2)=>{ const n=col[row],isStar=n===null,isCalled=n!==null&&calledNums.includes(n),isMarked=n!==null?marked.includes(n):true; return <div key={ci2} style={{ aspectRatio:1, borderRadius:3, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.25)':isCalled?'rgba(39,174,96,0.15)':'#1a1a1a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:isMarked&&isCalled?800:400, color:isStar?'#000':isMarked&&isCalled?C.gold:isCalled?'#27AE60':'#fff' }}>{isStar?'★':n}</div> })}</div>
+                      <div key={row} style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:2, marginBottom:1 }}>{nums.map((col,ci2)=>{ const n=col[row],isStar=n===null,isCalled=n!==null&&calledNums.includes(n),isMarked=n!==null?marked.includes(n):true; return <div key={ci2} style={{ aspectRatio:1, borderRadius:3, background:isStar?`linear-gradient(135deg,${C.gold},${C.goldLight})`:isMarked&&isCalled?'rgba(230,190,0,0.35)':isCalled?'rgba(39,174,96,0.25)':'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:7, fontWeight:isMarked&&isCalled?900:700, color:'#000' }}>{isStar?'★':n}</div> })}</div>
                     ))}
                   </div>
                 )
