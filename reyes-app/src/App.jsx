@@ -261,7 +261,7 @@ export default function App() {
     const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', raffleId).in('status', ['reserved', 'paid', 'winner'])
     const taken = (ex || []).flatMap(t => t.numbers || [])
     const avail = nums.filter(n => !taken.includes(n))
-    if (avail.length > 0) await supabase.from('tickets').insert({ user_id: user.id, raffle_id: raffleId, numbers: avail, status: 'reserved', total_amount: avail.length * price })
+    if (avail.length > 0) await supabase.from('tickets').insert({ user_id: user.id, raffle_id: raffleId, numbers: avail, status: 'reserved', total_amount: avail.length * price }).select('id')
     localStorage.removeItem('pendingNums'); setPendingNums(null)
     await fetchMyTickets()
     // Pequeño delay para que fetchMyTickets termine antes de ir al perfil
@@ -656,71 +656,43 @@ function ChooseAuthScreen({ selectedRaffle, selectedNums, onLogin, onRegister, o
 function RaffleCard({ r, onRaffle, featured }) {
   const prizes = Array.isArray(r.prizes) ? r.prizes : []
   const hasSociety = Array.isArray(r.society_numbers) && r.society_numbers.length > 0
-  const hasPresale = r.presale_active && r.presale_price > 0
   const cardColor = r.card_color || '#C0392B'
-  const isFeatured = r.is_featured || featured
   const totalPrizes = prizes.reduce((sum, p) => {
     const amt = typeof p === 'string' ? parseInt(p.replace(/[^0-9]/g,''))||0 : (parseInt(String(p.amount).replace(/[^0-9]/g,''))||0)
     return sum + amt
   }, 0)
-  const dateStr = (() => { try { return new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) } catch { return '' } })()
+  const dateStr = (() => { try { return new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short'}) } catch { return '' } })()
   return (
-    <div onClick={() => onRaffle(r)} style={{ borderRadius:14, overflow:'hidden', border:'1px solid #333', background:'#111', cursor:'pointer', marginBottom:4 }}>
-      {/* === HEADER CON COLOR PERSONALIZABLE === */}
-      <div style={{ background:cardColor, padding:'12px 14px', position:'relative' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div>
-            <div style={{ display:'flex', gap:3, marginBottom:3, flexWrap:'wrap' }}>
-              <span style={{ background:'rgba(0,0,0,0.3)', color:'#fff', padding:'1px 5px', borderRadius:3, fontSize:7, fontWeight:800 }}>ACTIVO</span>
-              {isFeatured && <span style={{ background:'rgba(0,0,0,0.3)', color:'#E6BE00', padding:'1px 5px', borderRadius:3, fontSize:7, fontWeight:800 }}>DESTACADO</span>}
-              {hasSociety && <span style={{ background:'rgba(0,0,0,0.2)', color:'#D7BDE2', padding:'1px 5px', borderRadius:3, fontSize:7, fontWeight:800 }}>SOCIEDAD</span>}
-            </div>
-            <div style={{ color:'#fff', fontSize:15, fontWeight:900 }}>{r.title}</div>
-            <div style={{ color:'rgba(255,255,255,0.8)', fontSize:10, marginTop:2 }}>{dateStr} · {r.lottery_name} · 00-{String((r.number_range||100)-1).padStart(2,'0')}</div>
-          </div>
-          <div style={{ color:'rgba(255,255,255,0.8)', fontSize:9, textAlign:'right' }}>
-            <div style={{ fontSize:7, color:'rgba(255,255,255,0.5)' }}>Org.</div>{r.lottery_name}
-          </div>
-        </div>
-        {/* Semicirculos ticket */}
-        <div style={{ position:'absolute', bottom:-7, left:20, width:14, height:14, background:'#111', borderRadius:'50%' }}></div>
-        <div style={{ position:'absolute', bottom:-7, right:20, width:14, height:14, background:'#111', borderRadius:'50%' }}></div>
+    <div onClick={() => onRaffle(r)} style={{ display:'flex', borderRadius:12, overflow:'hidden', border:'1px solid #222', marginBottom:8, cursor:'pointer' }}>
+      {/* BARRA DE PRECIO CON COLOR */}
+      <div style={{ width:80, background:cardColor, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:8, flexShrink:0 }}>
+        <div style={{ color:'rgba(255,255,255,0.7)', fontSize:6, letterSpacing:1, fontWeight:700, textTransform:'uppercase' }}>Boleto</div>
+        <div style={{ color:'#fff', fontSize: r.ticket_price >= 10000 ? 13 : 15, fontWeight:900, lineHeight:1, textAlign:'center' }}>{fmt(r.ticket_price)}</div>
       </div>
-      {/* === VALOR DEL BOLETO — TICKET DORADO === */}
-      <div style={{ background:'linear-gradient(135deg,#1a1200,#0d0a00)', padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', borderBottom:'2px dashed #333' }}>
-        <div style={{ color:'#C9A866', fontSize:7, textTransform:'uppercase', letterSpacing:2, fontWeight:700, marginBottom:3 }}>Valor del boleto</div>
-        <div style={{ color:C.gold, fontSize:30, fontWeight:900, lineHeight:1 }}>{fmt(r.ticket_price)}</div>
-      </div>
-      {/* === PREMIOS EN GRID 2 COLUMNAS === */}
-      <div style={{ padding:'10px 14px' }}>
-        <div style={{ color:'#555', fontSize:7, textTransform:'uppercase', letterSpacing:1, fontWeight:700, marginBottom:6 }}>Premios</div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5, marginBottom:6 }}>
-          {prizes.slice(0,4).map((p, i) => (
-            <div key={i} style={{ display:'flex', alignItems:'center', gap:5, background:i===0?'rgba(230,190,0,0.05)':'transparent', border:i===0?'1px solid rgba(230,190,0,0.2)':'1px solid #1a1a1a', borderRadius:6, padding:6 }}>
-              <span style={{ fontSize:12, flexShrink:0 }}>{medals[i]}</span>
-              <div>
-                <div style={{ color:i===0?C.gold:i===1?'#ccc':'#aaa', fontSize:i===0?12:11, fontWeight:i===0?900:700 }}>{p.amount || (typeof p==='string'?p:'')}</div>
-                {p.how_to_win && <div style={{ color:'#555', fontSize:7 }}>{p.how_to_win}</div>}
-              </div>
+      {/* INFO */}
+      <div style={{ flex:1, background:'#111', padding:'10px 12px', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>{r.title}</span>
+            <div style={{ display:'flex', gap:3 }}>
+              {hasSociety && <span style={{ color:'#9B59B6', fontSize:7, fontWeight:800, background:'rgba(155,89,182,0.1)', padding:'2px 5px', borderRadius:3 }}>Sociedad</span>}
+              <span style={{ color:'#27AE60', fontSize:7, fontWeight:800, background:'rgba(39,174,96,0.1)', padding:'2px 5px', borderRadius:3 }}>Activo</span>
             </div>
-          ))}
+          </div>
+          <div style={{ color:'#888', fontSize:8, marginTop:2 }}>{dateStr} · {r.lottery_name} · 00-{String((r.number_range||100)-1).padStart(2,'0')}</div>
         </div>
-        {/* Total en premios */}
-        {totalPrizes > 0 && (
-          <div style={{ textAlign:'right', padding:'4px 0', marginBottom:8, borderTop:'1px solid #1a1a1a', paddingTop:5 }}>
-            <span style={{ color:'#fff', fontSize:9, fontWeight:700 }}>Total en premios: </span>
-            <span style={{ color:'#27AE60', fontSize:11, fontWeight:800 }}>{fmt(totalPrizes)}</span>
+        {/* PREMIOS */}
+        {prizes.length > 0 && (
+          <div style={{ display:'flex', gap:3, marginTop:5, flexWrap:'wrap' }}>
+            {prizes.slice(0,3).map((p, i) => (
+              <span key={i} style={{ background: i===0?'rgba(201,162,39,0.08)':'rgba(255,255,255,0.03)', border: i===0?'1px solid rgba(201,162,39,0.2)':'1px solid #222', borderRadius:4, padding:'2px 5px', fontSize:7, color: i===0?C.gold:'#888', fontWeight:700 }}>{i===0?'1ro':''+({1:'2do',2:'3ro'}[i]||'')}: {p.amount || (typeof p==='string'?p:'')}</span>
+            ))}
           </div>
         )}
-        {/* Preventa */}
-        {hasPresale && (
-          <div style={{ background:'rgba(155,89,182,0.08)', border:'1px solid rgba(155,89,182,0.2)', borderRadius:8, padding:'6px 10px', marginBottom:8, display:'flex', alignItems:'center', gap:8 }}>
-            <span style={{ color:'#CE93D8', fontSize:9, fontWeight:700 }}>Preventa —</span>
-            <span style={{ color:'#C9A0E8', fontSize:14, fontWeight:900 }}>{fmt(r.presale_price)}</span>
-            <span style={{ color:C.muted, fontSize:9, textDecoration:'line-through' }}>{fmt(r.ticket_price)}</span>
-          </div>
-        )}
-        <button style={{ width:'100%', background:C.gold, color:'#000', border:'none', padding:10, borderRadius:8, fontSize:12, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>Participar</button>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:6 }}>
+          {totalPrizes > 0 ? <span style={{ color:'#888', fontSize:8 }}>Total en premios: <span style={{ color:'#27AE60', fontWeight:800 }}>{fmt(totalPrizes)}</span></span> : <span></span>}
+          <span style={{ color:'#000', fontSize:9, fontWeight:900, background:C.gold, padding:'4px 10px', borderRadius:4 }}>Participar</span>
+        </div>
       </div>
     </div>
   )
@@ -803,41 +775,48 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
       )}
       {/* RESTO DE SORTEOS */}
       {/* BINGO ACTIVO */}
-      {activeBingo && (appConfig.show_bingo || appConfig.showBingo) && (
-        <div style={{ marginBottom:16 }}>
-          <div style={{ textAlign:'center', marginBottom:12 }}>
-            <h2 style={{ color:'#fff', fontWeight:900, fontSize:15, margin:0, textTransform:'uppercase', letterSpacing:1 }}>Bingo en Vivo</h2>
-            <div style={{ height:1, background:'linear-gradient(90deg,transparent,#27AE60,transparent)', marginTop:6 }}></div>
-          </div>
-          <div onClick={onBingo} style={{ borderRadius:14, overflow:'hidden', border:'2px solid #27AE60', background:'#111', cursor:'pointer' }}>
-            <div style={{ background:'linear-gradient(135deg,#27AE60,#2ECC71)', padding:'14px 16px', position:'relative' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <div>
-                  <span style={{ background:'rgba(0,0,0,0.3)', color:'#fff', padding:'2px 6px', borderRadius:4, fontSize:8, fontWeight:800 }}>{activeBingo.status==='active'?'🔴 EN VIVO':'⏳ PRÓXIMAMENTE'}</span>
-                  <div style={{ color:'#fff', fontSize:17, fontWeight:900, marginTop:4 }}>{activeBingo.title||'Bingo La Casa'}</div>
-                  <div style={{ color:'rgba(255,255,255,0.8)', fontSize:10, marginTop:2 }}>Premios en efectivo · Auto-verificación</div>
-                </div>
-                <div style={{ fontSize:40 }}>🎱</div>
-              </div>
-              <div style={{ position:'absolute', bottom:-7, left:20, width:14, height:14, background:'#111', borderRadius:'50%' }}></div>
-              <div style={{ position:'absolute', bottom:-7, right:20, width:14, height:14, background:'#111', borderRadius:'50%' }}></div>
+      {activeBingo && (appConfig.show_bingo || appConfig.showBingo) && (() => {
+        const bCfg = (() => { try { return JSON.parse(activeBingo.prize_description||'{}') } catch { return {} } })()
+        const bPrizes = bCfg.prizes || {}
+        const bWinTypes = bCfg.win_types || []
+        const bTotal = Object.values(bPrizes).reduce((s,v) => s + (parseInt(v)||0), 0)
+        const WTL2 = { linea:'Línea', vertical:'Vertical', diagonal:'Diagonal', esquinas:'Esquinas', full:'Full' }
+        return (
+        <div style={{ marginBottom:14 }}>
+          <div style={{ color:'#555', fontSize:8, letterSpacing:2, fontWeight:700, marginBottom:8, textTransform:'uppercase' }}>Bingo</div>
+          <div onClick={onBingo} style={{ display:'flex', borderRadius:12, overflow:'hidden', border:'1.5px solid #27AE60', cursor:'pointer' }}>
+            <div style={{ width:80, background:'#27AE60', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:8, flexShrink:0 }}>
+              <div style={{ color:'rgba(255,255,255,0.7)', fontSize:6, letterSpacing:1, fontWeight:700 }}>CARTON</div>
+              <div style={{ color:'#fff', fontSize:14, fontWeight:900, lineHeight:1, textAlign:'center' }}>{fmt(bCfg.pack_price||6000)}</div>
+              <div style={{ color:'rgba(255,255,255,0.6)', fontSize:6, marginTop:3, fontWeight:700 }}>{activeBingo.status==='active'?'EN VIVO':'PRONTO'}</div>
             </div>
-            <div style={{ background:'linear-gradient(135deg,#0a1a10,#060d08)', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div style={{ flex:1, background:'#111', padding:'10px 12px', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
               <div>
-                <div style={{ color:'#6EE7B7', fontSize:7, textTransform:'uppercase', letterSpacing:2, fontWeight:700, marginBottom:2 }}>Valor del cartón</div>
-                <div style={{ color:C.gold, fontSize:24, fontWeight:900 }}>{(() => { try { return fmt(JSON.parse(activeBingo.prize_description||'{}').pack_price||6000) } catch { return '$ 6.000' } })()}</div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>{activeBingo.title||'Bingo La Casa'}</span>
+                  <span style={{ color:'#fff', fontSize:7, fontWeight:800, background:'rgba(231,76,60,0.8)', padding:'2px 5px', borderRadius:3 }}>{activeBingo.status==='active'?'EN VIVO':'PRONTO'}</span>
+                </div>
+                <div style={{ display:'flex', gap:3, marginTop:5, flexWrap:'wrap' }}>
+                  {bWinTypes.slice(0,4).map(wt => bPrizes[wt] ? (
+                    <span key={wt} style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:4, padding:'2px 5px', fontSize:7, color:'#27AE60', fontWeight:700 }}>{WTL2[wt]||wt} {fmt(bPrizes[wt])}</span>
+                  ) : null)}
+                </div>
               </div>
-              <button style={{ background:C.gold, color:'#000', border:'none', padding:'10px 20px', borderRadius:8, fontSize:13, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>🎱 Jugar</button>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:6 }}>
+                {bTotal > 0 ? <span style={{ color:'#888', fontSize:8 }}>Total en premios: <span style={{ color:'#27AE60', fontWeight:800 }}>{fmt(bTotal)}</span></span> : <span style={{ color:'#888', fontSize:8 }}>Premios en efectivo</span>}
+                <span style={{ color:'#000', fontSize:9, fontWeight:900, background:C.gold, padding:'4px 10px', borderRadius:4 }}>Jugar</span>
+              </div>
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
-            {!loadingRaffles && otherRaffles.length > 0 && (
+      {!loadingRaffles && otherRaffles.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
-            <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 13, margin: 0, textTransform: 'uppercase', letterSpacing: 1 }}>Mas Dinamicas</h2>
+            <h2 style={{ color: '#555', fontWeight: 700, fontSize: 8, margin: 0, textTransform: 'uppercase', letterSpacing: 2 }}>Mas sorteos</h2>
             <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,transparent,${C.gold})` }}></div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1842,6 +1821,21 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
     return Object.values(groups)
   }
 
+  const [myBingoCartones, setMyBingoCartones] = useState([])
+  const [bingoGame, setBingoGame] = useState(null)
+  useEffect(() => {
+    if (!user) return
+    // Fetch active bingo game and user's cartones
+    supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1)
+      .then(({ data }) => {
+        const g = data?.[0]
+        if (g) {
+          setBingoGame(g)
+          supabase.from('bingo_cartones').select('*').eq('game_id', g.id).eq('user_id', user.id).order('carton_number')
+            .then(({ data: carts }) => setMyBingoCartones(carts || []))
+        }
+      })
+  }, [user])
   const reserved       = myTickets.filter(t => t.status === 'reserved')
   const paid           = myTickets.filter(t => t.status === 'paid')
   const reservedGroups = groupTickets(reserved)
@@ -1927,11 +1921,11 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <div style={{ fontSize:28, marginBottom:4 }}>💰</div>
             <div style={{ color:C.gold, fontSize:16, fontWeight:900, marginBottom:2 }}>¡Gana dinero real!</div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Conviértete en <span style={{ color:C.gold, fontWeight:900 }}>Promotor</span></div>
-            <div style={{ color:C.muted, fontSize:10, marginBottom:8 }}>Comparte sorteos y gana comisiones en efectivo</div>            <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:10, padding:8, marginBottom:8 }}>
+            <div style={{ color:C.muted, fontSize:10, marginBottom:8 }}>Comparte sorteos y gana comisiones en efectivo</div>
+            <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:10, padding:8, marginBottom:8 }}>
               <div style={{ color:C.gold, fontSize:10, fontWeight:700, marginBottom:2 }}>💸 Ejemplo real</div>
               <div style={{ color:'#27AE60', fontSize:16, fontWeight:900 }}>Ganas hasta $10.000</div>
-              <div style={{ color:'#888', fontSize:9 }}>por cada boleto vendido con tu enlace</div>
-            </div>
+              <div style={{ color:'#888', fontSize:9 }}>por cada boleto vendido con tu enlace</div>            </div>
             <div style={{ background:'linear-gradient(135deg,#E6BE00,#f0d000)', borderRadius:10, padding:11 }}><div style={{ color:'#000', fontSize:13, fontWeight:900 }}>🚀 Quiero ser Promotor</div></div>
           </div>
         )}
@@ -2808,10 +2802,10 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
     const welcomeMsg = isRecargar
       ? `Hola, ${profile?.full_name?.split(' ')[0] || 'bienvenido'}! 👋 Quieres recargar saldo a tu cuenta. Dinos el monto que deseas recargar y te indicamos como hacerlo.`
       : `Hola, ${profile?.full_name?.split(' ')[0] || 'bienvenido'}! 👋 Veo que quieres pagar el boleto #${String(ctx.number).padStart(2,'0')} de ${ctx.title} por ${fmt(ctx.price)}. Adjunta aqui el comprobante de pago y lo validamos de inmediato.`
-    await supabase.from('support_messages').insert({ user_id:user.id, message:welcomeMsg, from_admin:true })
+    await supabase.from('support_messages').insert({ user_id:user.id, message:welcomeMsg, from_admin:true }).select('id')
     // Send payment data
     const payData = buildPaymentMsg()
-    if (payData) await supabase.from('support_messages').insert({ user_id:user.id, message:payData, from_admin:true })
+    if (payData) await supabase.from('support_messages').insert({ user_id:user.id, message:payData, from_admin:true }).select('id')
     await loadMyMessages()
   }
 
@@ -2862,11 +2856,11 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
       const publicUrl = urlData?.publicUrl
       if (!publicUrl) { alert('No se pudo obtener la URL de la imagen.'); return }
       const deleteAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
-      await supabase.from('support_messages').insert({ user_id:user.id, message:'Comprobante de pago adjunto', from_admin:false, image_url:publicUrl, delete_at:deleteAt })
+      await supabase.from('support_messages').insert({ user_id:user.id, message:'Comprobante de pago adjunto', from_admin:false, image_url:publicUrl, delete_at:deleteAt }).select('id')
       await loadMyMessages()
       // Auto respuesta al recibir imagen
       setTimeout(async () => {
-        await supabase.from('support_messages').insert({ user_id:user.id, message:'✅ Recibimos tu comprobante! Tu pago esta en validacion. En breve actualizaremos tu boleto y te notificamos. Gracias por tu paciencia!', from_admin:true })
+        await supabase.from('support_messages').insert({ user_id:user.id, message:'✅ Recibimos tu comprobante! Tu pago esta en validacion. En breve actualizaremos tu boleto y te notificamos. Gracias por tu paciencia!', from_admin:true }).select('id')
         await loadMyMessages()
       }, 1200)
     } catch(e) { alert('Error inesperado al procesar la imagen.') }
@@ -2878,10 +2872,10 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
     setMsg('')
     try {
       if (isAdmin && selectedConv) {
-        await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:content, from_admin:true })
+        await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:content, from_admin:true }).select('id')
         loadConvMessages(selectedConv.user_id)
       } else if (user) {
-        await supabase.from('support_messages').insert({ user_id:user.id, message:content, from_admin:false })
+        await supabase.from('support_messages').insert({ user_id:user.id, message:content, from_admin:false }).select('id')
         loadMyMessages()
       }
     } catch(e) { console.error('sendMessage error:', e) }
@@ -2889,23 +2883,23 @@ function SupportPage({ user, profile, isAdmin, onBack, appConfig, ticketContext 
 
   async function confirmPayment() {
     if (!selectedConv) return
-    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'✅ Pago confirmado! Tu numero esta asegurado. Mucha suerte en el sorteo!', from_admin:true })
+    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'✅ Pago confirmado! Tu numero esta asegurado. Mucha suerte en el sorteo!', from_admin:true }).select('id')
     await loadConvMessages(selectedConv.user_id)
   }
 
   async function rejectPayment() {
-    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'❌ Tu pago fue rechazado. El comprobante no es valido o no coincide con el monto. Por favor envia un nuevo comprobante.', from_admin:true })
+    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'❌ Tu pago fue rechazado. El comprobante no es valido o no coincide con el monto. Por favor envia un nuevo comprobante.', from_admin:true }).select('id')
     await loadConvMessages(selectedConv.user_id)
   }
 
   async function giveMoreTime() {
-    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'⏱ Te hemos dado 24 horas adicionales para completar tu pago. Aprovechalas!', from_admin:true })
+    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:'⏱ Te hemos dado 24 horas adicionales para completar tu pago. Aprovechalas!', from_admin:true }).select('id')
     await loadConvMessages(selectedConv.user_id)
   }
 
   async function saveNota() {
     if (!notaText.trim()) return
-    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:`[NOTA INTERNA] ${notaText}`, from_admin:true, is_internal:true })
+    await supabase.from('support_messages').insert({ user_id:selectedConv.user_id, message:`[NOTA INTERNA] ${notaText}`, from_admin:true, is_internal:true }).select('id')
     await loadConvMessages(selectedConv.user_id)
     setNotaModal(false); setNotaText('')
   }
@@ -3856,8 +3850,9 @@ function RaffleForm({ raffle, onBack, onSave }) {
     </div>
   )
 }
-// ─── MANUAL SALE ──────────────────────────────────────────────────────────────
-function ManualSaleForm({ raffles, onSaved }) {
+
+
+// ─── MANUAL SALE ──────────────────────────────────────────────────────────────function ManualSaleForm({ raffles, onSaved }) {
   const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
   const [saving, setSaving] = useState(false)
 
@@ -3872,10 +3867,10 @@ function ManualSaleForm({ raffles, onSaved }) {
     let userId = existUser?.[0]?.id
     if (!userId) {
       const fakeId = crypto.randomUUID()
-      await supabase.from('users_profile').insert({ id:fakeId, full_name:f.name.trim(), phone:f.phone.trim(), email:`manual_${fakeId.slice(0,8)}@lacasa.com`, role:'customer', credits:0, points:0 })
+      await supabase.from('users_profile').insert({ id:fakeId, full_name:f.name.trim(), phone:f.phone.trim(), email:`manual_${fakeId.slice(0,8)}@lacasa.com`, role:'customer', credits:0, points:0 }).select('id')
       userId = fakeId
     }
-    await supabase.from('tickets').insert({ user_id:userId, raffle_id:r.id, numbers:nums, status:f.status, total_amount:nums.length * r.ticket_price })
+    await supabase.from('tickets').insert({ user_id:userId, raffle_id:r.id, numbers:nums, status:f.status, total_amount:nums.length * r.ticket_price }).select('id')
     setSaving(false); setF({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
     alert(`Venta registrada para ${f.name}`); onSaved()
   }
@@ -4664,9 +4659,10 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   function getEmbedUrl(url) {
     if (!url) return ''
     let u = url.trim()
-    if (u.includes('youtube.com/watch?v=')) return u.replace('youtube.com/watch?v=','youtube.com/embed/')
-    if (u.includes('youtu.be/')) return u.replace('youtu.be/','youtube.com/embed/')
-    if (u.includes('youtube.com/live/')) return u.replace('youtube.com/live/','youtube.com/embed/')
+    if (u.includes('youtube.com/watch?v=')) return u.replace('youtube.com/watch?v=','youtube.com/embed/') + '?autoplay=1&mute=1'
+    if (u.includes('youtu.be/')) return u.replace('youtu.be/','youtube.com/embed/') + '?autoplay=1&mute=1'
+    if (u.includes('youtube.com/live/')) return u.replace('youtube.com/live/','youtube.com/embed/') + '?autoplay=1&mute=1'
+    if (u.includes('youtube.com/embed/') && !u.includes('autoplay')) return u + (u.includes('?') ? '&' : '?') + 'autoplay=1&mute=1'
     return u
   }
 
@@ -4721,7 +4717,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       game_id: game.id, user_id: user.id, numbers: generateCarton(),
       marked: [], carton_number: myCartones.length + 1, paid: true
     }
-    await supabase.from('bingo_cartones').insert(carton)
+    await supabase.from('bingo_cartones').insert(carton).select('id')
     await fetchMyCartones()
     alert('🎁 ¡Felicidades! Ganaste un cartón GRATIS por compartir 10 veces')
   }
@@ -4983,7 +4979,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 
         {/* PREMIOS COMPACTOS — hide when waiting */}
         {!isWaiting && <div style={{ background:'#111', border:'1px solid rgba(230,190,0,0.12)', borderRadius:10, padding:'8px 10px', marginBottom:10, display:'flex', gap:4, flexWrap:'wrap', alignItems:'center' }}>
-          <span style={{ color:'#fff', fontSize:10, fontWeight:900, marginRight:2 }}>🏆</span>
+          <span style={{ color:'#fff', fontSize:10, fontWeight:900, marginRight:4 }}>🏆 Premios</span>
           {winTypes.map(wt => {
             const isWon = wonTypes.includes(wt)
             return (
@@ -5019,7 +5015,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
         {/* CONTROLES — hide when waiting */}
         {!isWaiting && <div style={{ display:'flex', gap:8, marginBottom:10 }}>
           <button onClick={()=>setAutoMark(!autoMark)} style={{ flex:1, background:'#111', border:`1px solid ${autoMark?'rgba(39,174,96,0.3)':'#2a2a2a'}`, borderRadius:10, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', fontFamily:'inherit' }}><span style={{ color:'#fff', fontSize:11, fontWeight:700 }}>Auto-marcar</span><Toggle on={autoMark} onToggle={()=>setAutoMark(!autoMark)} /></button>
-          <button onClick={()=>setShowBoard(!showBoard)} style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:'8px 12px', cursor:'pointer', fontFamily:'inherit', color:C.gold, fontSize:10, fontWeight:700 }}>{showBoard?'Ocultar':'1-75'}</button>
+          <button onClick={()=>setShowBoard(!showBoard)} style={{ background:showBoard?'rgba(230,190,0,0.15)':'#111', border:'1.5px solid rgba(230,190,0,0.3)', borderRadius:10, padding:'8px 14px', cursor:'pointer', fontFamily:'inherit', color:C.gold, fontSize:11, fontWeight:800, display:'flex', alignItems:'center', gap:4 }}>{showBoard?'✕ Cerrar tablero':'📋 Ver tablero completo'}</button>
           {myCartones.length>0 && <button onClick={handlePrint} style={{ background:'#111', border:'1px solid rgba(230,190,0,0.2)', borderRadius:10, padding:'8px 12px', cursor:'pointer', fontFamily:'inherit', color:C.gold, fontSize:10, fontWeight:700 }}>🖨️ Imprimir</button>}
         </div>}
 
