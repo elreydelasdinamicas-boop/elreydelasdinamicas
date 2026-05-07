@@ -133,7 +133,10 @@ export default function App() {
   const pageHistoryRef = useRef([])
   const setPage = (newPage) => {
     setPageDirect(prev => {
-      if (prev !== newPage) pageHistoryRef.current = [...pageHistoryRef.current, prev]
+      if (prev !== newPage) {
+        pageHistoryRef.current = [...pageHistoryRef.current, prev]
+        try { window.history.pushState({ page: newPage }, '', '') } catch(e) {}
+      }
       return newPage
     })
   }
@@ -144,6 +147,22 @@ export default function App() {
     pageHistoryRef.current = h.slice(0, -1)
     setPageDirect(last)
   }
+  useEffect(() => {
+    const handlePop = () => {
+      const h = pageHistoryRef.current
+      if (h.length > 0) {
+        const last = h[h.length - 1]
+        pageHistoryRef.current = h.slice(0, -1)
+        setPageDirect(last)
+      } else {
+        setPageDirect('home')
+      }
+    }
+    window.addEventListener('popstate', handlePop)
+    // Push initial state
+    try { window.history.replaceState({ page: 'home' }, '', '') } catch(e) {}
+    return () => window.removeEventListener('popstate', handlePop)
+  }, [])
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -714,6 +733,11 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
   ].filter(s => s.url)
   const featuredRaffles = raffles.filter(r => r.is_featured)
   const otherRaffles = raffles.filter(r => !r.is_featured)
+  const [activeBingo, setActiveBingo] = useState(null)
+  useEffect(() => {
+    supabase.from('bingo_games').select('*').in('status',['active','waiting']).order('created_at',{ascending:false}).limit(1)
+      .then(({ data }) => { if (data?.[0]) setActiveBingo(data[0]) })
+  }, [])
 
   return (
     <div style={S.content}>
@@ -778,7 +802,38 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
         </>
       )}
       {/* RESTO DE SORTEOS */}
-      {!loadingRaffles && otherRaffles.length > 0 && (
+      {/* BINGO ACTIVO */}
+      {activeBingo && (appConfig.show_bingo || appConfig.showBingo) && (
+        <div style={{ marginBottom:16 }}>
+          <div style={{ textAlign:'center', marginBottom:12 }}>
+            <h2 style={{ color:'#fff', fontWeight:900, fontSize:15, margin:0, textTransform:'uppercase', letterSpacing:1 }}>Bingo en Vivo</h2>
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,#27AE60,transparent)', marginTop:6 }}></div>
+          </div>
+          <div onClick={onBingo} style={{ borderRadius:14, overflow:'hidden', border:'2px solid #27AE60', background:'#111', cursor:'pointer' }}>
+            <div style={{ background:'linear-gradient(135deg,#27AE60,#2ECC71)', padding:'14px 16px', position:'relative' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div>
+                  <span style={{ background:'rgba(0,0,0,0.3)', color:'#fff', padding:'2px 6px', borderRadius:4, fontSize:8, fontWeight:800 }}>{activeBingo.status==='active'?'🔴 EN VIVO':'⏳ PRÓXIMAMENTE'}</span>
+                  <div style={{ color:'#fff', fontSize:17, fontWeight:900, marginTop:4 }}>{activeBingo.title||'Bingo La Casa'}</div>
+                  <div style={{ color:'rgba(255,255,255,0.8)', fontSize:10, marginTop:2 }}>Premios en efectivo · Auto-verificación</div>
+                </div>
+                <div style={{ fontSize:40 }}>🎱</div>
+              </div>
+              <div style={{ position:'absolute', bottom:-7, left:20, width:14, height:14, background:'#111', borderRadius:'50%' }}></div>
+              <div style={{ position:'absolute', bottom:-7, right:20, width:14, height:14, background:'#111', borderRadius:'50%' }}></div>
+            </div>
+            <div style={{ background:'linear-gradient(135deg,#0a1a10,#060d08)', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div>
+                <div style={{ color:'#6EE7B7', fontSize:7, textTransform:'uppercase', letterSpacing:2, fontWeight:700, marginBottom:2 }}>Valor del cartón</div>
+                <div style={{ color:C.gold, fontSize:24, fontWeight:900 }}>{(() => { try { return fmt(JSON.parse(activeBingo.prize_description||'{}').pack_price||6000) } catch { return '$ 6.000' } })()}</div>
+              </div>
+              <button style={{ background:C.gold, color:'#000', border:'none', padding:'10px 20px', borderRadius:8, fontSize:13, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>🎱 Jugar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+            {!loadingRaffles && otherRaffles.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
@@ -1874,8 +1929,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Conviértete en <span style={{ color:C.gold, fontWeight:900 }}>Promotor</span></div>
             <div style={{ color:C.muted, fontSize:10, marginBottom:8 }}>Comparte sorteos y gana comisiones en efectivo</div>
             <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:10, padding:8, marginBottom:8 }}>
-              <div style={{ color:C.gold, fontSize:10, fontWeight:700, marginBottom:2 }}>💸 Ejemplo real</div>
-              <div style={{ color:'#27AE60', fontSize:16, fontWeight:900 }}>Ganas hasta $10.000</div>
+              <div style={{ color:C.gold, fontSize:10, fontWeight:700, marginBottom:2 }}>💸 Ejemplo real</div>              <div style={{ color:'#27AE60', fontSize:16, fontWeight:900 }}>Ganas hasta $10.000</div>
               <div style={{ color:'#888', fontSize:9 }}>por cada boleto vendido con tu enlace</div>
             </div>
             <div style={{ background:'linear-gradient(135deg,#E6BE00,#f0d000)', borderRadius:10, padding:11 }}><div style={{ color:'#000', fontSize:13, fontWeight:900 }}>🚀 Quiero ser Promotor</div></div>
@@ -1910,7 +1964,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'10px 4px', borderRadius:9, border:'none', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
               <span style={{ color:tab===i?'#000':'#555', fontSize:12, fontWeight:tab===i?800:500 }}>{lb}{cnt>0?' ('+cnt+')':''}</span>
             </button>
-          ))}        </div>
+          ))}
+        </div>
 
         {/* TITULO BOLETOS */}
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
@@ -3805,8 +3860,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
 
 
 // ─── MANUAL SALE ──────────────────────────────────────────────────────────────
-function ManualSaleForm({ raffles, onSaved }) {
-  const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
+function ManualSaleForm({ raffles, onSaved }) {  const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
   const [saving, setSaving] = useState(false)
 
   async function save() {
@@ -3822,7 +3876,8 @@ function ManualSaleForm({ raffles, onSaved }) {
       const fakeId = crypto.randomUUID()
       await supabase.from('users_profile').insert({ id:fakeId, full_name:f.name.trim(), phone:f.phone.trim(), email:`manual_${fakeId.slice(0,8)}@lacasa.com`, role:'customer', credits:0, points:0 })
       userId = fakeId
-    }    await supabase.from('tickets').insert({ user_id:userId, raffle_id:r.id, numbers:nums, status:f.status, total_amount:nums.length * r.ticket_price })
+    }
+    await supabase.from('tickets').insert({ user_id:userId, raffle_id:r.id, numbers:nums, status:f.status, total_amount:nums.length * r.ticket_price })
     setSaving(false); setF({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
     alert(`Venta registrada para ${f.name}`); onSaved()
   }
@@ -4525,9 +4580,9 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       if (error) {
         console.log('fetchGame error:', error)
         // Retry up to 5 times on error (auth might not be ready)
-        if (fetchRetries.current < 5) {
+        if (fetchRetries.current < 3) {
           fetchRetries.current++
-          setTimeout(fetchGame, 1500)
+          setTimeout(fetchGame, 800)
           return
         }
         setLoadingGame(false)
@@ -4535,10 +4590,10 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       }
       const g = data?.[0] || null
       if (g) { setGame(g); setLoadingGame(false); fetchRetries.current = 0; return }
-      // No data but no error - maybe auth not ready yet, retry a couple times
-      if (fetchRetries.current < 3) {
+      // No data but no error - retry once
+      if (fetchRetries.current < 2) {
         fetchRetries.current++
-        setTimeout(fetchGame, 1500)
+        setTimeout(fetchGame, 800)
         return
       }
       // No active game - check finished
@@ -4548,9 +4603,9 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       fetchRetries.current = 0
     } catch(e) {
       console.log('fetchGame catch:', e)
-      if (fetchRetries.current < 5) {
+      if (fetchRetries.current < 3) {
         fetchRetries.current++
-        setTimeout(fetchGame, 1500)
+        setTimeout(fetchGame, 800)
         return
       }
       setLoadingGame(false)
@@ -5239,6 +5294,7 @@ function AdminBingoPanel({ onBack }) {
   }
 
   useEffect(() => {
+    pollPaused.current = false // Reset on mount
     fetchGame().then(() => { if (gameRef.current) startPolling() })
     return () => { stopPolling(); if (autoTimer) clearInterval(autoTimer) }
   }, [])
