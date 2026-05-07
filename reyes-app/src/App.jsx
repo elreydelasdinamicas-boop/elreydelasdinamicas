@@ -179,6 +179,7 @@ export default function App() {
       return !cached
     } catch { return true }
   })
+  const [activeBingoGame, setActiveBingoGame] = useState(null)
   const [selectedRaffle, setSelectedRaffle] = useState(null)
   const [myTickets, setMyTickets] = useState([])
   const [selectedNums, setSelectedNums] = useState([])
@@ -224,6 +225,9 @@ export default function App() {
 
   useEffect(() => {
     fetchRaffles()
+    // Fetch active bingo for home card
+    supabase.from('bingo_games').select('*').in('status',['active','waiting']).order('created_at',{ascending:false}).limit(1)
+      .then(({ data }) => setActiveBingoGame(data?.[0] || null))
     // Realtime — cuando el admin crea/edita un sorteo se actualiza en todos los dispositivos
     const ch = supabase.channel('raffles-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'raffles' }, () => fetchRaffles())
@@ -405,7 +409,7 @@ export default function App() {
         const { data: refUser } = await supabase.from('users_profile').select('id').eq('referral_code', urlRef).limit(1)
         if (refUser?.[0]) referrerId = refUser[0].id
       }
-      await supabase.from('users_profile').upsert({ id: data.user.id, full_name: name, phone, email, role: 'customer', credits: appConfig.showWelcomeBonus ? 500 : 0, points: appConfig.showWelcomeBonus ? 1000 : 0, referral_code: refCode, is_promoter: false, referred_by: referrerId })
+      await supabase.from('users_profile').upsert({ id: data.user.id, full_name: name, phone, email, role: 'customer', credits: appConfig.showWelcomeBonus ? 500 : 0, points: appConfig.showWelcomeBonus ? 1000 : 0, referral_code: refCode, is_promoter: false, referred_by: referrerId }).select('id')
       setUser(data.user); await fetchProfile(data.user.id)
       setAuthPage(null)
       // Si tenía boletos pendientes, esperar a que reservePending los procese y ir al perfil
@@ -441,7 +445,7 @@ export default function App() {
     if (!user) return
     const refCode = 'CASA-' + Math.random().toString(36).substr(2, 6).toUpperCase()
     await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id).select('id')
-    await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: 15, level2_rate: 7, level3_rate: 3 }, { onConflict: 'user_id' })
+    await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: 15, level2_rate: 7, level3_rate: 3 }, { onConflict: 'user_id' }).select('id')
     await fetchProfile(user.id); alert('Ahora eres Vendedor Oficial!'); setPage('promoter')
   }
 
@@ -479,7 +483,7 @@ export default function App() {
           : <button onClick={() => setAuthPage('login')} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, border: 'none', color: '#000', cursor: 'pointer', padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, fontFamily: 'inherit' }}>Entrar</button>}
       </header>
       <main>
-        {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} onBingo={() => setPage('bingo')} />}
+        {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} onBingo={() => setPage('bingo')} activeBingoGame={activeBingoGame} />}
         {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={goBack} onSociety={async (num, mode) => {
           if (!user) { setAuthPage('login'); return }
           const halfPrice = Math.round(selectedRaffle.ticket_price / 2)
@@ -723,7 +727,7 @@ function RaffleCard({ r, onRaffle, featured }) {
 }
 
 
-function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, user, onHow, onWinners, onBingo }) {
+function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, user, onHow, onWinners, onBingo, activeBingoGame }) {
   const socials = [
     { key: 'whatsapp', label: 'WhatsApp', bg: '#075E54', icon: Icons.wa, url: appConfig.whatsapp },
     { key: 'canal', label: 'Canal', bg: '#128C7E', icon: Icons.wa, url: appConfig.canal, badge: true },
@@ -733,11 +737,7 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
   ].filter(s => s.url)
   const featuredRaffles = raffles.filter(r => r.is_featured)
   const otherRaffles = raffles.filter(r => !r.is_featured)
-  const [activeBingo, setActiveBingo] = useState(null)
-  useEffect(() => {
-    supabase.from('bingo_games').select('*').in('status',['active','waiting']).order('created_at',{ascending:false}).limit(1)
-      .then(({ data }) => { if (data?.[0]) setActiveBingo(data[0]) })
-  }, [])
+  const activeBingo = activeBingoGame
 
   return (
     <div style={S.content}>
@@ -1927,9 +1927,9 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <div style={{ fontSize:28, marginBottom:4 }}>💰</div>
             <div style={{ color:C.gold, fontSize:16, fontWeight:900, marginBottom:2 }}>¡Gana dinero real!</div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Conviértete en <span style={{ color:C.gold, fontWeight:900 }}>Promotor</span></div>
-            <div style={{ color:C.muted, fontSize:10, marginBottom:8 }}>Comparte sorteos y gana comisiones en efectivo</div>
-            <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:10, padding:8, marginBottom:8 }}>
-              <div style={{ color:C.gold, fontSize:10, fontWeight:700, marginBottom:2 }}>💸 Ejemplo real</div>              <div style={{ color:'#27AE60', fontSize:16, fontWeight:900 }}>Ganas hasta $10.000</div>
+            <div style={{ color:C.muted, fontSize:10, marginBottom:8 }}>Comparte sorteos y gana comisiones en efectivo</div>            <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:10, padding:8, marginBottom:8 }}>
+              <div style={{ color:C.gold, fontSize:10, fontWeight:700, marginBottom:2 }}>💸 Ejemplo real</div>
+              <div style={{ color:'#27AE60', fontSize:16, fontWeight:900 }}>Ganas hasta $10.000</div>
               <div style={{ color:'#888', fontSize:9 }}>por cada boleto vendido con tu enlace</div>
             </div>
             <div style={{ background:'linear-gradient(135deg,#E6BE00,#f0d000)', borderRadius:10, padding:11 }}><div style={{ color:'#000', fontSize:13, fontWeight:900 }}>🚀 Quiero ser Promotor</div></div>
@@ -2062,7 +2062,7 @@ function LiberarModal({ allNums, tickets, liberarNum, setLiberarNum, onClose, on
 
       if (isSocTicket) {
         const realId = ticket.society_id || String(ticket.id).replace('soc_','')
-        const { error } = await supabase.from('society_tickets').delete().eq('id', realId)
+        const { error } = await supabase.from('society_tickets').delete().eq('id', realId).select('id')
         if (error) {
           const { error: e2 } = await supabase.from('society_tickets')
             .update({ status:'cancelled', updated_at: new Date().toISOString() }).eq('id', realId)
@@ -2574,7 +2574,7 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
       const refCode = profile?.referral_code || 'CASA-' + Math.random().toString(36).substr(2,6).toUpperCase()
       const { error: e1 } = await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id).select('id')
       if (e1) { alert('Error perfil: ' + e1.message); return }
-      const { error: e2 } = await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: appConfig?.level1_rate||15, level2_rate: appConfig?.level2_rate||5 }, { onConflict: 'user_id' })
+      const { error: e2 } = await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: appConfig?.level1_rate||15, level2_rate: appConfig?.level2_rate||5 }, { onConflict: 'user_id' }).select('id')
       if (e2) { alert('Error promoter: ' + e2.message); return }
       alert('✅ ¡Ahora eres Promotor Oficial!')
       // Navigate to home to trigger fresh profile fetch
@@ -3257,7 +3257,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
         banner_speed:      localConfig.bannerSpeed      ?? 3,
         payment_whatsapp:  localConfig.paymentWhatsapp  ?? '',
       }
-      const { error } = await supabase.from('app_config').upsert(payload, { onConflict: 'id' })
+      const { error } = await supabase.from('app_config').upsert(payload, { onConflict: 'id' }).select('id')
       if (error) throw error
       setAppConfig(prev => ({ ...prev, ...localConfig }))
       alert('Configuracion guardada!')
@@ -3341,12 +3341,11 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
                   e.target.textContent = '...'
                   e.target.disabled = true
                   try {
-                    const t = new Promise((_,rj) => setTimeout(()=>rj(new Error('timeout')),10000))
                     // Eliminar tickets y boletos asociados primero
-                    await Promise.race([supabase.from('tickets').delete().eq('raffle_id', r.id), t])
-                    await Promise.race([supabase.from('society_tickets').delete().eq('raffle_id', r.id), t])
+                    await supabase.from('tickets').delete().eq('raffle_id', r.id).select('id')
+                    await supabase.from('society_tickets').delete().eq('raffle_id', r.id).select('id')
                     // Luego eliminar el sorteo
-                    const res = await Promise.race([supabase.from('raffles').delete().eq('id', r.id), t])
+                    const res = await supabase.from('raffles').delete().eq('id', r.id).select('id')
                     if (res?.error) { alert('Error: ' + res.error.message); e.target.textContent='Eliminar'; e.target.disabled=false; return }
                     loadAdminData(); if(onRefreshRaffles) onRefreshRaffles()
                   } catch(err) { alert('Error: ' + err.message); e.target.textContent='Eliminar'; e.target.disabled=false }
@@ -3857,10 +3856,9 @@ function RaffleForm({ raffle, onBack, onSave }) {
     </div>
   )
 }
-
-
 // ─── MANUAL SALE ──────────────────────────────────────────────────────────────
-function ManualSaleForm({ raffles, onSaved }) {  const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
+function ManualSaleForm({ raffles, onSaved }) {
+  const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
   const [saving, setSaving] = useState(false)
 
   async function save() {
@@ -5224,6 +5222,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 // ─── ADMIN BINGO PANEL — v64c bulletproof, config in prize_description ────────
 function AdminBingoPanel({ onBack }) {
   const [game, setGame] = useState(null)
+  const [loadingAdminGame, setLoadingAdminGame] = useState(true)
   const [form, setForm] = useState({
     title: 'Bingo La Casa', pack_price: 6000, mode: 'manual', auto_interval: 15, live_url: '',
     win_types: ['linea', 'vertical', 'diagonal', 'esquinas', 'full'],
@@ -5331,17 +5330,11 @@ function AdminBingoPanel({ onBack }) {
     if (pollPaused.current) return
     try {
       const { data: rows } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1)
-      const data = rows?.[0] || null
-      const d = data || null
+      const d = rows?.[0] || null
       gameRef.current = d
-      setGame(prev => {
-        if (!prev && !d) return prev
-        if (!prev && d) return d
-        if (prev && !d) return null
-        if (prev.id === d.id && prev.updated_at === d.updated_at && prev.status === d.status) return prev
-        return d
-      })
-    } catch(e) { /* ignore fetch errors during transitions */ }
+      setGame(d)
+      setLoadingAdminGame(false)
+    } catch(e) { setLoadingAdminGame(false) }
   }
 
   async function fetchStats() {
@@ -5471,8 +5464,8 @@ function AdminBingoPanel({ onBack }) {
     setGame(null)
     gameRef.current = null
     await new Promise(r => setTimeout(r, 300))
-    await supabase.from('bingo_cartones').delete().eq('game_id', gid)
-    await supabase.from('bingo_games').delete().eq('id', gid)
+    await supabase.from('bingo_cartones').delete().eq('game_id', gid).select('id')
+    await supabase.from('bingo_games').delete().eq('id', gid).select('id')
     pollPaused.current = false
   }
 
