@@ -1889,15 +1889,15 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
           </button>
         )}
 
-        {/* BANNER ANDROID */}        {isAndroid && pwa && !pwa.isInstalled && (
+        {/* BANNER ANDROID */}
+        {isAndroid && pwa && !pwa.isInstalled && (
           <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'11px 14px', marginBottom:14, display:'flex', alignItems:'center', gap:10, position:'relative', overflow:'hidden' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
             <div style={{ width:34, height:34, borderRadius:9, overflow:'hidden', flexShrink:0, border:'1px solid rgba(230,190,0,0.25)' }}><LogoSVG size={34} /></div>
             <div style={{ flex:1 }}>              <div style={{ color:'#fff', fontSize:12, fontWeight:800 }}>Instala La Casa</div>
               <div style={{ color:C.muted, fontSize:9, marginTop:1 }}>Acceso rapido + funciona sin internet</div>
             </div>
-            {pwa.canInstall
-              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
+            {pwa.canInstall              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
               : <span style={{ color:C.muted, fontSize:9, flexShrink:0, textAlign:'right', maxWidth:70, lineHeight:1.4 }}>Menu → Agregar a pantalla</span>
             }
           </div>
@@ -3780,7 +3780,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
         <FormField label="Comisión Nivel 2 — sub-referido ($)">
           <input type="number" value={form.commission_l2} onChange={e => setForm(p => ({ ...p, commission_l2: parseInt(e.target.value) || 0 }))} placeholder="Ej: 2000" />
         </FormField>
-        {form.ticket_price > 0 && form.commission_l1 > 0 && (          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
+        {form.ticket_price > 0 && form.commission_l1 > 0 && (
+          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
             <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>            <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Precio boleto: <span style={{ color:C.gold, fontWeight:700 }}>{fmt(form.ticket_price)}</span></div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Promotor gana: <span style={{ color:'#27AE60', fontWeight:700 }}>{fmt(form.commission_l1)}</span></div>
             <div style={{ color:'#fff', fontSize:11 }}>Tu ingreso neto: <span style={{ color:'#5DADE2', fontWeight:700 }}>{fmt(form.ticket_price - form.commission_l1)}</span></div>
@@ -3795,8 +3796,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
               Guardando...
             </span>
           : isEdit ? 'Guardar cambios' : 'Crear dinamica'
-        }
-      </button>
+        }      </button>
       <button onClick={onBack} style={S.btnOutline}>Cancelar</button>
     </div>
   )
@@ -4676,12 +4676,40 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 
   // ── NO GAME AT ALL ──
   if (!game) return (
-    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, gap:16 }}>
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
       <style>{CSS}</style>
-      <div style={{ fontSize:64, marginBottom:8 }}>🎱</div>
-      <div style={{ color:'#fff', fontSize:20, fontWeight:900, textAlign:'center' }}>No hay Bingo activo</div>
-      <div style={{ color:C.muted, fontSize:13, textAlign:'center' }}>El admin iniciará una partida pronto</div>
-      <button onClick={onBack} style={{ ...S.btnOutline, marginTop:8, maxWidth:200 }}>← Volver</button>
+      <div style={{ maxWidth:340, textAlign:'center' }}>
+        <div style={{ fontSize:56, marginBottom:6 }}>🎉</div>
+        <h2 style={{ color:'#fff', fontSize:22, fontWeight:900, margin:'0 0 8px' }}>¡Bingo en vivo próximamente!</h2>
+        <p style={{ color:C.muted, fontSize:13, lineHeight:1.6, margin:'0 0 20px' }}>Prepárate para jugar Bingo en tiempo real con premios en efectivo. ¡Sigue nuestras redes para saber cuándo es la próxima partida!</p>
+        <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ display:'flex', justifyContent:'space-around', marginBottom:12 }}>
+            <div style={{ textAlign:'center' }}>
+              <div style={{ fontSize:24 }}>🎱</div>
+              <div style={{ color:'#fff', fontSize:10, fontWeight:700, marginTop:4 }}>Bingo en vivo</div>
+            </div>
+            <div style={{ textAlign:'center' }}>
+              <div style={{ fontSize:24 }}>💰</div>
+              <div style={{ color:'#fff', fontSize:10, fontWeight:700, marginTop:4 }}>Premios reales</div>
+            </div>
+            <div style={{ textAlign:'center' }}>
+              <div style={{ fontSize:24 }}>⚡</div>
+              <div style={{ color:'#fff', fontSize:10, fontWeight:700, marginTop:4 }}>Auto-verificación</div>
+            </div>
+          </div>
+          <div style={{ color:C.gold, fontSize:11, fontWeight:700, textAlign:'center' }}>¡El sistema verifica tu cartón automáticamente!</div>
+        </div>
+        <div style={{ background:'linear-gradient(135deg,rgba(230,190,0,0.08),rgba(230,190,0,0.03))', border:'1px solid rgba(230,190,0,0.2)', borderRadius:12, padding:14, marginBottom:16 }}>
+          <div style={{ color:C.gold, fontSize:12, fontWeight:800, marginBottom:4 }}>¿Cómo funciona?</div>
+          <div style={{ color:'#aaa', fontSize:11, lineHeight:1.7 }}>
+            1. Compra tus cartones cuando se abra la partida<br/>
+            2. Los números se cantan en vivo<br/>
+            3. Tu cartón se marca solo automáticamente<br/>
+            4. ¡Si ganas, cobras al instante por Nequi o Daviplata!
+          </div>
+        </div>
+        <button onClick={onBack} style={{ ...S.btnGold, maxWidth:280, margin:'0 auto' }}>← Volver al inicio</button>
+      </div>
     </div>
   )
 
@@ -5250,9 +5278,6 @@ function AdminBingoPanel({ onBack }) {
     setCreating(true)
     stopPolling()
     pollPaused.current = true
-    // Only remove bingo channels, not tickets/society channels
-    try { const chs = supabase.getChannels(); for(const c of chs) { if (c.topic && c.topic.includes('bingo')) supabase.removeChannel(c) } } catch(e) {}
-    await new Promise(r => setTimeout(r, 2000))
     try {
       const cfgJson = buildConfigJson()
       const insertData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
