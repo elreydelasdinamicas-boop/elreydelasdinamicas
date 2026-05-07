@@ -413,7 +413,7 @@ export default function App() {
       const taken = (ex || []).flatMap(t => t.numbers || [])
       const conflict = selectedNums.filter(n => taken.includes(n))
       if (conflict.length > 0) { alert(`Los numeros ${conflict.map(n => String(n).padStart(2, '0')).join(', ')} ya estan apartados.`); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); return }
-      const { error } = await supabase.from('tickets').insert({ user_id: user.id, raffle_id: r.id, numbers: selectedNums, status: 'reserved', total_amount: selectedNums.length * r.ticket_price })
+      const { error } = await supabase.from('tickets').insert({ user_id: user.id, raffle_id: r.id, numbers: selectedNums, status: 'reserved', total_amount: selectedNums.length * r.ticket_price }).select('id')
       if (error) { alert('Error al reservar: ' + error.message); return }
       await fetchMyTickets(); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); setPage('profile')
     } catch(e) { alert('Error: ' + e.message) }
@@ -421,7 +421,7 @@ export default function App() {
   async function becomePromoter() {
     if (!user) return
     const refCode = 'CASA-' + Math.random().toString(36).substr(2, 6).toUpperCase()
-    await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id)
+    await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id).select('id')
     await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: 15, level2_rate: 7, level3_rate: 3 }, { onConflict: 'user_id' })
     await fetchProfile(user.id); alert('Ahora eres Vendedor Oficial!'); setPage('promoter')
   }
@@ -490,10 +490,10 @@ export default function App() {
                 expires_at: exp, updated_at: new Date().toISOString()
               }
               if (cancelledId) {
-                const { error } = await supabase.from('society_tickets').update(payload).eq('id', cancelledId)
+                const { error } = await supabase.from('society_tickets').update(payload).eq('id', cancelledId).select('id')
                 if (error) throw error
               } else {
-                const { error } = await supabase.from('society_tickets').insert(payload)
+                const { error } = await supabase.from('society_tickets').insert(payload).select('id')
                 if (error) throw error
               }
             } else if (mode === 'socio2' || (!st.socio2_id && st.socio1_id !== user.id)) {
@@ -924,7 +924,7 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
             payload.socio2_paid = false
             payload.socio2_amount = halfPrice
           }
-          const { error } = await supabase.from('society_tickets').insert(payload)
+          const { error } = await supabase.from('society_tickets').insert(payload).select('id')
           if (error) throw error
         }
 
@@ -1759,7 +1759,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
   async function saveProfile() {
     if (!editForm.full_name.trim()) { alert('Ingresa tu nombre'); return }
     setSaving(true)
-    await supabase.from('users_profile').update({ full_name: editForm.full_name, phone: editForm.phone }).eq('id', user.id)
+    await supabase.from('users_profile').update({ full_name: editForm.full_name, phone: editForm.phone }).eq('id', user.id).select('id')
     setSaving(false); setShowEditModal(false); onRefresh && onRefresh()
   }
 
@@ -2016,12 +2016,12 @@ function LiberarModal({ allNums, tickets, liberarNum, setLiberarNum, onClose, on
       } else {
         const nums = ticket.numbers || []
         if (nums.length <= 1) {
-          const { error } = await supabase.from('tickets').update({ status:'released' }).eq('id', ticket.id)
+          const { error } = await supabase.from('tickets').update({ status:'released' }).eq('id', ticket.id).select('id')
           if (error) throw error
         } else {
           const newNums = nums.filter(x => x !== liberarNum)
           const ppu = ticket.total_amount / nums.length
-          const { error } = await supabase.from('tickets').update({ numbers:newNums, total_amount:Math.round(ppu*newNums.length) }).eq('id', ticket.id)
+          const { error } = await supabase.from('tickets').update({ numbers:newNums, total_amount:Math.round(ppu*newNums.length) }).eq('id', ticket.id).select('id')
           if (error) throw error
         }
       }
@@ -2388,8 +2388,8 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
   async function releaseOne(num) {
     if (!window.confirm(`Liberar el numero ${String(num).padStart(2,'0')}?`)) return
     const newNums = nums.filter(n => n !== num)
-    if (newNums.length === 0) await supabase.from('tickets').update({ status:'released' }).eq('id', t.id)
-    else { const pp = t.total_amount / nums.length; await supabase.from('tickets').update({ numbers:newNums, total_amount:newNums.length * pp }).eq('id', t.id) }
+    if (newNums.length === 0) await supabase.from('tickets').update({ status:'released' }).eq('id', t.id).select('id')
+    else { const pp = t.total_amount / nums.length; await supabase.from('tickets').update({ numbers:newNums, total_amount:newNums.length * pp }).eq('id', t.id).select('id') }
     onRefresh()
   }
 
@@ -2517,7 +2517,7 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
   async function becomePromoterFn() {
     try {
       const refCode = profile?.referral_code || 'CASA-' + Math.random().toString(36).substr(2,6).toUpperCase()
-      const { error: e1 } = await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id)
+      const { error: e1 } = await supabase.from('users_profile').update({ is_promoter: true, referral_code: refCode }).eq('id', user.id).select('id')
       if (e1) { alert('Error perfil: ' + e1.message); return }
       const { error: e2 } = await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: appConfig?.level1_rate||15, level2_rate: appConfig?.level2_rate||5 }, { onConflict: 'user_id' })
       if (e2) { alert('Error promoter: ' + e2.message); return }
@@ -3152,7 +3152,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
     const user = adminUsers.find(u => u.id === userId)
     if (!user) return
     const newCredits = (user.credits || 0) + parseInt(amount)
-    const { error } = await supabase.from('users_profile').update({ credits: newCredits }).eq('id', userId)
+    const { error } = await supabase.from('users_profile').update({ credits: newCredits }).eq('id', userId).select('id')
     if (error) { alert('Error: ' + error.message); return }
     setCreditAmount('')
     loadUsers(userSearch)
@@ -3164,7 +3164,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
     const user = adminUsers.find(u => u.id === userId)
     if (!user) return
     const newPoints = (user.points || 0) + parseInt(amount)
-    const { error } = await supabase.from('users_profile').update({ points: newPoints }).eq('id', userId)
+    const { error } = await supabase.from('users_profile').update({ points: newPoints }).eq('id', userId).select('id')
     if (error) { alert('Error: ' + error.message); return }
     setPointsAmount('')
     loadUsers(userSearch)
@@ -3175,7 +3175,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
     const user = adminUsers.find(u => u.id === userId)
     if (!user) return
     const newVal = !user.bingo_unlimited
-    const { error } = await supabase.from('users_profile').update({ bingo_unlimited: newVal }).eq('id', userId)
+    const { error } = await supabase.from('users_profile').update({ bingo_unlimited: newVal }).eq('id', userId).select('id')
     if (error) { alert('Error: ' + error.message); return }
     loadUsers(userSearch)
   }
@@ -3318,7 +3318,7 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
               </div>
               {t.status === 'reserved' && (
                 <button onClick={async () => {
-                  await supabase.from('tickets').update({ status:'paid' }).eq('id', t.id)
+                  await supabase.from('tickets').update({ status:'paid' }).eq('id', t.id).select('id')
                   loadAdminData()
                 }} style={{ width:'100%', background:'rgba(39,174,96,0.1)', border:'1px solid rgba(39,174,96,0.25)', borderRadius:8, padding:'7px', color:C.green, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginTop:8 }}>✓ Confirmar pago</button>
               )}
@@ -4181,23 +4181,23 @@ function AdminSocietyPanel({ raffles, onBack }) {
   }
 
   async function revealNames(id) {
-    await supabase.from('society_tickets').update({ reveal_names: true }).eq('id', id)
+    await supabase.from('society_tickets').update({ reveal_names: true }).eq('id', id).select('id')
     fetchSocieties()
   }
   async function extendTime(id) {
     const newExp = new Date(Date.now() + 24 * 3600000).toISOString()
-    await supabase.from('society_tickets').update({ expires_at: newExp }).eq('id', id)
+    await supabase.from('society_tickets').update({ expires_at: newExp }).eq('id', id).select('id')
     fetchSocieties()
     alert('Plazo extendido 24 horas')
   }
   async function cancelSociety(id) {
     if (!window.confirm('Cancelar esta sociedad?')) return
-    await supabase.from('society_tickets').update({ status: 'cancelled' }).eq('id', id)
+    await supabase.from('society_tickets').update({ status: 'cancelled' }).eq('id', id).select('id')
     fetchSocieties()
   }
   async function confirmPayment(id, socioNum) {
     const field = socioNum === 1 ? 'socio1_paid' : 'socio2_paid'
-    await supabase.from('society_tickets').update({ [field]: true }).eq('id', id)
+    await supabase.from('society_tickets').update({ [field]: true }).eq('id', id).select('id')
     fetchSocieties()
   }
 
@@ -4448,7 +4448,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
         const shouldMark = allNums.filter(n => called.includes(n) && !marked.includes(n))
         if (shouldMark.length > 0) {
           const newMarked = [...marked, ...shouldMark]
-          supabase.from('bingo_cartones').update({ marked: newMarked }).eq('id', carton.id)
+          supabase.from('bingo_cartones').update({ marked: newMarked }).eq('id', carton.id).select('id')
           setMyCartones(prev => prev.map(c => c.id === carton.id ? { ...c, marked: newMarked } : c))
           checkBingoWin(carton, newMarked, called)
         }
@@ -4495,7 +4495,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       prize, time: new Date().toISOString(), auto: true
     }]
     const newCfg = { ...cfg, winners }
-    const { error: winErr } = await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id)
+    const { error: winErr } = await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id).select('id')
     if (winErr) { console.error('submitAutoWin error:', winErr); alert('Error registrando bingo: ' + winErr.message); return }
     console.log('✅ BINGO registered in DB!')
     setWinToast(`🎉 ¡BINGO! Ganaste ${WTL[winType]||winType}${prize ? ' — '+fmt(prize) : ''}!`)
@@ -4512,7 +4512,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
         : w
     )
     const newCfg = { ...cfg, winners }
-    await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id)
+    await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id).select('id')
     setClaimSending(false)
     setClaimForm({ phone:'', method:'', account:'', note:'' })
   }
@@ -4558,7 +4558,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
       const cartones = Array.from({length:numCartones},(_,i) => ({
         game_id: game.id, user_id: user.id, numbers: generateCarton(), marked: [], carton_number: myCartones.length+i+1, paid: false
       }))
-      const { error } = await supabase.from('bingo_cartones').insert(cartones)
+      const { error } = await supabase.from('bingo_cartones').insert(cartones).select('id')
       if (error) { alert('Error al crear cartones: ' + error.message); setBuyingPack(false); return }
       await fetchMyCartones()
       setBuyingPack(false)
@@ -4573,7 +4573,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     const carton = myCartones.find(c => c.id === cartonId)
     if (!carton) return
     const newMarked = carton.marked.includes(num) ? carton.marked.filter(n=>n!==num) : [...carton.marked, num]
-    await supabase.from('bingo_cartones').update({ marked: newMarked }).eq('id', cartonId)
+    await supabase.from('bingo_cartones').update({ marked: newMarked }).eq('id', cartonId).select('id')
     setMyCartones(prev => prev.map(c => c.id===cartonId ? {...c, marked:newMarked} : c))
     checkBingoWin(carton, newMarked, game.called_numbers||[])
   }
@@ -5155,12 +5155,12 @@ function AdminBingoPanel({ onBack }) {
   }
 
   async function approveCarton(cartonId) {
-    await supabase.from('bingo_cartones').update({ paid: true }).eq('id', cartonId)
+    await supabase.from('bingo_cartones').update({ paid: true }).eq('id', cartonId).select('id')
     fetchAdminCartones()
   }
 
   async function approveAllUser(userId) {
-    await supabase.from('bingo_cartones').update({ paid: true }).eq('game_id', game.id).eq('user_id', userId)
+    await supabase.from('bingo_cartones').update({ paid: true }).eq('game_id', game.id).eq('user_id', userId).select('id')
     fetchAdminCartones()
   }
   const [editing, setEditing] = useState(false)
@@ -5176,7 +5176,7 @@ function AdminBingoPanel({ onBack }) {
     if (winners[winnerIdx]) {
       winners[winnerIdx] = { ...winners[winnerIdx], claim: { ...(winners[winnerIdx].claim||{}), paid: true, paidAt: new Date().toISOString() } }
       const newCfg = { ...cfg, winners }
-      await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id)
+      await supabase.from('bingo_games').update({ prize_description: JSON.stringify(newCfg) }).eq('id', game.id).select('id')
     }
   }
 
@@ -5301,7 +5301,7 @@ function AdminBingoPanel({ onBack }) {
   async function saveGame() {
     if (!game) return
     pollPaused.current = true
-    const { error } = await supabase.from('bingo_games').update({ title: form.title, prize_description: buildConfigJson() }).eq('id', game.id)
+    const { error } = await supabase.from('bingo_games').update({ title: form.title, prize_description: buildConfigJson() }).eq('id', game.id).select('id')
     pollPaused.current = false
     if (error) alert('❌ Error: ' + error.message)
     else alert('✅ Bingo actualizado')
@@ -5309,7 +5309,7 @@ function AdminBingoPanel({ onBack }) {
   }
 
   async function startGame() {
-    await supabase.from('bingo_games').update({ status:'active' }).eq('id', game.id)
+    await supabase.from('bingo_games').update({ status:'active' }).eq('id', game.id).select('id')
     await fetchGame()
     if (game.mode === 'auto') startAuto()
   }
@@ -5324,7 +5324,7 @@ function AdminBingoPanel({ onBack }) {
       const rem = Array.from({length:75},(_,i)=>i+1).filter(n=>!called.includes(n))
       if (rem.length===0) { clearInterval(iv); return }
       const next = rem[Math.floor(Math.random()*rem.length)]
-      await supabase.from('bingo_games').update({ called_numbers:[...called,next], current_number:next, updated_at:new Date().toISOString() }).eq('id', g.id)
+      await supabase.from('bingo_games').update({ called_numbers:[...called,next], current_number:next, updated_at:new Date().toISOString() }).eq('id', g.id).select('id')
     }, ((game?.auto_interval||15))*1000)
     setAutoTimer(iv)
   }
@@ -5334,7 +5334,7 @@ function AdminBingoPanel({ onBack }) {
     setCalling(true)
     const called = game.called_numbers||[]
     if (called.includes(num)) { setCalling(false); return }
-    await supabase.from('bingo_games').update({ called_numbers:[...called,num], current_number:num, updated_at:new Date().toISOString() }).eq('id', game.id)
+    await supabase.from('bingo_games').update({ called_numbers:[...called,num], current_number:num, updated_at:new Date().toISOString() }).eq('id', game.id).select('id')
     setCalling(false)
     setNumInput('')
   }
@@ -5361,7 +5361,7 @@ function AdminBingoPanel({ onBack }) {
     if (autoTimer) { clearInterval(autoTimer); setAutoTimer(null) }
     stopPolling()
     pollPaused.current = true
-    await supabase.from('bingo_games').update({ status:'finished' }).eq('id', game.id)
+    await supabase.from('bingo_games').update({ status:'finished' }).eq('id', game.id).select('id')
     pollPaused.current = false
     setGame(null)
     gameRef.current = null
