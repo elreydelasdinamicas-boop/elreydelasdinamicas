@@ -5282,7 +5282,7 @@ function AdminBingoPanel({ onBack }) {
       const cfgJson = buildConfigJson()
       const insertData = { title: form.title, prize_description: cfgJson, status: 'waiting', called_numbers: [] }
       console.log('Creating bingo:', insertData)
-      const res = await supabase.from('bingo_games').insert(insertData)
+      const res = await supabase.from('bingo_games').insert(insertData).select()
       console.log('Result:', res)
       if (res.error) {
         alert('❌ Error: ' + res.error.message + (res.error.details ? '\nDetalles: '+res.error.details : '') + (res.error.hint ? '\nHint: '+res.error.hint : '') + '\nCode: '+(res.error.code||''))
