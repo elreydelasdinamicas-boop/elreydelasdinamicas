@@ -443,10 +443,10 @@ export default function App() {
         <div style={{ background: appConfig.bannerBg || '#E6BE00', overflow:'hidden', height:28, display:'flex', alignItems:'center', flexShrink:0 }}>
           <div style={{ display:'flex', width:'max-content', animation:`marquee ${(6 - (appConfig.bannerSpeed||3)) * 5 + 8}s linear infinite` }}>
             <span style={{ whiteSpace:'nowrap', padding:'0 40px', fontSize:12, fontWeight:700, color: appConfig.bannerColor || '#5a3e00' }}>
-              {appConfig.bannerText}&nbsp;&nbsp;&nbsp;
+              {appConfig.bannerText}   
             </span>
             <span style={{ whiteSpace:'nowrap', padding:'0 40px', fontSize:12, fontWeight:700, color: appConfig.bannerColor || '#5a3e00' }} aria-hidden="true">
-              {appConfig.bannerText}&nbsp;&nbsp;&nbsp;
+              {appConfig.bannerText}   
             </span>
           </div>
         </div>
@@ -635,66 +635,74 @@ function RaffleCard({ r, onRaffle, featured }) {
   const prizes = Array.isArray(r.prizes) ? r.prizes : []
   const hasSociety = Array.isArray(r.society_numbers) && r.society_numbers.length > 0
   const hasPresale = r.presale_active && r.presale_price > 0
-  const cardColor = r.card_color || '#E6BE00'
+  const cardColor = r.card_color || '#C0392B'
   const isFeatured = r.is_featured || featured
+  const totalPrizes = prizes.reduce((sum, p) => {
+    const amt = typeof p === 'string' ? parseInt(p.replace(/[^0-9]/g,''))||0 : (parseInt(String(p.amount).replace(/[^0-9]/g,''))||0)
+    return sum + amt
+  }, 0)
+  const dateStr = (() => { try { return new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'}) } catch { return '' } })()
   return (
-    <div onClick={() => onRaffle(r)} style={{ background: 'linear-gradient(180deg,#1a1a1a 0%,#0d0d0d 100%)', border: `2px solid ${isFeatured ? C.gold : cardColor || C.gold}`, borderRadius: 16, padding: 16, cursor: 'pointer', position: 'relative', overflow: 'hidden', boxShadow: `0 0 20px ${isFeatured ? 'rgba(230,190,0,0.12)' : 'rgba(0,0,0,0.3)'} inset` }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg,transparent,${isFeatured ? C.gold : cardColor},transparent)` }}></div>
-      {/* Badges */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-          <span style={{ background: '#27AE60', borderRadius: 999, padding: '3px 9px', color: '#fff', fontSize: 7, fontWeight: 800 }}>ACTIVO</span>
-          {isFeatured && <span style={{ background: `rgba(230,190,0,0.15)`, border: `1px solid rgba(230,190,0,0.4)`, borderRadius: 999, padding: '3px 9px', color: C.gold, fontSize: 7, fontWeight: 800 }}>⭐ DESTACADO</span>}
-          {hasSociety && <span style={{ background: 'rgba(155,89,182,0.15)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 999, padding: '3px 8px', color: '#CE93D8', fontSize: 7, fontWeight: 700 }}>👥 Sociedad</span>}
-          {hasPresale && <span style={{ background: 'rgba(155,89,182,0.15)', border: '1px solid rgba(155,89,182,0.3)', borderRadius: 999, padding: '3px 8px', color: '#CE93D8', fontSize: 7, fontWeight: 700 }}>Preventa</span>}
-        </div>
-        <span style={{ color: C.muted, fontSize: 10 }}>🎱 {r.lottery_name}</span>
-      </div>
-      {/* Titulo */}
-      <h3 style={{ color: '#fff', fontSize: 15, fontWeight: 900, textTransform: 'uppercase', margin: '0 0 8px', lineHeight: 1.3 }}>{r.title}</h3>
-      {/* Info fecha/loteria/numeros */}
-      <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
-        {[['📅', new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'})], ['🎱', r.lottery_name], ['🔢', `00 — ${String(r.number_range-1).padStart(2,'0')}`]].map(([ic,v]) => (
-          <div key={ic} style={{ background: 'rgba(230,190,0,0.08)', border:'1px solid rgba(230,190,0,0.2)', borderRadius: 7, padding: '6px 6px', flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 9 }}>{ic}</div>
-            <div style={{ color: '#fff', fontSize: 7, fontWeight: 700, marginTop: 1 }}>{v}</div>
-          </div>
-        ))}
-      </div>
-      {/* Premios — hasta 4 */}
-      <div style={{ marginBottom: 10, background:'#0a0a0a', border:'2px solid rgba(230,190,0,0.5)', borderRadius:10, padding:10 }}>
-        <div style={{ color: C.gold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, fontWeight:800 }}>🏆 Premios</div>
-        {prizes.slice(0, 4).map((p, i) => (
-          <div key={i} style={{ marginBottom: 4 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{ fontSize: 11 }}>{medals[i]}</span>
-              <span style={{ color: i === 0 ? C.gold : '#ccc', fontSize: i === 0 ? 13 : 11, fontWeight: i === 0 ? 900 : 500 }}>{p.amount || (typeof p==='string'?p:'')}</span>
+    <div onClick={() => onRaffle(r)} style={{ borderRadius:14, overflow:'hidden', border:'1px solid #333', background:'#111', cursor:'pointer', marginBottom:4 }}>
+      {/* === HEADER CON COLOR PERSONALIZABLE === */}
+      <div style={{ background:cardColor, padding:'12px 14px', position:'relative' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ display:'flex', gap:3, marginBottom:3, flexWrap:'wrap' }}>
+              <span style={{ background:'rgba(0,0,0,0.3)', color:'#fff', padding:'1px 5px', borderRadius:3, fontSize:7, fontWeight:800 }}>ACTIVO</span>
+              {isFeatured && <span style={{ background:'rgba(0,0,0,0.3)', color:'#E6BE00', padding:'1px 5px', borderRadius:3, fontSize:7, fontWeight:800 }}>DESTACADO</span>}
+              {hasSociety && <span style={{ background:'rgba(0,0,0,0.2)', color:'#D7BDE2', padding:'1px 5px', borderRadius:3, fontSize:7, fontWeight:800 }}>SOCIEDAD</span>}
             </div>
-            {p.how_to_win && <div style={{ color:'#555', fontSize:9, marginLeft:18, marginTop:1 }}>↳ {p.how_to_win}</div>}
+            <div style={{ color:'#fff', fontSize:15, fontWeight:900 }}>{r.title}</div>
+            <div style={{ color:'rgba(255,255,255,0.8)', fontSize:10, marginTop:2 }}>{dateStr} · {r.lottery_name} · 00-{String((r.number_range||100)-1).padStart(2,'0')}</div>
           </div>
-        ))}
+          <div style={{ color:'rgba(255,255,255,0.8)', fontSize:9, textAlign:'right' }}>
+            <div style={{ fontSize:7, color:'rgba(255,255,255,0.5)' }}>Org.</div>{r.lottery_name}
+          </div>
+        </div>
+        {/* Semicirculos ticket */}
+        <div style={{ position:'absolute', bottom:-7, left:20, width:14, height:14, background:'#111', borderRadius:'50%' }}></div>
+        <div style={{ position:'absolute', bottom:-7, right:20, width:14, height:14, background:'#111', borderRadius:'50%' }}></div>
       </div>
-      {/* Preventa */}
-      {hasPresale && (
-        <div style={{ background: 'rgba(155,89,182,0.08)', border: '1px solid rgba(155,89,182,0.2)', borderRadius: 8, padding: '6px 10px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#CE93D8', fontSize: 9, fontWeight: 700 }}>Preventa —</span>
-          <span style={{ color: '#C9A0E8', fontSize: 14, fontWeight: 900 }}>{fmt(r.presale_price)}</span>
-          <span style={{ color: C.muted, fontSize: 9, textDecoration: 'line-through' }}>{fmt(r.ticket_price)}</span>
+      {/* === VALOR DEL BOLETO — TICKET DORADO === */}
+      <div style={{ background:'linear-gradient(135deg,#1a1200,#0d0a00)', padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', borderBottom:'2px dashed #333' }}>
+        <div style={{ color:'#C9A866', fontSize:7, textTransform:'uppercase', letterSpacing:2, fontWeight:700, marginBottom:3 }}>Valor del boleto</div>
+        <div style={{ color:C.gold, fontSize:30, fontWeight:900, lineHeight:1 }}>{fmt(r.ticket_price)}</div>
+      </div>
+      {/* === PREMIOS EN GRID 2 COLUMNAS === */}
+      <div style={{ padding:'10px 14px' }}>
+        <div style={{ color:'#555', fontSize:7, textTransform:'uppercase', letterSpacing:1, fontWeight:700, marginBottom:6 }}>Premios</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:5, marginBottom:6 }}>
+          {prizes.slice(0,4).map((p, i) => (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:5, background:i===0?'rgba(230,190,0,0.05)':'transparent', border:i===0?'1px solid rgba(230,190,0,0.2)':'1px solid #1a1a1a', borderRadius:6, padding:6 }}>
+              <span style={{ fontSize:12, flexShrink:0 }}>{medals[i]}</span>
+              <div>
+                <div style={{ color:i===0?C.gold:i===1?'#ccc':'#aaa', fontSize:i===0?12:11, fontWeight:i===0?900:700 }}>{p.amount || (typeof p==='string'?p:'')}</div>
+                {p.how_to_win && <div style={{ color:'#555', fontSize:7 }}>{p.how_to_win}</div>}
+              </div>
+            </div>
+          ))}
         </div>
-      )}
-      <div style={{ height: 1, background: '#111', marginBottom: 10 }}></div>
-      {/* Precio y CTA */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ color: C.muted, fontSize: 9 }}>Valor del boleto</div>
-          <div style={{ color: isFeatured ? C.gold : cardColor, fontSize: 24, fontWeight: 900, lineHeight: 1 }}>{fmt(r.ticket_price)}</div>
-        </div>
-        <button style={{ background: C.gold, color: '#000', border: 'none', borderRadius: 10, padding: '11px 18px', fontWeight: 900, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>Participar ↗</button>
+        {/* Total en premios */}
+        {totalPrizes > 0 && (
+          <div style={{ textAlign:'right', padding:'4px 0', marginBottom:8, borderTop:'1px solid #1a1a1a', paddingTop:5 }}>
+            <span style={{ color:'#fff', fontSize:9, fontWeight:700 }}>Total en premios: </span>
+            <span style={{ color:'#27AE60', fontSize:11, fontWeight:800 }}>{fmt(totalPrizes)}</span>
+          </div>
+        )}
+        {/* Preventa */}
+        {hasPresale && (
+          <div style={{ background:'rgba(155,89,182,0.08)', border:'1px solid rgba(155,89,182,0.2)', borderRadius:8, padding:'6px 10px', marginBottom:8, display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ color:'#CE93D8', fontSize:9, fontWeight:700 }}>Preventa —</span>
+            <span style={{ color:'#C9A0E8', fontSize:14, fontWeight:900 }}>{fmt(r.presale_price)}</span>
+            <span style={{ color:C.muted, fontSize:9, textDecoration:'line-through' }}>{fmt(r.ticket_price)}</span>
+          </div>
+        )}
+        <button style={{ width:'100%', background:C.gold, color:'#000', border:'none', padding:10, borderRadius:8, fontSize:12, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>Participar</button>
       </div>
     </div>
   )
 }
-
 
 
 function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, user, onHow, onWinners }) {
@@ -737,7 +745,7 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
-        <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 15, margin: 0, textTransform: 'uppercase', letterSpacing: 1 }}>Dinamicas Activas</h2>
+        <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 15, margin: 0, marginTop: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Dinamicas Activas</h2>
         <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,transparent,${C.gold})` }}></div>
       </div>
 
@@ -1881,7 +1889,6 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <span style={{ color:C.gold, marginLeft:'auto' }}>→</span>
           </button>
         )}
-
         {/* BANNER ANDROID */}
         {isAndroid && pwa && !pwa.isInstalled && (
           <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'11px 14px', marginBottom:14, display:'flex', alignItems:'center', gap:10, position:'relative', overflow:'hidden' }}>
@@ -2532,7 +2539,7 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
           <div style={{ color:'#fff', fontSize:13, fontWeight:900, marginBottom:8 }}>¿Cómo funciona?</div>
           {[['1','Comparte tu enlace','Recibes un link único para compartir por WhatsApp, redes sociales, etc.','rgba(230,190,0,0.1)'],['2','Tus referidos compran','Cada vez que alguien compra con tu enlace, ganas comisión.','rgba(39,174,96,0.1)'],['3','Cobra tus ganancias','Retira a Nequi, Daviplata o Bancolombia.','rgba(93,173,226,0.1)']].map(([n,t,d,bg])=>(
             <div key={n} style={{ display:'flex', gap:10, alignItems:'flex-start', marginBottom:8, background:'#111', borderRadius:10, padding:10 }}>
-              <div style={{ width:28, height:28, background:bg, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color:'#fff', fontSize:13, fontWeight:900 }}>{n}</div>
+              <div style={{ width:34, height:34, background:bg, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color:'#fff', fontSize:13, fontWeight:900 }}>{n}</div>
               <div><div style={{ color:'#fff', fontSize:11, fontWeight:700 }}>{t}</div><div style={{ color:'#888', fontSize:10 }}>{d}</div></div>
             </div>
           ))}
@@ -3401,8 +3408,8 @@ function AdminPage({ user, isAdmin, raffles, appConfig, setAppConfig, onBack, on
             {localConfig.showBanner && localConfig.bannerText && (
               <div style={{ marginTop:12, background:localConfig.bannerBg||'#E6BE00', overflow:'hidden', height:28, borderRadius:6, display:'flex', alignItems:'center' }}>
                 <div style={{ display:'flex', width:'max-content', animation:`marquee ${(6-(localConfig.bannerSpeed||3))*5+8}s linear infinite` }}>
-                  <span style={{ whiteSpace:'nowrap', padding:'0 30px', fontSize:12, fontWeight:700, color:localConfig.bannerColor||'#5a3e00' }}>{localConfig.bannerText}&nbsp;&nbsp;&nbsp;</span>
-                  <span style={{ whiteSpace:'nowrap', padding:'0 30px', fontSize:12, fontWeight:700, color:localConfig.bannerColor||'#5a3e00' }} aria-hidden="true">{localConfig.bannerText}&nbsp;&nbsp;&nbsp;</span>
+                  <span style={{ whiteSpace:'nowrap', padding:'0 30px', fontSize:12, fontWeight:700, color:localConfig.bannerColor||'#5a3e00' }}>{localConfig.bannerText}   </span>
+                  <span style={{ whiteSpace:'nowrap', padding:'0 30px', fontSize:12, fontWeight:700, color:localConfig.bannerColor||'#5a3e00' }} aria-hidden="true">{localConfig.bannerText}   </span>
                 </div>
               </div>
             )}
@@ -3773,8 +3780,7 @@ function RaffleForm({ raffle, onBack, onSave }) {
         </FormField>
         <FormField label="Comisión Nivel 2 — sub-referido ($)">
           <input type="number" value={form.commission_l2} onChange={e => setForm(p => ({ ...p, commission_l2: parseInt(e.target.value) || 0 }))} placeholder="Ej: 2000" />
-        </FormField>
-        {form.ticket_price > 0 && form.commission_l1 > 0 && (
+        </FormField>        {form.ticket_price > 0 && form.commission_l1 > 0 && (
           <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
             <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>            <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Precio boleto: <span style={{ color:C.gold, fontWeight:700 }}>{fmt(form.ticket_price)}</span></div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Promotor gana: <span style={{ color:'#27AE60', fontWeight:700 }}>{fmt(form.commission_l1)}</span></div>
