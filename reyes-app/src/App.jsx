@@ -79,7 +79,7 @@ const Icons = {
 }
 
 const DEFAULT_CONFIG = {
-  show_bingo: false, show_promoter_banner: true, showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
+  show_bingo: true, show_promoter_banner: true, showPoints: true, showWinners: true, showHowItWorks: true, showWelcomeBonus: true,
   whatsapp: '', canal: '', instagram: '', facebook: '', telegram: '',
   supportWhatsapp: '3013986016', supportWhatsappText: 'WhatsApp', supportWhatsappMsg: 'Hola! Necesito ayuda',
   paymentWhatsapp: '3013986016', showWAPayButton: true, showChatPayButton: true, waMsgTemplate: '', imgDeleteDays: 3, showBanner: false, bannerText: '🔥 ¡Hoy es tu día de suerte! Aparta tu número antes de que se agote · 💰 Premios reales cada semana · ✅ Pagos seguros y verificados · 🏆 Ganadores publicados en Instagram', bannerBg: '#E6BE00', bannerColor: '#5a3e00', bannerSpeed: 3,
@@ -129,21 +129,20 @@ function usePWA() {
 
 // ─── APP PRINCIPAL ────────────────────────────────────────────────────────────
 export default function App() {
-  const [page, _setPage] = useState('home')
-  const [pageHistory, setPageHistory] = useState([])
+  const [page, setPageDirect] = useState('home')
+  const pageHistoryRef = useRef([])
   const setPage = (newPage) => {
-    _setPage(prev => {
-      if (prev !== newPage) setPageHistory(h => [...h, prev])
+    setPageDirect(prev => {
+      if (prev !== newPage) pageHistoryRef.current = [...pageHistoryRef.current, prev]
       return newPage
     })
   }
   const goBack = () => {
-    setPageHistory(h => {
-      if (h.length === 0) { _setPage('home'); return [] }
-      const last = h[h.length - 1]
-      _setPage(last)
-      return h.slice(0, -1)
-    })
+    const h = pageHistoryRef.current
+    if (h.length === 0) { setPageDirect('home'); return }
+    const last = h[h.length - 1]
+    pageHistoryRef.current = h.slice(0, -1)
+    setPageDirect(last)
   }
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -401,7 +400,7 @@ export default function App() {
     try {
       await supabase.auth.signOut()
     } catch(e) { console.error('signOut error:', e) }
-    setUser(null); setProfile(null); setMyTickets([]); setPageHistory([]); setAllReservedNums([]); _setPage('home')
+    setUser(null); setProfile(null); setMyTickets([]); pageHistoryRef.current = []; setAllReservedNums([]); setPageDirect('home')
   }
   async function handleReserve() {
     if (!user) {
@@ -1889,8 +1888,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <span style={{ color:C.gold, marginLeft:'auto' }}>→</span>
           </button>
         )}
-        {/* BANNER ANDROID */}
-        {isAndroid && pwa && !pwa.isInstalled && (
+
+        {/* BANNER ANDROID */}        {isAndroid && pwa && !pwa.isInstalled && (
           <div style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:12, padding:'11px 14px', marginBottom:14, display:'flex', alignItems:'center', gap:10, position:'relative', overflow:'hidden' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.gold},transparent)` }}></div>
             <div style={{ width:34, height:34, borderRadius:9, overflow:'hidden', flexShrink:0, border:'1px solid rgba(230,190,0,0.25)' }}><LogoSVG size={34} /></div>
@@ -3780,8 +3779,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
         </FormField>
         <FormField label="Comisión Nivel 2 — sub-referido ($)">
           <input type="number" value={form.commission_l2} onChange={e => setForm(p => ({ ...p, commission_l2: parseInt(e.target.value) || 0 }))} placeholder="Ej: 2000" />
-        </FormField>        {form.ticket_price > 0 && form.commission_l1 > 0 && (
-          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
+        </FormField>
+        {form.ticket_price > 0 && form.commission_l1 > 0 && (          <div style={{ background:'#0a0a0a', borderRadius:8, padding:10, marginTop:4 }}>
             <div style={{ color:'#888', fontSize:9, marginBottom:4, fontWeight:700 }}>📊 RESUMEN</div>            <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Precio boleto: <span style={{ color:C.gold, fontWeight:700 }}>{fmt(form.ticket_price)}</span></div>
             <div style={{ color:'#fff', fontSize:11, marginBottom:2 }}>Promotor gana: <span style={{ color:'#27AE60', fontWeight:700 }}>{fmt(form.commission_l1)}</span></div>
             <div style={{ color:'#fff', fontSize:11 }}>Tu ingreso neto: <span style={{ color:'#5DADE2', fontWeight:700 }}>{fmt(form.ticket_price - form.commission_l1)}</span></div>
