@@ -460,7 +460,7 @@ export default function App() {
           : <button onClick={() => setAuthPage('login')} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, border: 'none', color: '#000', cursor: 'pointer', padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, fontFamily: 'inherit' }}>Entrar</button>}
       </header>
       <main>
-        {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} />}
+        {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} onBingo={() => setPage('bingo')} />}
         {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={goBack} onSociety={async (num, mode) => {
           if (!user) { setAuthPage('login'); return }
           const halfPrice = Math.round(selectedRaffle.ticket_price / 2)
@@ -704,7 +704,7 @@ function RaffleCard({ r, onRaffle, featured }) {
 }
 
 
-function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, user, onHow, onWinners }) {
+function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, user, onHow, onWinners, onBingo }) {
   const socials = [
     { key: 'whatsapp', label: 'WhatsApp', bg: '#075E54', icon: Icons.wa, url: appConfig.whatsapp },
     { key: 'canal', label: 'Canal', bg: '#128C7E', icon: Icons.wa, url: appConfig.canal, badge: true },
@@ -1897,7 +1897,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <div style={{ flex:1 }}>              <div style={{ color:'#fff', fontSize:12, fontWeight:800 }}>Instala La Casa</div>
               <div style={{ color:C.muted, fontSize:9, marginTop:1 }}>Acceso rapido + funciona sin internet</div>
             </div>
-            {pwa.canInstall              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
+            {pwa.canInstall
+              ? <button onClick={pwa.install} style={{ background:C.gold, border:'none', borderRadius:8, padding:'8px 13px', color:'#000', fontSize:10, fontWeight:800, cursor:'pointer', flexShrink:0, fontFamily:'inherit' }}>Instalar</button>
               : <span style={{ color:C.muted, fontSize:9, flexShrink:0, textAlign:'right', maxWidth:70, lineHeight:1.4 }}>Menu → Agregar a pantalla</span>
             }
           </div>
@@ -1909,8 +1910,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'10px 4px', borderRadius:9, border:'none', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
               <span style={{ color:tab===i?'#000':'#555', fontSize:12, fontWeight:tab===i?800:500 }}>{lb}{cnt>0?' ('+cnt+')':''}</span>
             </button>
-          ))}
-        </div>
+          ))}        </div>
 
         {/* TITULO BOLETOS */}
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
@@ -3796,7 +3796,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
               Guardando...
             </span>
           : isEdit ? 'Guardar cambios' : 'Crear dinamica'
-        }      </button>
+        }
+      </button>
       <button onClick={onBack} style={S.btnOutline}>Cancelar</button>
     </div>
   )
@@ -3821,8 +3822,7 @@ function ManualSaleForm({ raffles, onSaved }) {
       const fakeId = crypto.randomUUID()
       await supabase.from('users_profile').insert({ id:fakeId, full_name:f.name.trim(), phone:f.phone.trim(), email:`manual_${fakeId.slice(0,8)}@lacasa.com`, role:'customer', credits:0, points:0 })
       userId = fakeId
-    }
-    await supabase.from('tickets').insert({ user_id:userId, raffle_id:r.id, numbers:nums, status:f.status, total_amount:nums.length * r.ticket_price })
+    }    await supabase.from('tickets').insert({ user_id:userId, raffle_id:r.id, numbers:nums, status:f.status, total_amount:nums.length * r.ticket_price })
     setSaving(false); setF({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
     alert(`Venta registrada para ${f.name}`); onSaved()
   }
@@ -4396,6 +4396,7 @@ function AdminSMSButton({ ticket, compact = false }) {
 // ─── BINGO PAGE — v64e premios compactos, como jugar, print español ──────────
 function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   const [game, setGame] = useState(null)
+  const [loadingGame, setLoadingGame] = useState(true)
   const [myCartones, setMyCartones] = useState([])
   const [showGuide, setShowGuide] = useState(false)
   const [buyingPack, setBuyingPack] = useState(false)
@@ -4415,7 +4416,7 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     const ch = supabase.channel('bingo-live-'+Date.now())
       .on('postgres_changes', { event:'*', schema:'public', table:'bingo_games' }, () => fetchGame())
       .subscribe()
-    const poll = setInterval(fetchGame, 6000)
+    const poll = setInterval(fetchGame, 3000)
     return () => { supabase.removeChannel(ch); clearInterval(poll) }
   }, [])
 
@@ -4517,16 +4518,43 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     setClaimForm({ phone:'', method:'', account:'', note:'' })
   }
 
+  const fetchRetries = useRef(0)
   async function fetchGame() {
     try {
       const { data, error } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1)
-      if (error) { console.log('fetchGame error:', error); return }
+      if (error) {
+        console.log('fetchGame error:', error)
+        // Retry up to 5 times on error (auth might not be ready)
+        if (fetchRetries.current < 5) {
+          fetchRetries.current++
+          setTimeout(fetchGame, 1500)
+          return
+        }
+        setLoadingGame(false)
+        return
+      }
       const g = data?.[0] || null
-      if (g) { setGame(g); return }
+      if (g) { setGame(g); setLoadingGame(false); fetchRetries.current = 0; return }
+      // No data but no error - maybe auth not ready yet, retry a couple times
+      if (fetchRetries.current < 3) {
+        fetchRetries.current++
+        setTimeout(fetchGame, 1500)
+        return
+      }
       // No active game - check finished
       const { data: fd } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1)
       setGame(fd?.[0] || null)
-    } catch(e) { console.log('fetchGame catch:', e) }
+      setLoadingGame(false)
+      fetchRetries.current = 0
+    } catch(e) {
+      console.log('fetchGame catch:', e)
+      if (fetchRetries.current < 5) {
+        fetchRetries.current++
+        setTimeout(fetchGame, 1500)
+        return
+      }
+      setLoadingGame(false)
+    }
   }
 
   async function fetchMyCartones() {
@@ -4675,6 +4703,16 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   const pointsPrice = cfg.points_price || 0
 
   // ── NO GAME AT ALL ──
+  if (loadingGame) return (
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <style>{CSS}</style>
+      <div style={{ textAlign:'center' }}>
+        <div className="pulse" style={{ fontSize:48, marginBottom:12 }}>🎱</div>
+        <div style={{ color:C.gold, fontSize:14, fontWeight:700 }}>Cargando Bingo...</div>
+      </div>
+    </div>
+  )
+
   if (!game) return (
     <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
       <style>{CSS}</style>
