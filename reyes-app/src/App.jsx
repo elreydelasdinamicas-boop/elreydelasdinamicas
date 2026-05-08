@@ -2553,7 +2553,7 @@ function TicketCard({ ticket: t, paid, onRefresh, onDownload, onSupport, appConf
 }
 
 // ─── PROMOTER ─────────────────────────────────────────────────────────────────
-function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
+function PromoterPage({ user, profile, onBack, raffles, appConfig, onRefreshProfile }) {
   const [referrals, setReferrals] = useState([])
   const [earnings, setEarnings] = useState([])
   const [tab, setTab] = useState(0)
@@ -2571,8 +2571,7 @@ function PromoterPage({ user, profile, onBack, raffles, appConfig }) {
       const { error: e2 } = await supabase.from('promoters').upsert({ user_id: user.id, referral_code: refCode, total_earnings: 0, pending_earnings: 0, level1_rate: appConfig?.level1_rate||15, level2_rate: appConfig?.level2_rate||5 }, { onConflict: 'user_id' }).select('id')
       if (e2) { alert('Error promoter: ' + e2.message); return }
       alert('✅ ¡Ahora eres Promotor Oficial!')
-      // Navigate to home to trigger fresh profile fetch
-      window.location.href = window.location.origin + '/'
+      if (onRefreshProfile) await onRefreshProfile()
     } catch(err) { alert('Error: ' + err.message) }
   }
 
@@ -3852,8 +3851,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
 }
 
 
-// ─── MANUAL SALE ──────────────────────────────────────────────────────────────function ManualSaleForm({ raffles, onSaved }) {
-  const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
+// ─── MANUAL SALE ──────────────────────────────────────────────────────────────
+function ManualSaleForm({ raffles, onSaved }) {  const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
   const [saving, setSaving] = useState(false)
 
   async function save() {
