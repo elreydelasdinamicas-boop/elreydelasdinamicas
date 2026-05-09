@@ -226,8 +226,20 @@ export default function App() {
   useEffect(() => {
     fetchRaffles()
     // Fetch active bingo for home card
-    supabase.from('bingo_games').select('*').in('status',['active','waiting']).order('created_at',{ascending:false}).limit(1)
-      .then(({ data }) => setActiveBingoGame(data?.[0] || null))
+    // Fetch active bingo with retry
+    async function fetchActiveBingo() {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const { data } = await supabase.from('bingo_games').select('*').in('status',['active','waiting']).order('created_at',{ascending:false}).limit(1)
+          if (data?.[0]) { setActiveBingoGame(data[0]); return }
+        } catch(e) { console.log('fetchActiveBingo attempt', attempt, e) }
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1000))
+      }
+      setActiveBingoGame(null)
+    }
+    fetchActiveBingo()
+    // Also poll every 10s so bingo card updates on home
+    const bingoInterval = setInterval(fetchActiveBingo, 10000)
     // Realtime — cuando el admin crea/edita un sorteo se actualiza en todos los dispositivos
     const ch = supabase.channel('raffles-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'raffles' }, () => fetchRaffles())
@@ -241,7 +253,7 @@ export default function App() {
     const ch = supabase.channel(`my-tickets-${user.id}`)
       .on('postgres_changes', { event:'*', schema:'public', table:'tickets', filter:`user_id=eq.${user.id}` }, () => fetchMyTickets())
       .subscribe()
-    return () => supabase.removeChannel(ch)
+    return () => { supabase.removeChannel(ch); clearInterval(bingoInterval) }
   }, [user])
   useEffect(() => {
     if (!selectedRaffle) return
@@ -1885,7 +1897,6 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             }
           </div>
         )}
-
         {/* TABS — solo Reservas y Pagados */}
         <div style={{ background:'#111', borderRadius:12, padding:3, display:'flex', gap:2, marginBottom:16 }}>
           {[['Reservas', reserved.length, 0],['Pagados', paid.length, 1]].map(([lb,cnt,i]) => (
@@ -1902,6 +1913,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             {tab === 0 ? 'Boletos reservados' : 'Boletos pagados'}
           </span>
         </div>
+
         {myTickets.length === 0 ? (
           <div style={{ textAlign:'center', padding:'40px 0', color:C.muted }}>
             <div style={{ fontSize:44, marginBottom:12 }}>🎟️</div>
@@ -3807,6 +3819,7 @@ function ManualSaleForm({ raffles, onSaved }) {
     setSaving(false); setF({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
     alert(`Venta registrada para ${f.name}`); onSaved()
   }
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
       <div>
@@ -4498,43 +4511,15 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
     setClaimForm({ phone:'', method:'', account:'', note:'' })
   }
 
-  const fetchRetries = useRef(0)
   async function fetchGame() {
     try {
       const { data, error } = await supabase.from('bingo_games').select('*').in('status',['active','waiting','paused']).order('created_at',{ascending:false}).limit(1)
-      if (error) {
-        console.log('fetchGame error:', error)
-        // Retry up to 5 times on error (auth might not be ready)
-        if (fetchRetries.current < 3) {
-          fetchRetries.current++
-          setTimeout(fetchGame, 800)
-          return
-        }
-        setLoadingGame(false)
-        return
-      }
-      const g = data?.[0] || null
-      if (g) { setGame(g); setLoadingGame(false); fetchRetries.current = 0; return }
-      // No data but no error - retry once
-      if (fetchRetries.current < 2) {
-        fetchRetries.current++
-        setTimeout(fetchGame, 800)
-        return
-      }
-      // No active game - check finished
+      if (!error && data?.[0]) { setGame(data[0]); setLoadingGame(false); return }
+      // No active - check finished
       const { data: fd } = await supabase.from('bingo_games').select('*').eq('status','finished').order('created_at',{ascending:false}).limit(1)
       setGame(fd?.[0] || null)
       setLoadingGame(false)
-      fetchRetries.current = 0
-    } catch(e) {
-      console.log('fetchGame catch:', e)
-      if (fetchRetries.current < 3) {
-        fetchRetries.current++
-        setTimeout(fetchGame, 800)
-        return
-      }
-      setLoadingGame(false)
-    }
+    } catch(e) { console.log('fetchGame error:', e); setLoadingGame(false) }
   }
 
   async function fetchMyCartones() {
