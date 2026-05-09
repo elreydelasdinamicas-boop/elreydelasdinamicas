@@ -700,151 +700,102 @@ function RaffleCard({ r, onRaffle, featured }) {
 
 
 function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, user, onHow, onWinners, onBingo, activeBingoGame }) {
-  const socials = [
-    { key: 'whatsapp', label: 'WhatsApp', bg: '#075E54', icon: Icons.wa, url: appConfig.whatsapp },
-    { key: 'canal', label: 'Canal', bg: '#128C7E', icon: Icons.wa, url: appConfig.canal, badge: true },
-    { key: 'instagram', label: 'Instagram', bg: 'linear-gradient(45deg,#f09433,#dc2743,#bc1888)', icon: Icons.ig, url: appConfig.instagram },
-    { key: 'facebook', label: 'Facebook', bg: '#1877F2', icon: Icons.fb, url: appConfig.facebook },
-    { key: 'telegram', label: 'Telegram', bg: '#229ED9', icon: Icons.tg, url: appConfig.telegram },
-  ].filter(s => s.url)
-  const featuredRaffles = raffles.filter(r => r.is_featured)
-  const otherRaffles = raffles.filter(r => !r.is_featured)
+  const featuredRaffles = raffles.filter(r => r.is_featured && r.status === 'active')
+  const otherRaffles = raffles.filter(r => !r.is_featured && r.status === 'active')
   const activeBingo = activeBingoGame
+  const bCfg = (() => { try { return JSON.parse(activeBingo?.prize_description||'{}') } catch { return {} } })()
+  const bPrizes = bCfg.prizes || {}
+  const bWinTypes = bCfg.win_types || []
+  const WTL = { linea:'Línea', vertical:'Vertical', diagonal:'Diagonal', esquinas:'Esquinas', full:'Full' }
+  const bTotal = Object.values(bPrizes).reduce((s,v) => s + (parseInt(v)||0), 0)
 
   return (
     <div style={S.content}>
 
-      {/* BIENVENIDA compacta */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ color: '#fff', fontSize: 18, fontWeight: 900, lineHeight: 1.2, marginBottom: 3 }}>
-          Bienvenido, <span style={{ color: C.gold }}>{displayName.split(' ')[0]}!</span>
+      {/* SALUDO */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ color: '#fff', fontSize: 16, fontWeight: 900, lineHeight: 1.3 }}>
+          Hola, <span style={{ color: C.gold }}>{displayName.split(' ')[0]}!</span>
         </div>
-        <div style={{ color: C.muted, fontSize: 11 }}>Hoy puede ser tu dia de <span style={{ color: C.gold, fontWeight: 700 }}>SUERTE</span></div>
+        <div style={{ color: C.muted, fontSize: 10 }}>Que la suerte te acompañe</div>
       </div>
-      {/* Redes sociales — solo si configuradas */}
-      {socials.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-          {socials.map(s => (
-            <a key={s.key} href={s.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                <div style={{ width: 34, height: 34, background: s.bg, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                  {s.icon}
-                  {s.badge && <div style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, background: C.gold, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="#000" strokeWidth="3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>}
+
+      {/* === BINGO SECTION === */}
+      {activeBingo && (appConfig.show_bingo || appConfig.showBingo) && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ color: '#27AE60', fontSize: 8, letterSpacing: 2, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase' }}>Bingos</div>
+          <div onClick={onBingo} style={{ borderRadius: 12, overflow: 'hidden', border: '1.5px solid #27AE60', cursor: 'pointer' }}>
+            {/* Header verde con bola */}
+            <div style={{ background: '#27AE60', padding: '14px', display: 'flex', gap: 12, alignItems: 'center' }}>
+              <svg width="52" height="52" viewBox="0 0 52 52">
+                <circle cx="26" cy="26" r="25" fill="#fff" stroke="#C9A227" strokeWidth="2"/>
+                <circle cx="26" cy="26" r="20" fill="#fff"/>
+                <rect x="12" y="14" width="28" height="24" rx="4" fill="#27AE60"/>
+                <text x="26" y="30" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="700" fontFamily="system-ui">{(activeBingo.called_numbers||[]).slice(-1)[0] || '?'}</text>
+              </svg>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: '#fff', fontSize: 14, fontWeight: 900 }}>{activeBingo.title || 'Bingo La Casa'}</span>
                 </div>
-                <span style={{ color: C.muted, fontSize: 8, fontWeight: 600 }}>{s.label}</span>
+                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 8, marginTop: 2 }}>Premios en efectivo</div>
               </div>
-            </a>
-          ))}
+              <span style={{ background: 'rgba(0,0,0,0.3)', color: '#fff', padding: '2px 6px', borderRadius: 4, fontSize: 7, fontWeight: 800 }}>{activeBingo.status === 'active' ? 'EN VIVO' : 'PRONTO'}</span>
+            </div>
+            {/* Premios */}
+            <div style={{ background: '#111', padding: '10px 14px' }}>
+              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 8 }}>
+                {bWinTypes.map(wt => bPrizes[wt] ? (
+                  <span key={wt} style={{ background: 'rgba(39,174,96,0.1)', border: '1px solid rgba(39,174,96,0.2)', borderRadius: 3, padding: '2px 5px', fontSize: 7, color: '#27AE60', fontWeight: 700 }}>{WTL[wt]||wt} {fmt(bPrizes[wt])}</span>
+                ) : null)}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <span style={{ color: C.muted, fontSize: 7 }}>Cartón </span>
+                  <span style={{ color: C.gold, fontSize: 15, fontWeight: 900 }}>{fmt(bCfg.pack_price || 6000)}</span>
+                </div>
+                <div>
+                  <span style={{ color: C.muted, fontSize: 7 }}>Total en premios </span>
+                  <span style={{ color: '#27AE60', fontSize: 11, fontWeight: 800 }}>{fmt(bTotal)}</span>
+                </div>
+                <span style={{ background: C.gold, color: '#000', padding: '5px 14px', borderRadius: 6, fontSize: 10, fontWeight: 900 }}>Jugar</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
-        <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 15, margin: 0, marginTop: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Dinamicas Activas</h2>
-        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,transparent,${C.gold})` }}></div>
-      </div>
+      {/* === SORTEOS SECTION === */}
+      {!loadingRaffles && (featuredRaffles.length > 0 || otherRaffles.length > 0) && (
+        <div>
+          <div style={{ color: C.gold, fontSize: 8, letterSpacing: 2, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase' }}>Sorteos</div>
+          {[...featuredRaffles, ...otherRaffles].map(r => <RaffleCard key={r.id} r={r} onRaffle={onRaffle} />)}
+        </div>
+      )}
 
-      {/* SKELETON mientras cargan */}
+      {/* LOADING */}
       {loadingRaffles && (
-        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[1,2].map(i => (
-            <div key={i} style={{ background:'#111', border:'1px solid #1a1a1a', borderRadius:16, padding:18 }} className="pulse">
-              <div style={{ background:'#1a1a1a', borderRadius:8, height:16, width:'65%', marginBottom:10 }}></div>
-              <div style={{ background:'#1a1a1a', borderRadius:8, height:11, width:'45%', marginBottom:14 }}></div>
-              <div style={{ display:'flex', gap:8, marginBottom:14 }}>
-                {[1,2,3].map(j => <div key={j} style={{ background:'#1a1a1a', borderRadius:8, height:40, flex:1 }}></div>)}
-              </div>
-              <div style={{ background:'#1a1a1a', borderRadius:10, height:44, width:'100%' }}></div>
+            <div key={i} style={{ background: '#111', borderRadius: 10, padding: 14 }} className="pulse">
+              <div style={{ background: '#1a1a1a', borderRadius: 6, height: 14, width: '60%', marginBottom: 8 }}></div>
+              <div style={{ background: '#1a1a1a', borderRadius: 6, height: 10, width: '40%', marginBottom: 10 }}></div>
+              <div style={{ background: '#1a1a1a', borderRadius: 8, height: 36, width: '100%' }}></div>
             </div>
           ))}
         </div>
       )}
 
-      {/* SORTEOS DESTACADOS */}
-      {!loadingRaffles && featuredRaffles.length > 0 && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
-            <h2 style={{ color: '#fff', fontWeight: 900, fontSize: 13, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}><span>⭐</span> Destacados</h2>
-            <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,transparent,${C.gold})` }}></div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
-            {featuredRaffles.map(r => <RaffleCard key={r.id} r={r} onRaffle={onRaffle} featured />)}
-          </div>
-        </>
-      )}
-      {/* RESTO DE SORTEOS */}
-      {/* BINGO ACTIVO */}
-      {activeBingo && (appConfig.show_bingo || appConfig.showBingo) && (() => {
-        const bCfg = (() => { try { return JSON.parse(activeBingo.prize_description||'{}') } catch { return {} } })()
-        const bPrizes = bCfg.prizes || {}
-        const bWinTypes = bCfg.win_types || []
-        const bTotal = Object.values(bPrizes).reduce((s,v) => s + (parseInt(v)||0), 0)
-        const WTL2 = { linea:'Línea', vertical:'Vertical', diagonal:'Diagonal', esquinas:'Esquinas', full:'Full' }
-        return (
-        <div style={{ marginBottom:14 }}>
-          <div style={{ color:'#555', fontSize:8, letterSpacing:2, fontWeight:700, marginBottom:8, textTransform:'uppercase' }}>Bingo</div>
-          <div onClick={onBingo} style={{ display:'flex', borderRadius:12, overflow:'hidden', border:'1.5px solid #27AE60', cursor:'pointer' }}>
-            <div style={{ width:80, background:'#27AE60', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:8, flexShrink:0 }}>
-              <div style={{ color:'rgba(255,255,255,0.7)', fontSize:6, letterSpacing:1, fontWeight:700 }}>CARTON</div>
-              <div style={{ color:'#fff', fontSize:14, fontWeight:900, lineHeight:1, textAlign:'center' }}>{fmt(bCfg.pack_price||6000)}</div>
-              <div style={{ color:'rgba(255,255,255,0.6)', fontSize:6, marginTop:3, fontWeight:700 }}>{activeBingo.status==='active'?'EN VIVO':'PRONTO'}</div>
-            </div>
-            <div style={{ flex:1, background:'#111', padding:'10px 12px', display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
-              <div>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <span style={{ color:'#fff', fontSize:13, fontWeight:900 }}>{activeBingo.title||'Bingo La Casa'}</span>
-                  <span style={{ color:'#fff', fontSize:7, fontWeight:800, background:'rgba(231,76,60,0.8)', padding:'2px 5px', borderRadius:3 }}>{activeBingo.status==='active'?'EN VIVO':'PRONTO'}</span>
-                </div>
-                <div style={{ display:'flex', gap:3, marginTop:5, flexWrap:'wrap' }}>
-                  {bWinTypes.slice(0,4).map(wt => bPrizes[wt] ? (
-                    <span key={wt} style={{ background:'rgba(39,174,96,0.08)', border:'1px solid rgba(39,174,96,0.2)', borderRadius:4, padding:'2px 5px', fontSize:7, color:'#27AE60', fontWeight:700 }}>{WTL2[wt]||wt} {fmt(bPrizes[wt])}</span>
-                  ) : null)}
-                </div>
-              </div>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:6 }}>
-                {bTotal > 0 ? <span style={{ color:'#888', fontSize:8 }}>Total en premios: <span style={{ color:'#27AE60', fontWeight:800 }}>{fmt(bTotal)}</span></span> : <span style={{ color:'#888', fontSize:8 }}>Premios en efectivo</span>}
-                <span style={{ color:'#000', fontSize:9, fontWeight:900, background:C.gold, padding:'4px 10px', borderRadius:4 }}>Jugar</span>
-              </div>
-            </div>
-          </div>
+      {!loadingRaffles && featuredRaffles.length === 0 && otherRaffles.length === 0 && !activeBingo && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: C.muted, fontSize: 12 }}>
+          No hay dinámicas activas por ahora
         </div>
-        )
-      })()}
-
-      {!loadingRaffles && otherRaffles.length > 0 && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,${C.gold},transparent)` }}></div>
-            <h2 style={{ color: '#555', fontWeight: 700, fontSize: 8, margin: 0, textTransform: 'uppercase', letterSpacing: 2 }}>Mas sorteos</h2>
-            <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg,transparent,${C.gold})` }}></div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {otherRaffles.map(r => <RaffleCard key={r.id} r={r} onRaffle={onRaffle} />)}
-          </div>
-        </>
       )}
 
-      {/* COMO FUNCIONA + GANADORES — al final */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 20, marginBottom: 14 }}>
-        {appConfig.showHowItWorks && <button onClick={onHow} style={{ flex: 1, background: C.bg3, border: `1px solid ${C.cardBorder}`, borderRadius: 10, padding: '9px 10px', color: C.gold, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Como funciona?</button>}
-        {appConfig.showWinners && (
-          appConfig.winnersInstagram
-            ? <a href={appConfig.winnersInstagram} target="_blank" rel="noreferrer" style={{ flex:1, textDecoration:'none' }}>
-                <div style={{ background:'linear-gradient(135deg,rgba(240,148,51,0.1),rgba(188,24,136,0.1))', border:'1px solid rgba(220,39,67,0.3)', borderRadius:10, padding:'9px 10px', fontSize:11, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5, width:'100%' }}>
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" strokeWidth="2" strokeLinecap="round"><defs><linearGradient id="igG" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#f09433"/><stop offset="100%" stopColor="#bc1888"/></linearGradient></defs><rect x="2" y="2" width="20" height="20" rx="5" stroke="url(#igG)"/><circle cx="12" cy="12" r="4" stroke="url(#igG)"/><circle cx="17.5" cy="6.5" r="1" fill="#dc2743" stroke="none"/></svg>
-                  <span style={{ background:'linear-gradient(90deg,#f09433,#bc1888)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Ganadores</span>
-                </div>
-              </a>
-            : <button onClick={onWinners} style={{ flex: 1, background: C.bg3, border: '1px solid rgba(39,174,96,0.2)', borderRadius: 10, padding: '9px 10px', color: C.green, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>🏆 Ganadores</button>
-        )}
-      </div>
     </div>
   )
 }
 
 
-// ─── SOCIETY SECTION — numeros sociedad con estado real ──────────────────────
 function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSocietyInfo, setShowSocietyInfo }) {
   const [societyStates, setSocietyStates] = useState({}) // {num: null | {status, socio1_id, socio2_id, id}}
   const [showModal, setShowModal]         = useState(false)
@@ -1925,7 +1876,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             <div style={{ background:'rgba(0,0,0,0.3)', borderRadius:10, padding:8, marginBottom:8 }}>
               <div style={{ color:C.gold, fontSize:10, fontWeight:700, marginBottom:2 }}>💸 Ejemplo real</div>
               <div style={{ color:'#27AE60', fontSize:16, fontWeight:900 }}>Ganas hasta $10.000</div>
-              <div style={{ color:'#888', fontSize:9 }}>por cada boleto vendido con tu enlace</div>            </div>
+              <div style={{ color:'#888', fontSize:9 }}>por cada boleto vendido con tu enlace</div>
+            </div>
             <div style={{ background:'linear-gradient(135deg,#E6BE00,#f0d000)', borderRadius:10, padding:11 }}><div style={{ color:'#000', fontSize:13, fontWeight:900 }}>🚀 Quiero ser Promotor</div></div>
           </div>
         )}
@@ -1956,8 +1908,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
         <div style={{ background:'#111', borderRadius:12, padding:3, display:'flex', gap:2, marginBottom:16 }}>
           {[['Reservas', reserved.length, 0],['Pagados', paid.length, 1]].map(([lb,cnt,i]) => (
             <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'10px 4px', borderRadius:9, border:'none', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
-              <span style={{ color:tab===i?'#000':'#555', fontSize:12, fontWeight:tab===i?800:500 }}>{lb}{cnt>0?' ('+cnt+')':''}</span>
-            </button>
+              <span style={{ color:tab===i?'#000':'#555', fontSize:12, fontWeight:tab===i?800:500 }}>{lb}{cnt>0?' ('+cnt+')':''}</span>            </button>
           ))}
         </div>
 
@@ -3852,7 +3803,8 @@ function RaffleForm({ raffle, onBack, onSave }) {
 
 
 // ─── MANUAL SALE ──────────────────────────────────────────────────────────────
-function ManualSaleForm({ raffles, onSaved }) {  const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
+function ManualSaleForm({ raffles, onSaved }) {
+  const [f, setF] = useState({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
   const [saving, setSaving] = useState(false)
 
   async function save() {
@@ -3866,8 +3818,7 @@ function ManualSaleForm({ raffles, onSaved }) {  const [f, setF] = useState({ ra
     let userId = existUser?.[0]?.id
     if (!userId) {
       const fakeId = crypto.randomUUID()
-      await supabase.from('users_profile').insert({ id:fakeId, full_name:f.name.trim(), phone:f.phone.trim(), email:`manual_${fakeId.slice(0,8)}@lacasa.com`, role:'customer', credits:0, points:0 }).select('id')
-      userId = fakeId
+      await supabase.from('users_profile').insert({ id:fakeId, full_name:f.name.trim(), phone:f.phone.trim(), email:`manual_${fakeId.slice(0,8)}@lacasa.com`, role:'customer', credits:0, points:0 }).select('id')      userId = fakeId
     }
     await supabase.from('tickets').insert({ user_id:userId, raffle_id:r.id, numbers:nums, status:f.status, total_amount:nums.length * r.ticket_price }).select('id')
     setSaving(false); setF({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
