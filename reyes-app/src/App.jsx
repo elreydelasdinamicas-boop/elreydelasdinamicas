@@ -1908,7 +1908,8 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
         <div style={{ background:'#111', borderRadius:12, padding:3, display:'flex', gap:2, marginBottom:16 }}>
           {[['Reservas', reserved.length, 0],['Pagados', paid.length, 1]].map(([lb,cnt,i]) => (
             <button key={lb} onClick={() => setTab(i)} style={{ flex:1, padding:'10px 4px', borderRadius:9, border:'none', background:tab===i?C.gold:'transparent', cursor:'pointer', fontFamily:'inherit', position:'relative' }}>
-              <span style={{ color:tab===i?'#000':'#555', fontSize:12, fontWeight:tab===i?800:500 }}>{lb}{cnt>0?' ('+cnt+')':''}</span>            </button>
+              <span style={{ color:tab===i?'#000':'#555', fontSize:12, fontWeight:tab===i?800:500 }}>{lb}{cnt>0?' ('+cnt+')':''}</span>
+            </button>
           ))}
         </div>
 
@@ -3818,7 +3819,8 @@ function ManualSaleForm({ raffles, onSaved }) {
     let userId = existUser?.[0]?.id
     if (!userId) {
       const fakeId = crypto.randomUUID()
-      await supabase.from('users_profile').insert({ id:fakeId, full_name:f.name.trim(), phone:f.phone.trim(), email:`manual_${fakeId.slice(0,8)}@lacasa.com`, role:'customer', credits:0, points:0 }).select('id')      userId = fakeId
+      await supabase.from('users_profile').insert({ id:fakeId, full_name:f.name.trim(), phone:f.phone.trim(), email:`manual_${fakeId.slice(0,8)}@lacasa.com`, role:'customer', credits:0, points:0 }).select('id')
+      userId = fakeId
     }
     await supabase.from('tickets').insert({ user_id:userId, raffle_id:r.id, numbers:nums, status:f.status, total_amount:nums.length * r.ticket_price }).select('id')
     setSaving(false); setF({ raffleId:'', name:'', phone:'', numbers:'', status:'paid' })
