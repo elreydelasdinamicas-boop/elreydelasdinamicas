@@ -241,8 +241,9 @@ export default function App() {
     // Also poll every 10s so bingo card updates on home
     const bingoInterval = setInterval(fetchActiveBingo, 10000)
     // Realtime — cuando el admin crea/edita un sorteo se actualiza en todos los dispositivos
-    const ch = supabase.channel('raffles-live')
+    const ch = supabase.channel('home-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'raffles' }, () => fetchRaffles())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bingo_games' }, () => fetchActiveBingo())
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [])
@@ -335,14 +336,21 @@ export default function App() {
       const cached = localStorage.getItem('lcdd_raffles')
       if (cached) { setRaffles(JSON.parse(cached)); setLoadingRaffles(false) }
     } catch(e) {}
-    try {
-      const { data, error } = await supabase.from('raffles').select('*').eq('status','active').order('created_at',{ascending:false})
-      if (error) { console.error('fetchRaffles error:', error); return }
-      const fresh = data || []
-      setRaffles(fresh)
-      setLoadingRaffles(false)
-      try { localStorage.setItem('lcdd_raffles', JSON.stringify(fresh)) } catch(e) {}
-    } catch(e) { setLoadingRaffles(false) }
+    // Fetch with retry
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const { data, error } = await supabase.from('raffles').select('*').eq('status','active').order('created_at',{ascending:false})
+        if (!error && data) {
+          setRaffles(data)
+          setLoadingRaffles(false)
+          try { localStorage.setItem('lcdd_raffles', JSON.stringify(data)) } catch(e) {}
+          return
+        }
+        if (error) console.error('fetchRaffles attempt', attempt, error)
+      } catch(e) { console.error('fetchRaffles catch', attempt, e) }
+      if (attempt < 2) await new Promise(r => setTimeout(r, 1500))
+    }
+    setLoadingRaffles(false)
   }
   async function fetchMyTickets() {
     if (!user) return
@@ -492,7 +500,10 @@ export default function App() {
         </button>
         <Logo />
         {user ? <button onClick={() => setPage('profile')} style={{ background: 'transparent', border: 'none', color: '#666', cursor: 'pointer', padding: 8 }}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
-          : <button onClick={() => setAuthPage('login')} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldLight})`, border: 'none', color: '#000', cursor: 'pointer', padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, fontFamily: 'inherit' }}>Entrar</button>}
+          : <div style={{ display:'flex', gap:6 }}>
+              <button onClick={() => setAuthPage('login')} style={{ background: C.gold, border: 'none', color: '#000', cursor: 'pointer', padding: '5px 12px', borderRadius: 6, fontWeight: 700, fontSize: 10, fontFamily: 'inherit' }}>Entrar</button>
+              <button onClick={() => setAuthPage('register')} style={{ background: '#27AE60', border: 'none', color: '#fff', cursor: 'pointer', padding: '5px 12px', borderRadius: 6, fontWeight: 700, fontSize: 10, fontFamily: 'inherit' }}>Registrarse</button>
+            </div>}
       </header>
       <main>
         {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} onBingo={() => setPage('bingo')} activeBingoGame={activeBingoGame} />}
@@ -572,11 +583,11 @@ export default function App() {
       )}
       <nav style={S.bottomNav}>
         {[{ id: 'home', label: 'Inicio', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-          ...(profile?.is_promoter ? [{ id: 'promoter', label: 'Promotor', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> }] : []),
-          ...((appConfig.show_bingo || appConfig.showBingo) ? [{ id: 'bingo', label: 'Bingo', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> }] : []),
-          { id: 'support', label: 'Soporte', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
-          { id: 'profile', label: 'Mi Cuenta', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-        ].map(({ id, label, icon }) => (<button key={id} onClick={() => setPage(id)} style={S.navBtn(page === id)}>{icon}<span style={{ fontSize: 9, fontWeight: 700 }}>{label}</span></button>))}
+          ...((appConfig.show_bingo || appConfig.showBingo) ? [{ id: 'bingo', label: 'Mis bingos', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><text x="12" y="16" textAnchor="middle" fill="currentColor" fontSize="10" fontWeight="700" stroke="none">B</text></svg> }] : []),
+          { id: 'home', label: 'Sorteos', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>, action: 'sorteos' },
+          { id: 'support', label: 'Soporte', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
+          { id: 'profile', label: 'Perfil', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+        ].map(({ id, label, icon }) => (<button key={id+label} onClick={() => setPage(id)} style={S.navBtn(page === id)}>{icon}<span style={{ fontSize: 9, fontWeight: 700 }}>{label}</span></button>))}
       </nav>
       {showReservePopup && selectedRaffle && selectedNums.length > 0 && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setShowReservePopup(false)}>
@@ -667,7 +678,6 @@ function ChooseAuthScreen({ selectedRaffle, selectedNums, onLogin, onRegister, o
 // ─── RAFFLE CARD — nuevo estilo negro + borde amarillo ──────────────────────
 function RaffleCard({ r, onRaffle, featured }) {
   const prizes = Array.isArray(r.prizes) ? r.prizes : []
-  const hasSociety = Array.isArray(r.society_numbers) && r.society_numbers.length > 0
   const cardColor = r.card_color || '#C0392B'
   const totalPrizes = prizes.reduce((sum, p) => {
     const amt = typeof p === 'string' ? parseInt(p.replace(/[^0-9]/g,''))||0 : (parseInt(String(p.amount).replace(/[^0-9]/g,''))||0)
@@ -675,29 +685,20 @@ function RaffleCard({ r, onRaffle, featured }) {
   }, 0)
   const dateStr = (() => { try { return new Date(r.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short'}) } catch { return '' } })()
   return (
-    <div onClick={() => onRaffle(r)} style={{ background:'#111', border:'1px solid #222', borderRadius:12, padding:12, marginBottom:8, cursor:'pointer' }}>
+    <div onClick={() => onRaffle(r)} style={{ background:'#111', border:'1px solid #222', borderRadius:10, padding:12, marginBottom:8, cursor:'pointer' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
         <div>
-          <div style={{ color:'#fff', fontSize:14, fontWeight:900 }}>{r.title}</div>
-          <div style={{ color:'#888', fontSize:9, marginTop:2 }}>{dateStr} · Lot. {r.lottery_name} · 00-{String((r.number_range||100)-1).padStart(2,'0')}</div>
+          <div style={{ color:'#fff', fontSize:13, fontWeight:900 }}>{r.title}</div>
+          <div style={{ color:'#888', fontSize:8, marginTop:2 }}>{dateStr} · Lot. {r.lottery_name} · 00-{String((r.number_range||100)-1).padStart(2,'0')}</div>
         </div>
-        <div style={{ background:cardColor, borderRadius:6, padding:'6px 10px', textAlign:'center', flexShrink:0 }}>
-          <div style={{ color:'#fff', fontSize: r.ticket_price >= 10000 ? 11 : 14, fontWeight:900 }}>{fmt(r.ticket_price)}</div>
-          <div style={{ color:'rgba(255,255,255,0.6)', fontSize:5, fontWeight:700 }}>BOLETO</div>
+        <div style={{ background:cardColor, borderRadius:5, padding:'5px 8px', textAlign:'center', flexShrink:0 }}>
+          <div style={{ color:'#fff', fontSize: r.ticket_price >= 10000 ? 11 : 12, fontWeight:900 }}>{fmt(r.ticket_price)}</div>
+          <div style={{ color:'rgba(255,255,255,0.5)', fontSize:6, fontWeight:700 }}>BOLETO</div>
         </div>
       </div>
-      {prizes.length > 0 && (
-        <div style={{ display:'flex', gap:3, marginBottom:4, flexWrap:'wrap' }}>
-          {prizes.slice(0,3).map((p, i) => (
-            <span key={i} style={{ background: i===0?'rgba(201,162,39,0.08)':'#1a1a1a', border: i===0?'1px solid rgba(201,162,39,0.2)':'none', borderRadius:3, padding:'1px 4px', fontSize:7, color: i===0?C.gold:'#888', fontWeight:700 }}>{i===0?'1ro':i===1?'2do':'3ro'}: {p.amount || (typeof p==='string'?p:'')}</span>
-          ))}
-        </div>
-      )}
-      <div style={{ marginBottom:8 }}>
-        {totalPrizes > 0 && <div style={{ color:'#888', fontSize:8 }}>Total en premios: <span style={{ color:'#27AE60', fontWeight:800 }}>{fmt(totalPrizes)}</span></div>}
-      </div>
-      <div style={{ background:C.gold, borderRadius:8, padding:8, textAlign:'center' }}>
-        <span style={{ color:'#000', fontSize:12, fontWeight:900 }}>Participar</span>
+      {totalPrizes > 0 && <div style={{ color:'#888', fontSize:8, marginBottom:8 }}>Total en premios: <span style={{ color:'#27AE60', fontWeight:800 }}>{fmt(totalPrizes)}</span></div>}
+      <div style={{ background:C.gold, borderRadius:6, padding:7, textAlign:'center' }}>
+        <span style={{ color:'#000', fontSize:11, fontWeight:900 }}>Participar</span>
       </div>
     </div>
   )
@@ -705,68 +706,77 @@ function RaffleCard({ r, onRaffle, featured }) {
 
 
 function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, user, onHow, onWinners, onBingo, activeBingoGame }) {
-  const featuredRaffles = raffles.filter(r => r.is_featured && r.status === 'active')
-  const otherRaffles = raffles.filter(r => !r.is_featured && r.status === 'active')
-  const allRaffles = [...featuredRaffles, ...otherRaffles]
+  const allActiveRaffles = raffles.filter(r => r.status === 'active')
   const activeBingo = activeBingoGame
-  const bCfg = (() => { try { return JSON.parse(activeBingo?.prize_description||'{}') } catch { return {} } })()
-  const bPrizes = bCfg.prizes || {}
-  const bWinTypes = bCfg.win_types || []
+  // Parse ALL active bingo games (not just one)
+  const [allBingos, setAllBingos] = useState([])
+  useEffect(() => {
+    supabase.from('bingo_games').select('*').in('status',['active','waiting']).order('created_at',{ascending:false})
+      .then(({ data }) => setAllBingos(data || []))
+  }, [activeBingoGame])
+
   const WTL = { linea:'Línea horizontal', vertical:'Línea vertical', diagonal:'Diagonal', esquinas:'Esquinas', full:'Cartón lleno' }
-  const bTotal = Object.values(bPrizes).reduce((s,v) => s + (parseInt(v)||0), 0)
+  const bingoLetters = ['B','I','N','G','O']
 
   return (
     <div style={S.content}>
 
       {/* SALUDO */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ color: '#fff', fontSize: 22, fontWeight: 900, lineHeight: 1.3 }}>
+        <div style={{ color: '#fff', fontSize: 20, fontWeight: 900, lineHeight: 1.3 }}>
           Hola, <span style={{ color: C.gold }}>{displayName.split(' ')[0]}!</span>
         </div>
-        <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>Que la suerte te acompañe</div>
+        <div style={{ color: C.muted, fontSize: 11, marginTop: 4 }}>Que la suerte te acompañe</div>
       </div>
 
-      {/* === BINGOS SECTION === */}
-      {activeBingo && (appConfig.show_bingo || appConfig.showBingo) && (
+      {/* === BINGOS === */}
+      {(appConfig.show_bingo || appConfig.showBingo) && allBingos.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-            <span style={{ fontSize:16 }}>🎱</span>
-            <span style={{ color:'#27AE60', fontSize:11, fontWeight:800, letterSpacing:1.5, textTransform:'uppercase' }}>Bingos</span>
-            <div style={{ flex:1, height:1, background:'rgba(39,174,96,0.3)' }}></div>
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
+            <span style={{ width:6, height:6, borderRadius:'50%', background:'#27AE60', display:'inline-block' }}></span>
+            <span style={{ color:'#27AE60', fontSize:10, fontWeight:800, letterSpacing:1 }}>BINGOS</span>
+            <div style={{ flex:1, height:1, background:'rgba(39,174,96,0.25)' }}></div>
           </div>
-          <div onClick={onBingo} style={{ background:'#0d2010', border:'1.5px solid #27AE60', borderRadius:12, padding:12, display:'flex', gap:10, alignItems:'center', cursor:'pointer' }}>
-            {/* Bola BINGO */}
-            <div style={{ width:48, height:48, borderRadius:'50%', background:'#1a1a1a', border:'2px solid #333', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-              <div style={{ width:36, height:36, borderRadius:'50%', background:'#111', border:'2px solid #555', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <span style={{ color:C.gold, fontSize:8, fontWeight:800, letterSpacing:0.5 }}>BINGO</span>
+          {allBingos.map((bg, idx) => {
+            const cfg = (() => { try { return JSON.parse(bg.prize_description||'{}') } catch { return {} } })()
+            const prizes = cfg.prizes || {}
+            const winTypes = cfg.win_types || []
+            const totalPrize = Object.values(prizes).reduce((s,v) => s + (parseInt(v)||0), 0)
+            return (
+              <div key={bg.id} onClick={onBingo} style={{ background:'#0d2010', border:'1px solid rgba(39,174,96,0.3)', borderRadius:10, padding:10, marginBottom:6, display:'flex', gap:10, alignItems:'center', cursor:'pointer' }}>
+                <div style={{ width:40, height:40, borderRadius:'50%', background:'#222', border:'2px solid #444', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <span style={{ color:'#fff', fontSize:14, fontWeight:700 }}>{bingoLetters[idx % 5]}</span>
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:2 }}>
+                    <span style={{ background:'#C0392B', color:'#fff', padding:'1px 5px', borderRadius:3, fontSize:7, fontWeight:800 }}>{bg.status==='active'?'VIVO':'PRONTO'}</span>
+                    <span style={{ color:'#fff', fontSize:11, fontWeight:800, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{bg.title||'Bingo'}</span>
+                  </div>
+                  <div style={{ color:'#888', fontSize:8 }}>Cartón: <span style={{ color:'#fff', fontWeight:700 }}>{fmt(cfg.pack_price||6000)}</span>{totalPrize > 0 && <> <span style={{ color:'#27AE60', fontWeight:700 }}>Premio: {fmt(totalPrize)}</span></>}</div>
+                  {winTypes.length > 0 && (
+                    <div style={{ display:'flex', gap:3, marginTop:3, flexWrap:'wrap' }}>
+                      {winTypes.slice(0,3).map(wt => (
+                        <span key={wt} style={{ background:'rgba(255,255,255,0.06)', borderRadius:3, padding:'1px 5px', fontSize:7, color:'#aaa' }}>{WTL[wt]||wt}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <span style={{ background:C.gold, color:'#000', padding:'5px 10px', borderRadius:5, fontSize:9, fontWeight:900, flexShrink:0 }}>Jugar</span>
               </div>
-            </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:3 }}>
-                <span style={{ background:'#C0392B', color:'#fff', padding:'1px 5px', borderRadius:3, fontSize:7, fontWeight:800 }}>{activeBingo.status==='active'?'VIVO':'PRONTO'}</span>
-                <span style={{ color:'#fff', fontSize:12, fontWeight:800, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{activeBingo.title||'Bingo La Casa'}</span>
-              </div>
-              <div style={{ color:'#888', fontSize:9 }}>Cartón: <span style={{ color:'#fff', fontWeight:700 }}>{fmt(bCfg.pack_price||6000)}</span> <span style={{ color:'#27AE60', fontWeight:700 }}>Premio: {fmt(bTotal)}</span></div>
-              <div style={{ display:'flex', gap:3, marginTop:4, flexWrap:'wrap' }}>
-                {bWinTypes.slice(0,3).map(wt => (
-                  <span key={wt} style={{ background:'rgba(255,255,255,0.08)', borderRadius:3, padding:'2px 6px', fontSize:7, color:'#ccc' }}>{WTL[wt]||wt}</span>
-                ))}
-              </div>
-            </div>
-            <span style={{ background:C.gold, color:'#000', padding:'6px 12px', borderRadius:6, fontSize:10, fontWeight:900, flexShrink:0 }}>Jugar</span>
-          </div>
+            )
+          })}
         </div>
       )}
 
-      {/* === SORTEOS SECTION === */}
-      {!loadingRaffles && allRaffles.length > 0 && (
+      {/* === SORTEOS === */}
+      {!loadingRaffles && allActiveRaffles.length > 0 && (
         <div>
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-            <span style={{ fontSize:16 }}>🎟️</span>
-            <span style={{ color:C.gold, fontSize:11, fontWeight:800, letterSpacing:1.5, textTransform:'uppercase' }}>Sorteos</span>
-            <div style={{ flex:1, height:1, background:'rgba(201,162,39,0.3)' }}></div>
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
+            <span style={{ fontSize:14 }}>🎟️</span>
+            <span style={{ color:C.gold, fontSize:10, fontWeight:800, letterSpacing:1 }}>SORTEOS</span>
+            <div style={{ flex:1, height:1, background:'rgba(201,162,39,0.25)' }}></div>
           </div>
-          {allRaffles.map(r => <RaffleCard key={r.id} r={r} onRaffle={onRaffle} />)}
+          {allActiveRaffles.map(r => <RaffleCard key={r.id} r={r} onRaffle={onRaffle} />)}
         </div>
       )}
 
@@ -782,7 +792,7 @@ function HomePage({ raffles, loadingRaffles, displayName, appConfig, onRaffle, u
         </div>
       )}
 
-      {!loadingRaffles && allRaffles.length === 0 && !activeBingo && (
+      {!loadingRaffles && allActiveRaffles.length === 0 && allBingos.length === 0 && (
         <div style={{ textAlign:'center', padding:'40px 0', color:C.muted, fontSize:12 }}>No hay dinámicas activas</div>
       )}
     </div>
@@ -1897,6 +1907,7 @@ function ProfilePage({ user, profile, myTickets, onLogout, onLogin, onRegister, 
             }
           </div>
         )}
+
         {/* TABS — solo Reservas y Pagados */}
         <div style={{ background:'#111', borderRadius:12, padding:3, display:'flex', gap:2, marginBottom:16 }}>
           {[['Reservas', reserved.length, 0],['Pagados', paid.length, 1]].map(([lb,cnt,i]) => (
