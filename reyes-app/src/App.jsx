@@ -90,6 +90,10 @@ const DEFAULT_CONFIG = {
 }
 
 // ─── PWA HOOK ─────────────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════
 function usePWA() {
   const [canInstall, setCanInstall] = useState(false)
   const [isInstalled, setIsInstalled] = useState(false)
@@ -128,6 +132,10 @@ function usePWA() {
 }
 
 // ─── APP PRINCIPAL ────────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════
+// APP — Main router and shared state
+// ═══════════════════════════════════════════════
 export default function App() {
   const [page, setPageDirect] = useState('home')
   const pageHistoryRef = useRef([])
@@ -182,12 +190,8 @@ export default function App() {
   const [activeBingoGame, setActiveBingoGame] = useState(null)
   const [selectedRaffle, setSelectedRaffle] = useState(null)
   const [myTickets, setMyTickets] = useState([])
-  const [selectedNums, setSelectedNums] = useState([])
-  const [allReservedNums, setAllReservedNums] = useState([])
-  const [showReservePopup, setShowReservePopup] = useState(false)
   const [pendingNums, setPendingNums] = useState(null)
   const [appConfig, setAppConfig] = useState(DEFAULT_CONFIG)
-  const [societyData, setSocietyData] = useState(null)
   const [supportTicketContext, setSupportTicketContext] = useState(null) // { raffle, number }
   const [bingoVisible, setBingoVisible] = useState(false)
   const pwa = usePWA()
@@ -256,15 +260,7 @@ export default function App() {
       .subscribe()
     return () => { supabase.removeChannel(ch); clearInterval(bingoInterval) }
   }, [user])
-  useEffect(() => {
-    if (!selectedRaffle) return
-    fetchReserved(selectedRaffle.id)
-    const ch = supabase.channel(`tickets-${selectedRaffle.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: `raffle_id=eq.${selectedRaffle.id}` }, () => fetchReserved(selectedRaffle.id))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'society_tickets', filter: `raffle_id=eq.${selectedRaffle.id}` }, () => fetchReserved(selectedRaffle.id))
-      .subscribe()
-    return () => supabase.removeChannel(ch)
-  }, [selectedRaffle])
+
 
   useEffect(() => { if (user && pendingNums?.nums?.length > 0) reservePending() }, [user, pendingNums])
 
@@ -307,25 +303,7 @@ export default function App() {
       setAppConfig(prev => ({ ...prev, ...mapped }))
     }
   }
-  async function fetchReserved(id) {
-    try {
-      // Tickets normales
-      const { data, error } = await supabase.from('tickets').select('numbers').eq('raffle_id', id).in('status', ['reserved', 'paid', 'winner'])
-      if (error) { console.error('fetchReserved tickets error:', error); return }
-      const normalNums = (data || []).flatMap(t => t.numbers || [])
-      // Society tickets
-      // Solo marcar como reservado/ocupado si la sociedad está COMPLETA
-      // (ambos socios). 'waiting' aún tiene 1 espacio libre.
-      const { data: sData, error: sErr } = await supabase.from('society_tickets')
-        .select('number, status')
-        .eq('raffle_id', id)
-        .in('status', ['waiting', 'complete'])
-      if (sErr) console.error('fetchReserved society error:', sErr)
-      // Solo 'complete' = ocupado totalmente. 'waiting' sigue disponible.
-      const societyOccupied = (sData || []).filter(s => s.status === 'complete').map(s => s.number)
-      setAllReservedNums([...normalNums, ...societyOccupied])
-    } catch(e) { console.error('fetchReserved catch:', e) }
-  }
+
   async function fetchProfile(id) {
     const { data } = await supabase.from('users_profile').select('*').eq('id', id).single()
     if (data) setProfile(data)
@@ -443,23 +421,7 @@ export default function App() {
     try {
       await supabase.auth.signOut()
     } catch(e) { console.error('signOut error:', e) }
-    setUser(null); setProfile(null); setMyTickets([]); pageHistoryRef.current = []; setAllReservedNums([]); setPageDirect('home')
-  }
-  async function handleReserve() {
-    if (!user) {
-      localStorage.setItem('pendingNums', JSON.stringify({ raffleId: selectedRaffle.id, nums: selectedNums, price: selectedRaffle.ticket_price }))
-      setShowReservePopup(false); setAuthPage('choose'); return
-    }
-    const r = selectedRaffle
-    try {
-      const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', r.id).in('status', ['reserved', 'paid', 'winner'])
-      const taken = (ex || []).flatMap(t => t.numbers || [])
-      const conflict = selectedNums.filter(n => taken.includes(n))
-      if (conflict.length > 0) { alert(`Los numeros ${conflict.map(n => String(n).padStart(2, '0')).join(', ')} ya estan apartados.`); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); return }
-      const { error } = await supabase.from('tickets').insert({ user_id: user.id, raffle_id: r.id, numbers: selectedNums, status: 'reserved', total_amount: selectedNums.length * r.ticket_price }).select('id')
-      if (error) { alert('Error al reservar: ' + error.message); return }
-      await fetchMyTickets(); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); setPage('profile')
-    } catch(e) { alert('Error: ' + e.message) }
+    setUser(null); setProfile(null); setMyTickets([]); pageHistoryRef.current = []; setPageDirect('home')
   }
   async function becomePromoter() {
     if (!user) return
@@ -506,68 +468,8 @@ export default function App() {
             </div>}
       </header>
       <main>
-        {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setSelectedNums([]); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} onBingo={() => setPage('bingo')} activeBingoGame={activeBingoGame} />}
-        {page === 'raffle' && selectedRaffle && <RafflePage raffle={selectedRaffle} user={user} allReservedNums={allReservedNums} selectedNums={selectedNums} setSelectedNums={setSelectedNums} onShowPopup={() => setShowReservePopup(true)} onBack={goBack} onSociety={async (num, mode) => {
-          if (!user) { setAuthPage('login'); return }
-          const halfPrice = Math.round(selectedRaffle.ticket_price / 2)
-          try {
-            // Solo buscar registros activos — ignorar cancelled
-          const { data: fresh } = await supabase.from('society_tickets')
-              .select('*').eq('raffle_id', selectedRaffle.id).eq('number', num)
-              .in('status', ['waiting','complete','paid']).limit(1)
-            const st = fresh?.[0]
-
-            // Si no hay registro activo, verificar si hay cancelled para reutilizar
-            const { data: cancelledRows } = !st ? await supabase.from('society_tickets')
-              .select('id').eq('raffle_id', selectedRaffle.id).eq('number', num)
-              .eq('status','cancelled').limit(1) : { data: [] }
-            const cancelledId = cancelledRows?.[0]?.id
-
-            const exp = new Date(Date.now()+48*3600000).toISOString()
-
-            if (!st) {
-              // LIBRE — insertar o reutilizar cancelled
-              const payload = {
-                raffle_id: selectedRaffle.id, number: num,
-                socio1_id: user.id, socio1_paid: false, socio1_amount: halfPrice,
-                socio2_id: (mode==='full'||mode==='buy_other_half') ? user.id : null,
-                socio2_paid: false, socio2_amount: (mode==='full'||mode==='buy_other_half') ? halfPrice : 0,
-                status: (mode==='full'||mode==='buy_other_half') ? 'complete' : 'waiting',
-                expires_at: exp, updated_at: new Date().toISOString()
-              }
-              if (cancelledId) {
-                const { error } = await supabase.from('society_tickets').update(payload).eq('id', cancelledId).select('id')
-                if (error) throw error
-              } else {
-                const { error } = await supabase.from('society_tickets').insert(payload).select('id')
-                if (error) throw error
-              }
-            } else if (mode === 'socio2' || (!st.socio2_id && st.socio1_id !== user.id)) {
-              if (st.socio2_id) { alert('Este número ya no está disponible.'); return }
-              const { error } = await supabase.from('society_tickets').update({
-                socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
-                status: 'complete', updated_at: new Date().toISOString()
-              }).eq('id', st.id)
-              if (error) throw error
-            } else if (mode === 'buy_other_half' && st.socio1_id === user.id && !st.socio2_id) {
-              const { error } = await supabase.from('society_tickets').update({
-                socio2_id: user.id, socio2_paid: false, socio2_amount: halfPrice,
-                status: 'complete', updated_at: new Date().toISOString()
-              }).eq('id', st.id)
-              if (error) throw error
-            }
-
-            await fetchMyTickets()
-            setTimeout(() => setPage('profile'), 200)
-          } catch(e) { console.error('Society error:', e); throw e }
-        }} />}
-        {page === 'profile' && <ProfilePage user={user} profile={profile} myTickets={myTickets} onLogout={doLogout} onLogin={() => setAuthPage('login')} onRegister={() => setAuthPage('register')} onPromoter={() => setPage('promoter')} onBecomePromoter={becomePromoter} isAdmin={isAdmin} onAdmin={() => setPage('admin')} onRefresh={fetchMyTickets} onSupport={(ctx) => { setSupportTicketContext(ctx||null); setPage('support') }} appConfig={appConfig} pwa={pwa} />}
-        {page === 'promoter' && <PromoterPage user={user} profile={profile} raffles={raffles} appConfig={appConfig} onBack={() => setPage('profile')} />}
-        {page === 'points' && appConfig.showPoints && <PointsPage user={user} profile={profile} onLogin={() => setAuthPage('login')} />}
-        {page === 'support' && <SupportPage user={user} profile={profile} isAdmin={isAdmin} onBack={goBack} appConfig={appConfig} ticketContext={supportTicketContext} />}
-        {page === 'admin' && <AdminSafe user={user} isAdmin={isAdmin} raffles={raffles} appConfig={appConfig} setAppConfig={setAppConfig} onBack={goBack} onOpenSupport={() => setPage('admin-support')} onOpenSociety={() => setPage('admin-society')} onOpenBingo={() => setPage('admin-bingo')} onRefreshRaffles={fetchRaffles} />}
-        {page === 'admin-support' && <SupportPage user={user} profile={profile} isAdmin={true} onBack={() => setPage('admin')} appConfig={appConfig} />}
-        {page === 'winners' && <WinnersPage onBack={goBack} onRaffle={() => setPage('home')} />}
+        {page === 'home' && <HomePage raffles={raffles} loadingRaffles={loadingRaffles} displayName={displayName} appConfig={appConfig} onRaffle={r => { setSelectedRaffle(r); setPage('raffle') }} user={user} onHow={() => setPage('how')} onWinners={() => setPage('winners')} onBingo={() => setPage('bingo')} activeBingoGame={activeBingoGame} />}
+        {page === 'raffle' && selectedRaffle && <RafflePageWrapper raffle={selectedRaffle} user={user} profile={profile} appConfig={appConfig} onBack={goBack} onLogin={() => setAuthPage('login')} onAuthChoose={() => setAuthPage('choose')} onProfile={() => { fetchMyTickets(); setPage('profile') }} />}
         {page === 'society' && societyData && <SocietyPage user={user} profile={profile} raffle={societyData.raffle} number={societyData.number} onBack={() => { setPage('raffle') }} onLogin={() => setAuthPage('login')} />}
         {page === 'admin-society' && <AdminSocietyPanel raffles={raffles} onBack={() => setPage('admin')} />}
         {page === 'bingo' && <BingoPage user={user} profile={profile} appConfig={appConfig} onLogin={() => setAuthPage('login')} onBack={goBack} />}
@@ -589,34 +491,7 @@ export default function App() {
           { id: 'profile', label: 'Perfil', icon: <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
         ].map(({ id, label, icon }) => (<button key={id+label} onClick={() => setPage(id)} style={S.navBtn(page === id)}>{icon}<span style={{ fontSize: 9, fontWeight: 700 }}>{label}</span></button>))}
       </nav>
-      {showReservePopup && selectedRaffle && selectedNums.length > 0 && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setShowReservePopup(false)}>
-          <div className="slide-up" style={{ background: '#111', borderRadius: '22px 22px 0 0', padding: 24, width: '100%', maxWidth: 500, border: `1px solid rgba(201,162,39,0.25)`, borderBottom: 'none', position: 'relative', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-            <GoldLine />
-            <div style={{ width: 40, height: 4, background: '#2a2a2a', borderRadius: 2, margin: '0 auto 18px' }}></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-              <div><div style={{ color: C.muted, fontSize: 11, marginBottom: 4 }}>Numeros seleccionados</div><div style={{ color: C.gold, fontSize: 20, fontWeight: 900 }}>{selectedNums.map(n => `#${String(n).padStart(selectedRaffle.number_range <= 100 ? 2 : 3, '0')}`).join('  ')}</div></div>
-              <div style={{ textAlign: 'right' }}><div style={{ color: C.muted, fontSize: 11 }}>Total</div><div style={{ color: C.gold, fontSize: 20, fontWeight: 900 }}>{fmt(selectedNums.length * selectedRaffle.ticket_price)}</div></div>
-            </div>
-            <div style={{ background: '#1a1a1a', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', gap: 20 }}>
-              <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Sorteo</div><div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{new Date(selectedRaffle.raffle_date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}</div></div>
-              <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Loteria</div><div style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.lottery_name}</div></div>
-              <div style={{ textAlign: 'center' }}><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', marginBottom: 2 }}>Caduca</div><div style={{ color: '#E74C3C', fontSize: 11, fontWeight: 700 }}>{selectedRaffle.release_hours ? (() => { const d = new Date(Date.now() + (selectedRaffle.release_hours||24)*3600000); return d.toLocaleDateString('es-CO',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) })() : '24h'}</div></div>
-            </div>
-            {!user && (
-              <div style={{ background:'rgba(230,190,0,0.06)', border:'1px solid rgba(230,190,0,0.15)', borderRadius:9, padding:'8px 12px', marginBottom:10, textAlign:'center' }}>
-                <span style={{ color:C.muted, fontSize:11 }}>Se pedirá login — </span>
-                <span style={{ color:C.gold, fontSize:11, fontWeight:700 }}>tus números quedan guardados ✓</span>
-              </div>
-            )}
-            <button onClick={handleReserve} style={{ ...S.btnGold, marginBottom: 10 }}>
-              {user ? 'Confirmar reserva' : 'Continuar para apartar'}
-            </button>
-            <div style={{ color: C.muted, fontSize: 11, textAlign: 'center', marginBottom: 10 }}>{selectedRaffle.release_hours ? (() => { const d = new Date(Date.now() + (selectedRaffle.release_hours||24)*3600000); return `Los numeros quedan guardados hasta el ${d.toLocaleDateString('es-CO',{day:'numeric',month:'long'})} a las ${d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}` })() : 'Los numeros quedan guardados 24 horas mientras confirmas el pago'}</div>
-            <button onClick={() => setShowReservePopup(false)} style={{ width: '100%', background: 'transparent', border: 'none', color: '#444', fontSize: 13, cursor: 'pointer', padding: 8, fontFamily: 'inherit' }}>Cancelar</button>
-          </div>
-        </div>
-      )}
+
     </div>
   )
 }
@@ -676,6 +551,10 @@ function ChooseAuthScreen({ selectedRaffle, selectedNums, onLogin, onRegister, o
 
 // ─── HOME PAGE ────────────────────────────────────────────────────────────────
 // ─── RAFFLE CARD — nuevo estilo negro + borde amarillo ──────────────────────
+
+// ═══════════════════════════════════════════════
+// SORTEOS MODULE — Independent from Bingo
+// ═══════════════════════════════════════════════
 function RaffleCard({ r, onRaffle, featured }) {
   const prizes = Array.isArray(r.prizes) ? r.prizes : []
   const cardColor = r.card_color || '#C0392B'
@@ -1299,6 +1178,89 @@ function SocietySection({ societyNums, raffle: r, user, pad, onSociety, showSoci
 
 
 // ─── RAFFLE PAGE con SOCIEDAD visual ─────────────────────────────────────────
+function RafflePageWrapper({ raffle, user, profile, appConfig, onBack, onLogin, onAuthChoose, onProfile }) {
+  const [selectedNums, setSelectedNums] = useState([])
+  const [allReservedNums, setAllReservedNums] = useState([])
+  const [showReservePopup, setShowReservePopup] = useState(false)
+
+  async function fetchReserved(id) {
+    try {
+      const { data } = await supabase.from('tickets').select('numbers').eq('raffle_id', id).in('status', ['reserved', 'paid', 'winner'])
+      const normalNums = (data || []).flatMap(t => t.numbers || [])
+      const { data: sData } = await supabase.from('society_tickets')
+        .select('number, status').eq('raffle_id', id).in('status', ['waiting', 'complete'])
+      const societyOccupied = (sData || []).filter(s => s.status === 'complete').map(s => s.number)
+      setAllReservedNums([...normalNums, ...societyOccupied])
+    } catch(e) { console.error('fetchReserved:', e) }
+  }
+
+  useEffect(() => {
+    if (!raffle) return
+    fetchReserved(raffle.id)
+    const ch = supabase.channel(`tickets-${raffle.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: `raffle_id=eq.${raffle.id}` }, () => fetchReserved(raffle.id))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'society_tickets', filter: `raffle_id=eq.${raffle.id}` }, () => fetchReserved(raffle.id))
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [raffle?.id])
+
+  async function handleReserve() {
+    if (!user) { onAuthChoose(); return }
+    const r = raffle
+    try {
+      const { data: ex } = await supabase.from('tickets').select('numbers').eq('raffle_id', r.id).in('status', ['reserved', 'paid', 'winner'])
+      const taken = (ex || []).flatMap(t => t.numbers || [])
+      const conflict = selectedNums.filter(n => taken.includes(n))
+      if (conflict.length > 0) { alert(`Los numeros ${conflict.map(n => String(n).padStart(2, '0')).join(', ')} ya estan apartados.`); await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false); return }
+      const { error } = await supabase.from('tickets').insert({ user_id: user.id, raffle_id: r.id, numbers: selectedNums, status: 'reserved', total_amount: selectedNums.length * r.ticket_price }).select('id')
+      if (error) { alert('Error al reservar: ' + error.message); return }
+      await fetchReserved(r.id); setSelectedNums([]); setShowReservePopup(false)
+      if (onProfile) onProfile()
+    } catch(e) { alert('Error: ' + e.message) }
+  }
+
+  const pad = n => String(n).padStart(raffle.number_range <= 100 ? 2 : 3, '0')
+
+  return (
+    <>
+      <RafflePage
+        raffle={raffle} user={user} allReservedNums={allReservedNums}
+        selectedNums={selectedNums} setSelectedNums={setSelectedNums}
+        onShowPopup={() => setShowReservePopup(true)} onBack={onBack}
+        onSociety={(num) => {/* handled in SocietyPage */}}
+      />
+      {showReservePopup && selectedNums.length > 0 && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 500, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setShowReservePopup(false)}>
+          <div className="slide-up" style={{ background: '#111', borderRadius: '22px 22px 0 0', padding: 24, width: '100%', maxWidth: 500, border: '1px solid rgba(201,162,39,0.25)', borderBottom: 'none' }} onClick={e => e.stopPropagation()}>
+            <div style={{ width: 40, height: 4, background: '#2a2a2a', borderRadius: 2, margin: '0 auto 18px' }}></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div>
+                <div style={{ color: C.muted, fontSize: 11, marginBottom: 4 }}>Numeros seleccionados</div>
+                <div style={{ color: C.gold, fontSize: 20, fontWeight: 900 }}>{selectedNums.map(n => `#${pad(n)}`).join('  ')}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ color: C.muted, fontSize: 11 }}>Total</div>
+                <div style={{ color: C.gold, fontSize: 20, fontWeight: 900 }}>{fmt(selectedNums.length * raffle.ticket_price)}</div>
+              </div>
+            </div>
+            <div style={{ background: '#1a1a1a', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', gap: 20 }}>
+              {[['SORTEO', new Date(raffle.raffle_date).toLocaleDateString('es-CO',{day:'numeric',month:'short'})],['LOTERIA', raffle.lottery_name],['CADUCA', new Date(Date.now()+48*60*60*1000).toLocaleString('es-CO')]].map(([l,v],i) => (
+                <div key={i} style={{ flex: 1 }}>
+                  <div style={{ color: C.muted, fontSize: 8, letterSpacing: 1 }}>{l}</div>
+                  <div style={{ color: i === 2 ? '#E67E22' : '#fff', fontSize: 10, fontWeight: 700 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={handleReserve} style={{ ...S.btnGold, marginBottom: 8 }}>Confirmar reserva</button>
+            <div style={{ color: C.muted, fontSize: 9, textAlign: 'center', marginBottom: 8 }}>Los numeros quedan guardados hasta el {new Date(Date.now()+48*60*60*1000).toLocaleString('es-CO')}.</div>
+            <button onClick={() => setShowReservePopup(false)} style={{ background: 'transparent', border: 'none', color: C.muted, fontSize: 12, width: '100%', padding: 8, cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 function RafflePage({ raffle: r, user, allReservedNums, selectedNums, setSelectedNums, onShowPopup, onBack, onSociety }) {
   const range = r.number_range || 100
   const cols  = range <= 100 ? 10 : 20
@@ -4398,6 +4360,10 @@ function AdminSMSButton({ ticket, compact = false }) {
 
 
 // ─── BINGO PAGE — v64e premios compactos, como jugar, print español ──────────
+
+// ═══════════════════════════════════════════════
+// BINGO MODULE — Independent from Sorteos
+// ═══════════════════════════════════════════════
 function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
   const [game, setGame] = useState(null)
   const [loadingGame, setLoadingGame] = useState(true)
@@ -5144,6 +5110,10 @@ function BingoPage({ user, profile, appConfig, onLogin, onBack }) {
 
 
 // ─── ADMIN BINGO PANEL — v64c bulletproof, config in prize_description ────────
+
+// ═══════════════════════════════════════════════
+// BINGO ADMIN — Independent from Sorteos admin
+// ═══════════════════════════════════════════════
 function AdminBingoPanel({ onBack }) {
   const [game, setGame] = useState(null)
   const [loadingAdminGame, setLoadingAdminGame] = useState(true)
